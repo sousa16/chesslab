@@ -1,0 +1,132 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import "tailwindcss";
+
+/*
+ * CHESSLAB COLOR SYSTEM
+ * ----------------------
+ * Dark, calm, professional palette for long study sessions.
+ * Low contrast, muted tones, deep green accent.
+ */
+
+@layer base {
+  :root {
+    /* Core backgrounds - dark grays, never pure black */
+    --background: 220 12% 9%;
+    --foreground: 220 10% 82%;
+
+    /* Card/panel surfaces */
+    --card: 220 12% 11%;
+    --card-foreground: 220 10% 82%;
+
+    --popover: 220 12% 11%;
+    --popover-foreground: 220 10% 82%;
+
+    /* Primary - deep muted green */
+    --primary: 158 35% 38%;
+    --primary-foreground: 220 12% 9%;
+
+    /* Secondary - slightly lighter surface */
+    --secondary: 220 10% 14%;
+    --secondary-foreground: 220 10% 72%;
+
+    /* Muted - subdued text and backgrounds */
+    --muted: 220 10% 14%;
+    --muted-foreground: 220 8% 48%;
+
+    /* Accent - subtle green tint */
+    --accent: 158 20% 18%;
+    --accent-foreground: 158 25% 70%;
+
+    /* Destructive - muted red */
+    --destructive: 0 45% 45%;
+    --destructive-foreground: 0 20% 90%;
+
+    /* Borders and inputs - subtle */
+    --border: 220 10% 16%;
+    --input: 220 10% 16%;
+    --ring: 158 35% 38%;
+
+    --radius: 0.5rem;
+
+    /* Chessboard colors */
+    --board-light: 45 15% 72%;
+    --board-dark: 158 22% 32%;
+    --board-highlight: 50 60% 50%;
+    --board-move: 158 35% 38%;
+
+    /* Sidebar */
+    --sidebar-background: 220 12% 10%;
+    --sidebar-foreground: 220 10% 72%;
+    --sidebar-primary: 158 35% 38%;
+    --sidebar-primary-foreground: 220 12% 9%;
+    --sidebar-accent: 220 10% 14%;
+    --sidebar-accent-foreground: 220 10% 82%;
+    --sidebar-border: 220 10% 14%;
+    --sidebar-ring: 158 35% 38%;
+
+    /* Surface layers for depth */
+    --surface-1: 220 12% 10%;
+    --surface-2: 220 12% 12%;
+    --surface-3: 220 12% 14%;
+
+    /* Feedback colors - soft, not harsh */
+    --success: 158 40% 42%;
+    --warning: 38 50% 50%;
+    --error: 0 40% 48%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    font-family: var(--font-geist-sans, "Inter"), system-ui, sans-serif;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .surface-1 {
+    background-color: hsl(var(--surface-1));
+  }
+
+  .surface-2 {
+    background-color: hsl(var(--surface-2));
+  }
+
+  .surface-3 {
+    background-color: hsl(var(--surface-3));
+  }
+}

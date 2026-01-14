@@ -1,4 +1,4 @@
-import { middleware } from "@/middleware";
+import { middleware } from "@/proxy";
 import { getToken } from "next-auth/jwt";
 import { NextRequest } from "next/server";
 

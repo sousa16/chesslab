@@ -1,4 +1,4 @@
-import { middleware } from "@/proxy";
+import { proxy } from "@/proxy";
 import { getToken } from "next-auth/jwt";
 import { NextRequest } from "next/server";
 
@@ -19,7 +19,7 @@ describe("Middleware - Route Protection", () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(307);
       expect(response?.headers.get("location")).toContain("/auth");
@@ -29,7 +29,7 @@ describe("Middleware - Route Protection", () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/repertoire");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(307);
       expect(response?.headers.get("location")).toContain("/auth");
@@ -39,7 +39,7 @@ describe("Middleware - Route Protection", () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/training");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(307);
       expect(response?.headers.get("location")).toContain("/auth");
@@ -57,7 +57,7 @@ describe("Middleware - Route Protection", () => {
       mockGetToken.mockResolvedValue(mockToken as any);
       const request = new NextRequest("http://localhost:3000/");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(200);
       expect(response?.headers.get("location")).toBeNull();
@@ -67,7 +67,7 @@ describe("Middleware - Route Protection", () => {
       mockGetToken.mockResolvedValue(mockToken as any);
       const request = new NextRequest("http://localhost:3000/repertoire");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(200);
       expect(response?.headers.get("location")).toBeNull();
@@ -77,7 +77,7 @@ describe("Middleware - Route Protection", () => {
       mockGetToken.mockResolvedValue(mockToken as any);
       const request = new NextRequest("http://localhost:3000/training");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(200);
       expect(response?.headers.get("location")).toBeNull();
@@ -89,7 +89,7 @@ describe("Middleware - Route Protection", () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/auth");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(200);
       expect(response?.headers.get("location")).toBeNull();
@@ -102,7 +102,7 @@ describe("Middleware - Route Protection", () => {
       } as any);
       const request = new NextRequest("http://localhost:3000/auth");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(307);
       expect(response?.headers.get("location")).toContain("/");
@@ -114,7 +114,7 @@ describe("Middleware - Route Protection", () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/api/verify-email");
 
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       expect(response?.status).toBe(200);
       expect(response?.headers.get("location")).toBeNull();
@@ -128,7 +128,7 @@ describe("Middleware - Route Protection", () => {
       );
 
       // This should not call getToken due to matcher config
-      const response = await middleware(request);
+      const response = await proxy(request);
 
       // Should return without processing
       expect(response?.status).toBe(200);

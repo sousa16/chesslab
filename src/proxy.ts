@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const protectedRoutes = ["/", "/repertoire", "/training"];
 const publicRoutes = ["/auth", "/api"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Skip API routes from middleware check

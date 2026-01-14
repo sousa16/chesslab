@@ -1,8 +1,8 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { SessionProvider } from "next-auth/react";
 import Home from "@/app/(app)/page";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 // Mock next-auth/react
@@ -20,10 +20,9 @@ jest.mock("next/navigation", () => ({
 }));
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
-const mockSignOut = signOut as jest.MockedFunction<typeof signOut>;
 const mockUseRouter = useRouter as jest.MockedFunction<typeof useRouter>;
 
-describe("Home Page (Authenticated)", () => {
+describe("Home Page", () => {
   const mockSession = {
     user: {
       id: "user-123",
@@ -43,196 +42,91 @@ describe("Home Page (Authenticated)", () => {
     } as any);
   });
 
-  describe("Authentication State", () => {
-    it("should show loading state when session is loading", () => {
-      mockUseSession.mockReturnValue({
-        data: null,
-        status: "loading",
-        update: jest.fn(),
-      } as any);
+  it("should show loading state when session is loading", () => {
+    mockUseSession.mockReturnValue({
+      data: null,
+      status: "loading",
+      update: jest.fn(),
+    } as any);
 
-      render(<Home />);
+    render(<Home />);
 
-      expect(screen.getByText("Loading...")).toBeInTheDocument();
-    });
-
-    it("should redirect to /auth when user is not authenticated", async () => {
-      mockUseSession.mockReturnValue({
-        data: null,
-        status: "unauthenticated",
-        update: jest.fn(),
-      } as any);
-
-      render(<Home />);
-
-      await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/auth");
-      });
-    });
-
-    it("should render home page when user is authenticated", () => {
-      mockUseSession.mockReturnValue({
-        data: mockSession,
-        status: "authenticated",
-        update: jest.fn(),
-      } as any);
-
-      render(<Home />);
-
-      expect(screen.getByText("ChessLab")).toBeInTheDocument();
-      expect(
-        screen.getByText("Master your opening repertoire")
-      ).toBeInTheDocument();
-    });
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
 
-  describe("UI Elements", () => {
-    beforeEach(() => {
-      mockUseSession.mockReturnValue({
-        data: mockSession,
-        status: "authenticated",
-        update: jest.fn(),
-      } as any);
-    });
+  it("should redirect to auth when unauthenticated", () => {
+    mockUseSession.mockReturnValue({
+      data: null,
+      status: "unauthenticated",
+      update: jest.fn(),
+    } as any);
 
-    it("should render header with app title", () => {
-      render(<Home />);
+    render(<Home />);
 
-      expect(screen.getByText("ChessLab")).toBeInTheDocument();
-      expect(
-        screen.getByText("Master your opening repertoire")
-      ).toBeInTheDocument();
-    });
-
-    it("should display user welcome message with name", () => {
-      render(<Home />);
-
-      expect(screen.getByText("Welcome, Test User!")).toBeInTheDocument();
-    });
-
-    it("should display user email", () => {
-      render(<Home />);
-
-      expect(screen.getByText("test@example.com")).toBeInTheDocument();
-    });
-
-    it("should use email as fallback when name is not available", () => {
-      const sessionWithoutName = {
-        user: {
-          id: "user-123",
-          email: "user@example.com",
-          name: null,
-        },
-      };
-
-      mockUseSession.mockReturnValue({
-        data: sessionWithoutName,
-        status: "authenticated",
-        update: jest.fn(),
-      } as any);
-
-      render(<Home />);
-
-      expect(
-        screen.getByText("Welcome, user@example.com!")
-      ).toBeInTheDocument();
-    });
-
-    it("should render Repertoire section", () => {
-      render(<Home />);
-
-      // Repertoire and Training links should not be present yet
-      expect(
-        screen.queryByText("Manage your opening repertoire and study positions")
-      ).not.toBeInTheDocument();
-    });
-
-    it("should render Training section", () => {
-      render(<Home />);
-
-      // Training link should not be present yet
-      expect(
-        screen.queryByText(
-          "Practice your opening knowledge with interactive exercises"
-        )
-      ).not.toBeInTheDocument();
-    });
-
-    it("should render Sign Out button", () => {
-      render(<Home />);
-
-      expect(
-        screen.getByRole("button", { name: /sign out/i })
-      ).toBeInTheDocument();
-    });
+    expect(mockPush).toHaveBeenCalledWith("/auth");
   });
 
-  describe("Navigation", () => {
-    beforeEach(() => {
-      mockUseSession.mockReturnValue({
-        data: mockSession,
-        status: "authenticated",
-        update: jest.fn(),
-      } as any);
-    });
+  it("should render home page when user is authenticated", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
 
-    it("should not have navigation links yet", () => {
-      render(<Home />);
+    const { container } = render(<Home />);
 
-      expect(
-        screen.queryByRole("link", { name: /repertoire/i })
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole("link", { name: /training/i })
-      ).not.toBeInTheDocument();
-    });
+    // Check that main layout rendered
+    expect(container.querySelector(".min-h-screen")).toBeInTheDocument();
   });
 
-  describe("Sign Out Functionality", () => {
-    beforeEach(() => {
-      mockUseSession.mockReturnValue({
-        data: mockSession,
-        status: "authenticated",
-        update: jest.fn(),
-      } as any);
-    });
+  it("should render dashboard with repertoire panels when authenticated", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
 
-    it("should call signOut with correct callback when Sign Out button is clicked", async () => {
-      render(<Home />);
+    render(<Home />);
 
-      const signOutButton = screen.getByRole("button", { name: /sign out/i });
-      fireEvent.click(signOutButton);
+    const dashboard = screen.getByText("Dashboard");
+    expect(dashboard).toBeInTheDocument();
 
-      await waitFor(() => {
-        expect(mockSignOut).toHaveBeenCalledWith({ callbackUrl: "/auth" });
-      });
-    });
+    const whiteRepertoire = screen.getByText("White Repertoire");
+    expect(whiteRepertoire).toBeInTheDocument();
+
+    const blackRepertoire = screen.getByText("Black Repertoire");
+    expect(blackRepertoire).toBeInTheDocument();
   });
 
-  describe("Accessibility", () => {
-    beforeEach(() => {
-      mockUseSession.mockReturnValue({
-        data: mockSession,
-        status: "authenticated",
-        update: jest.fn(),
-      } as any);
+  it("should display daily tasks section", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
+
+    render(<Home />);
+
+    const dailyTasks = screen.getByText("Daily Tasks");
+    expect(dailyTasks).toBeInTheDocument();
+
+    const practiceButton = screen.getByRole("button", {
+      name: /practice now/i,
     });
+    expect(practiceButton).toBeInTheDocument();
+  });
 
-    it("should have proper heading hierarchy", () => {
-      render(<Home />);
+  it("should display progress statistics", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
 
-      const h1 = screen.getByRole("heading", { level: 1 });
-      expect(h1).toHaveTextContent("ChessLab");
+    render(<Home />);
 
-      const h2 = screen.getByRole("heading", { level: 2 });
-      expect(h2).toHaveTextContent(/Welcome/);
-    });
-
-    it("should have proper button roles", () => {
-      render(<Home />);
-
-      const signOutButton = screen.getByRole("button", { name: /sign out/i });
-      expect(signOutButton).toBeInTheDocument();
-    });
+    expect(screen.getByText("Lines Learned")).toBeInTheDocument();
+    expect(screen.getByText("Accuracy")).toBeInTheDocument();
+    expect(screen.getByText("Streak")).toBeInTheDocument();
   });
 });

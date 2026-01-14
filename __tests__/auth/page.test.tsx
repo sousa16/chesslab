@@ -9,6 +9,15 @@ jest.mock("next-auth/react", () => ({
   signIn: jest.fn(),
 }));
 
+// Mock next/navigation with useSearchParams returning a proper URLSearchParams
+jest.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams("verified=true"),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+  }),
+}));
+
 const mockSignIn = signIn as jest.MockedFunction<typeof signIn>;
 
 describe("AuthPage Component", () => {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,16 +10,34 @@ import { Separator } from "@/components/ui/separator";
 import { signIn } from "next-auth/react";
 
 export default function AuthPage() {
+  const searchParams = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [showResendButton, setShowResendButton] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+
+  useEffect(() => {
+    // Check for verification success
+    if (searchParams.get("verified") === "true") {
+      setSuccess("Email verified successfully! You can now sign in.");
+    }
+    // Check for verification error
+    const errorParam = searchParams.get("error");
+    if (errorParam) {
+      setError(errorParam);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+    setSuccess("");
+    setShowResendButton(false);
 
     try {
       const result = await signIn("credentials", {
@@ -30,6 +49,15 @@ export default function AuthPage() {
 
       if (result?.error) {
         setError(result.error);
+        // If it's a verification message, show it as info (not error styling)
+        if (
+          result.error.includes("check your email") ||
+          result.error.includes("verify your email")
+        ) {
+          setSuccess(result.error);
+          setError("");
+          setShowResendButton(true);
+        }
       } else if (result?.ok) {
         window.location.href = "/";
       }
@@ -37,6 +65,39 @@ export default function AuthPage() {
       setError("An unexpected error occurred");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (!email) {
+      setError("Please enter your email address");
+      return;
+    }
+
+    setResendLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(
+          data.message || "Verification email sent! Check your inbox."
+        );
+      } else {
+        setError(data.error || "Failed to resend email");
+      }
+    } catch (error) {
+      setError("Failed to resend verification email");
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -64,6 +125,23 @@ export default function AuthPage() {
 
           {/* Error Message */}
           {error && <p className="text-red-500 text-lg text-center">{error}</p>}
+
+          {/* Success Message */}
+          {success && (
+            <div className="space-y-4">
+              <p className="text-green-500 text-lg text-center">{success}</p>
+              {showResendButton && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-12 text-lg"
+                  onClick={handleResendEmail}
+                  disabled={resendLoading}>
+                  {resendLoading ? "Sending..." : "Resend Verification Email"}
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* Google Sign In */}
           <Button

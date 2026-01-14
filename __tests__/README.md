@@ -1,6 +1,6 @@
-# Authentication Tests
+# Authentication & Email Tests
 
-This directory contains comprehensive tests for the Chesslab authentication system.
+This directory contains comprehensive tests for the Chesslab authentication and email verification system.
 
 ## Test Coverage
 
@@ -62,6 +62,54 @@ Tests for the NextAuth.js configuration.
 - Session callback: Adds token ID to session user
 - Proper token/session handling
 
+### 4. Email Service Tests (`email/email.test.ts`)
+Tests for the email sending functionality using Resend.
+
+#### Email Sending
+- Successful email dispatch
+- Verification URL generation
+- Email content validation
+- Sender configuration
+- Error handling
+
+### 5. Email Verification API Tests (`api/verify-email.test.ts`)
+Tests for the email verification endpoint.
+
+#### Verification Flow
+- Missing token handling
+- Invalid token rejection
+- Expired token cleanup
+- Successful email verification
+- User record updates
+- Database error handling
+
+### 6. Resend Verification API Tests (`api/resend-verification.test.ts`)
+Tests for the resend verification email endpoint.
+
+#### Resend Logic
+- Email validation
+- User existence checks
+- Already verified detection
+- Token deletion and regeneration
+- Email sending
+- Error responses
+
+### 7. Email Verification Auth Flow Tests (`auth/email-verification.test.ts`)
+Tests for email verification integration with authentication.
+
+#### Registration Flow
+- Creates users with unverified status
+- Generates verification tokens
+- Sends verification emails
+- Blocks auto-login after registration
+
+#### Login Flow
+- Blocks unverified users from logging in
+- Auto-sends verification emails on login attempts
+- Reuses valid tokens when available
+- Cleans up expired tokens
+- Allows verified users to login
+
 ## Running Tests
 
 ### Run all tests
@@ -114,7 +162,9 @@ Current coverage focuses on:
 - ✅ Credentials provider (registration & login logic)
 - ✅ Auth page component (UI & interactions)
 - ✅ Auth configuration (callbacks & strategies)
-- ⏳ API routes (to be added)
+- ✅ Email service (sending & templates)
+- ✅ Email verification endpoints (verify & resend)
+- ✅ Email verification flow (registration & login)
 - ⏳ Protected pages (to be added)
 
 ## Common Test Scenarios
@@ -125,12 +175,22 @@ Current coverage focuses on:
 - Invalid password
 - User already exists
 - OAuth-only accounts
+- Unverified email
+
+### Email Verification Errors
+- Missing token
+- Invalid token
+- Expired token
+- Email sending failures
+- Already verified
 
 ### Happy Path Scenarios
 - Successful registration
 - Successful login
 - Google OAuth flow
 - Session management
+- Email verification
+- Resend verification email
 
 ### UI Interactions
 - Form submission

@@ -4,6 +4,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
+import { sendVerificationEmail } from "./email";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -39,20 +41,34 @@ export const authOptions: NextAuthOptions = {
           // Hash password
           const hashedPassword = await bcrypt.hash(password, 12);
 
-          // Create new user
+          // Create new user (not verified yet)
           const user = await prisma.user.create({
             data: {
               email,
               hashedPassword,
+              emailVerified: null, // Not verified yet
             },
           });
 
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            image: user.image,
-          };
+          // Generate verification token
+          const token = randomBytes(32).toString("hex");
+          const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+          await prisma.verificationToken.create({
+            data: {
+              identifier: email,
+              token,
+              expires,
+            },
+          });
+
+          // Send verification email
+          await sendVerificationEmail(email, token);
+
+          // Don't automatically log them in - they need to verify first
+          throw new Error(
+            "Please check your email to verify your account before signing in"
+          );
         } else {
           // Login
           const user = await prisma.user.findUnique({
@@ -70,6 +86,51 @@ export const authOptions: NextAuthOptions = {
 
           if (!isPasswordValid) {
             throw new Error("Invalid email or password");
+          }
+
+          // Check if email is verified
+          if (!user.emailVerified) {
+            // Delete old expired tokens
+            await prisma.verificationToken.deleteMany({
+              where: {
+                identifier: email,
+                expires: { lt: new Date() },
+              },
+            });
+
+            // Check if there's a valid token already
+            const existingToken = await prisma.verificationToken.findFirst({
+              where: {
+                identifier: email,
+                expires: { gt: new Date() },
+              },
+            });
+
+            let token: string;
+
+            if (existingToken) {
+              // Reuse existing valid token
+              token = existingToken.token;
+            } else {
+              // Generate new token
+              token = randomBytes(32).toString("hex");
+              const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+              await prisma.verificationToken.create({
+                data: {
+                  identifier: email,
+                  token,
+                  expires,
+                },
+              });
+            }
+
+            // Send verification email
+            await sendVerificationEmail(email, token);
+
+            throw new Error(
+              "Please verify your email before signing in. A new verification email has been sent."
+            );
           }
 
           return {

@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { Logo } from "@/components/Logo";
 import { HomePanel } from "@/components/HomePanel";
 import { RepertoirePanel } from "@/components/RepertoirePanel";
+import { Board } from "@/components/Board";
 import { BoardControls } from "@/components/BoardControls";
 
 type View = "home" | "repertoire";
@@ -80,51 +81,49 @@ export default function Home() {
 
         <div className="w-full max-w-4xl h-full flex flex-col items-center justify-center gap-4">
           {/* Player Info - Top */}
-          <div className="flex items-center gap-3 mb-3 px-1">
+          <div className="flex items-center gap-4 mb-3 px-1">
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+              className={`w-12 h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "black"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-xs font-medium ${
+                className={`text-lg font-medium ${
                   selectedColor === "black" ? "text-zinc-800" : "text-zinc-300"
                 }`}>
                 {selectedColor === "black" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {selectedColor === "black" ? "White" : "Black"}
             </p>
           </div>
 
-          {/* Chessboard Placeholder */}
-          <div className="w-full aspect-square max-w-md bg-zinc-200 dark:bg-zinc-800 rounded-lg flex items-center justify-center border border-zinc-300 dark:border-zinc-700">
-            <p className="text-muted-foreground">Chessboard Placeholder</p>
-          </div>
+          {/* Chessboard */}
+          <Board playerColor={selectedColor} />
 
           {/* Player Info - Bottom */}
-          <div className="flex items-center gap-3 mt-3 px-1">
+          <div className="flex items-center gap-4 mt-3 px-1">
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+              className={`w-12 h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "white"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-xs font-medium ${
+                className={`text-lg font-medium ${
                   selectedColor === "white" ? "text-zinc-800" : "text-zinc-300"
                 }`}>
                 {selectedColor === "white" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-sm text-foreground font-medium">You</p>
+            <p className="text-base text-foreground font-medium">You</p>
           </div>
 
           {/* Board Controls */}
           <div className="mt-4">
-            <BoardControls />
+            <BoardControls isDisabled={true} />
           </div>
         </div>
       </div>

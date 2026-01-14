@@ -10,6 +10,7 @@ Minimal, focused, training-first platform for chess improvement.
 - **ORM**: [Prisma](https://www.prisma.io)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com) 4 with custom color system
 - **UI**: Custom component library with [Radix UI](https://www.radix-ui.com) primitives
+- **Chess**: [react-chessboard](https://www.npmjs.com/package/react-chessboard) + [chess.js](https://www.npmjs.com/package/chess.js)
 - **Language**: TypeScript
 
 ## Getting Started
@@ -61,10 +62,13 @@ Open [http://localhost:3000](http://localhost:3000)
 src/
 ├── app/
 │   ├── (auth)/        # Auth pages and routes
-│   ├── (app)/         # Protected app pages
+│   ├── (app)/         # Protected app pages with chessboard
 │   ├── api/auth/      # Auth.js API routes
 │   └── layout.tsx     # Root layout
-├── components/        # Reusable UI components
+├── components/
+│   ├── Board.tsx          # Interactive chessboard display
+│   ├── BoardControls.tsx  # Move navigation controls
+│   └── ...                # Other UI components
 ├── lib/              # Auth config, Prisma client, utilities
 ├── types/            # TypeScript types
 └── app.css           # Tailwind styles
@@ -75,6 +79,20 @@ src/
 - Use `npm run dev` to start dev server
 - Use `npm run build` to build for production
 - Use `npm run lint` to check code style
+- Use `npm test` to run tests (backend + component tests)
+
+## Features
+
+### Chessboard
+- Full interactive chess board with piece rendering
+- Board controls for move navigation (First, Previous, Next, Last, Reset)
+- Responsive sizing with proper aspect ratio
+- Custom color palette matching the design system
+
+### Testing
+- Backend tests with Jest for API routes and utilities
+- Component tests using React Testing Library
+- Tests for Board and BoardControls components included
 
 ## Color System
 

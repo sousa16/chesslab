@@ -63,7 +63,7 @@ export default function AuthPage() {
           </h1>
 
           {/* Error Message */}
-          {error && <p className="text-error text-lg text-center">{error}</p>}
+          {error && <p className="text-red-500 text-lg text-center">{error}</p>}
 
           {/* Google Sign In */}
           <Button

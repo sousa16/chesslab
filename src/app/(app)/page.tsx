@@ -76,7 +76,7 @@ export default function Home() {
       <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0">
         {/* Logo in corner */}
         <div className="absolute top-4 left-4">
-          <Logo />
+          <Logo size="xl" />
         </div>
 
         <div className="w-full max-w-4xl h-full flex flex-col items-center justify-center gap-4">

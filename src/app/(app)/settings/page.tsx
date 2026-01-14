@@ -123,7 +123,7 @@ export default function Settings() {
 
           {/* Footer */}
           <div className="text-center pt-4">
-            <Logo />
+            <Logo size="xl" />
             <p className="text-sm text-muted-foreground mt-2">Version 1.0.0</p>
           </div>
         </div>

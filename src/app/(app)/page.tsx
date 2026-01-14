@@ -1,14 +1,23 @@
 "use client";
 
-import { useSession, signOut } from "next-auth/react";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useEffect } from "react";
+import { Logo } from "@/components/Logo";
+import { HomePanel } from "@/components/HomePanel";
+import { RepertoirePanel } from "@/components/RepertoirePanel";
+import { BoardControls } from "@/components/BoardControls";
+
+type View = "home" | "repertoire";
 
 export default function Home() {
-  const { data: session, status } = useSession();
   const router = useRouter();
+  const { data: session, status } = useSession();
+  const [view, setView] = useState<View>("home");
+  const [selectedColor, setSelectedColor] = useState<"white" | "black">(
+    "white"
+  );
 
   useEffect(() => {
     // If session is loaded and user is not authenticated, redirect to auth
@@ -29,41 +38,113 @@ export default function Home() {
     return null;
   }
 
-  return (
-    <div className="min-h-screen bg-white dark:bg-black">
-      <header className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-black dark:text-white">
-                ChessLab
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Master your opening repertoire
-              </p>
-            </div>
-            <Button
-              onClick={() => signOut({ callbackUrl: "/auth" })}
-              variant="outline"
-              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950">
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+  const handleSelectRepertoire = (color: "white" | "black") => {
+    setSelectedColor(color);
+    setView("repertoire");
+  };
 
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-lg bg-zinc-50 p-8 dark:bg-zinc-900">
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-black dark:text-white">
-              Welcome, {session.user?.name || session.user?.email}!
-            </h2>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-              {session.user?.email}
+  const handleBack = () => {
+    setView("home");
+  };
+
+  const handleStartPractice = () => {
+    router.push("/training?color=white");
+  };
+
+  const handleBuild = (openingId?: string, lineId?: string) => {
+    const params = new URLSearchParams();
+    if (openingId) params.set("opening", openingId);
+    if (lineId) params.set("line", lineId);
+    const query = params.toString();
+    router.push(
+      `/repertoire?color=${selectedColor}${query ? `&${query}` : ""}`
+    );
+  };
+
+  const handleLearn = (openingId?: string, lineId?: string) => {
+    const params = new URLSearchParams();
+    if (openingId) params.set("opening", openingId);
+    if (lineId) params.set("line", lineId);
+    const query = params.toString();
+    router.push(`/training?color=${selectedColor}${query ? `&${query}` : ""}`);
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex">
+      {/* Left Panel - Board */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0">
+        {/* Logo in corner */}
+        <div className="absolute top-4 left-4">
+          <Logo />
+        </div>
+
+        <div className="w-full max-w-4xl h-full flex flex-col items-center justify-center gap-4">
+          {/* Player Info - Top */}
+          <div className="flex items-center gap-3 mb-3 px-1">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                selectedColor === "black"
+                  ? "bg-zinc-100"
+                  : "bg-zinc-800 border border-zinc-700"
+              }`}>
+              <span
+                className={`text-xs font-medium ${
+                  selectedColor === "black" ? "text-zinc-800" : "text-zinc-300"
+                }`}>
+                {selectedColor === "black" ? "W" : "B"}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {selectedColor === "black" ? "White" : "Black"}
             </p>
           </div>
+
+          {/* Chessboard Placeholder */}
+          <div className="w-full aspect-square max-w-md bg-zinc-200 dark:bg-zinc-800 rounded-lg flex items-center justify-center border border-zinc-300 dark:border-zinc-700">
+            <p className="text-muted-foreground">Chessboard Placeholder</p>
+          </div>
+
+          {/* Player Info - Bottom */}
+          <div className="flex items-center gap-3 mt-3 px-1">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                selectedColor === "white"
+                  ? "bg-zinc-100"
+                  : "bg-zinc-800 border border-zinc-700"
+              }`}>
+              <span
+                className={`text-xs font-medium ${
+                  selectedColor === "white" ? "text-zinc-800" : "text-zinc-300"
+                }`}>
+                {selectedColor === "white" ? "W" : "B"}
+              </span>
+            </div>
+            <p className="text-sm text-foreground font-medium">You</p>
+          </div>
+
+          {/* Board Controls */}
+          <div className="mt-4">
+            <BoardControls />
+          </div>
         </div>
-      </main>
+      </div>
+
+      {/* Right Panel */}
+      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0">
+        {view === "home" ? (
+          <HomePanel
+            onSelectRepertoire={handleSelectRepertoire}
+            onStartPractice={handleStartPractice}
+          />
+        ) : (
+          <RepertoirePanel
+            color={selectedColor}
+            onBack={handleBack}
+            onBuild={handleBuild}
+            onLearn={handleLearn}
+          />
+        )}
+      </aside>
     </div>
   );
 }

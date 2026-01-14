@@ -9,7 +9,9 @@ import { useRouter } from "next/navigation";
 jest.mock("next-auth/react", () => ({
   useSession: jest.fn(),
   signOut: jest.fn(),
-  SessionProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
 // Mock next/navigation
@@ -131,7 +133,9 @@ describe("Home Page (Authenticated)", () => {
 
       render(<Home />);
 
-      expect(screen.getByText("Welcome, user@example.com!")).toBeInTheDocument();
+      expect(
+        screen.getByText("Welcome, user@example.com!")
+      ).toBeInTheDocument();
     });
 
     it("should render Repertoire section", () => {
@@ -157,7 +161,9 @@ describe("Home Page (Authenticated)", () => {
     it("should render Sign Out button", () => {
       render(<Home />);
 
-      expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /sign out/i })
+      ).toBeInTheDocument();
     });
   });
 
@@ -173,8 +179,12 @@ describe("Home Page (Authenticated)", () => {
     it("should not have navigation links yet", () => {
       render(<Home />);
 
-      expect(screen.queryByRole("link", { name: /repertoire/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: /training/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("link", { name: /repertoire/i })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("link", { name: /training/i })
+      ).not.toBeInTheDocument();
     });
   });
 

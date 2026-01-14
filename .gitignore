@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+.jest-cache
+
+# SWC
+.swc
 
 # next.js
 /.next/

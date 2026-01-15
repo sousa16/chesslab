@@ -66,7 +66,7 @@ export function RepertoirePanel({
 
       {/* Openings Tree */}
       <div className="flex-1 overflow-y-auto p-4">
-        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
           Openings
         </h3>
         <div className="space-y-1">

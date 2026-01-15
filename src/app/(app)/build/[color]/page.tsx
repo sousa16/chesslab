@@ -75,11 +75,11 @@ export default function BuildPage({
           {/* Position indicator */}
           {currentMove && (
             <div className="w-full px-1">
-              <div className="bg-surface-2 rounded-lg px-3 py-2 border border-border/50 inline-flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
+              <div className="bg-surface-2 rounded-lg px-4 py-3 border border-border/50 inline-flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">
                   Position after
                 </span>
-                <span className="text-sm font-mono text-foreground">
+                <span className="text-base font-mono text-foreground">
                   {currentMoveIndex}. {currentMove.white}
                   {currentMove.black && ` ${currentMove.black}`}
                 </span>
@@ -98,7 +98,7 @@ export default function BuildPage({
 
           {/* Hint */}
           <div className="text-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {color === "white"
                 ? "Black's turn. Click a square to add response."
                 : "White's turn. Click a square to add move."}

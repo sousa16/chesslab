@@ -42,19 +42,19 @@ export function BuildPanel({
           <ChevronLeft size={20} />
         </Button>
         <div className="flex-1 flex flex-col items-center gap-1">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          <h2 className="text-base font-semibold text-muted-foreground uppercase tracking-wide">
             Building
           </h2>
           <div className="flex items-center gap-2">
             <div
-              className={`w-6 h-6 rounded flex items-center justify-center text-sm ${
+              className={`w-7 h-7 rounded flex items-center justify-center text-base ${
                 color === "white"
                   ? "bg-zinc-100 text-zinc-900"
                   : "bg-zinc-800 text-zinc-100"
               }`}>
               {color === "white" ? "♔" : "♚"}
             </div>
-            <span className="text-base font-semibold text-foreground capitalize">
+            <span className="text-lg font-semibold text-foreground capitalize">
               {color}
             </span>
           </div>
@@ -68,29 +68,29 @@ export function BuildPanel({
         {(openingName || lineName) && (
           <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
             {openingName && (
-              <p className="text-sm font-medium text-foreground mb-1">
+              <p className="text-base font-medium text-foreground mb-1">
                 {openingName}
               </p>
             )}
             {lineName && (
-              <p className="text-xs text-muted-foreground">{lineName}</p>
+              <p className="text-sm text-muted-foreground">{lineName}</p>
             )}
           </div>
         )}
 
         {/* Repertoire Color */}
         <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-          <p className="text-xs text-muted-foreground mb-2">Building</p>
+          <p className="text-sm text-muted-foreground mb-2">Building</p>
           <div className="flex items-center gap-2">
             <div
-              className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+              className={`w-9 h-9 rounded-lg flex items-center justify-center ${
                 color === "white"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
-              <span className="text-lg">{color === "white" ? "♔" : "♚"}</span>
+              <span className="text-xl">{color === "white" ? "♔" : "♚"}</span>
             </div>
-            <span className="text-sm font-medium text-foreground capitalize">
+            <span className="text-base font-medium text-foreground capitalize">
               {color} Repertoire
             </span>
           </div>
@@ -98,26 +98,26 @@ export function BuildPanel({
 
         {/* Move List */}
         <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">
             Moves
           </p>
           <div className="space-y-1">
             {moves.map((move, index) => (
               <div
                 key={index}
-                className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
+                className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
                   index < currentMoveIndex
                     ? "bg-surface-2 text-foreground"
                     : "bg-muted text-muted-foreground"
                 }`}>
                 <div className="flex items-center gap-2 flex-1">
-                  <span className="text-xs font-medium w-6">
+                  <span className="text-sm font-medium w-6">
                     {move.number}.
                   </span>
-                  <span className="font-mono text-sm">{move.white}</span>
+                  <span className="font-mono text-base">{move.white}</span>
                   {move.black && (
                     <>
-                      <span className="font-mono text-sm">{move.black}</span>
+                      <span className="font-mono text-base">{move.black}</span>
                     </>
                   )}
                 </div>
@@ -125,9 +125,9 @@ export function BuildPanel({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
                     onClick={() => onDeleteMove?.(index)}>
-                    <X size={14} />
+                    <X size={16} />
                   </Button>
                 )}
               </div>
@@ -138,10 +138,10 @@ export function BuildPanel({
         {/* Add Move Prompt */}
         {currentMoveIndex === moves.length && (
           <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
-            <p className="text-sm text-foreground font-medium mb-2">
+            <p className="text-base text-foreground font-medium mb-2">
               Add next move
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Click on a square on the board to add a move.
             </p>
           </div>
@@ -150,8 +150,10 @@ export function BuildPanel({
 
       {/* Footer */}
       <div className="border-t border-border p-4 space-y-2">
-        <Button className="w-full" onClick={() => onAddMove?.("")}>
-          <Plus size={16} className="mr-2" />
+        <Button
+          className="w-full h-12 text-base"
+          onClick={() => onAddMove?.("")}>
+          <Plus size={20} className="mr-2" />
           Save Line
         </Button>
       </div>

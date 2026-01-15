@@ -35,8 +35,8 @@ export function OpeningItem({
           }`}
         />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground">{name}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base font-medium text-foreground">{name}</p>
+          <p className="text-sm text-muted-foreground">
             {learnedCount}/{lines.length} lines learned
           </p>
         </div>
@@ -79,7 +79,7 @@ export function OpeningItem({
                 }`}
               />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground">
+                <p className="text-sm font-medium text-foreground">
                   {line.name}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">

@@ -269,10 +269,10 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         {isViewingHistory && (
           <div className="absolute inset-0 bg-black/30 rounded-lg flex items-center justify-center">
             <div className="bg-background/90 px-6 py-3 rounded-lg text-center">
-              <p className="text-sm font-medium text-foreground">
+              <p className="text-base font-medium text-foreground">
                 Viewing move history
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 Press "Last move" to continue playing
               </p>
             </div>

@@ -19,13 +19,13 @@ export function HomePanel({
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-border flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground">Dashboard</h2>
+        <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
         <Button
           variant="ghost"
           size="icon"
           className="text-muted-foreground hover:text-foreground"
           onClick={() => router.push("/settings")}>
-          <Settings size={18} />
+          <Settings size={20} />
         </Button>
       </div>
 
@@ -33,7 +33,7 @@ export function HomePanel({
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {/* Repertoires */}
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
             Repertoires
           </h3>
           <div className="space-y-2">
@@ -41,21 +41,21 @@ export function HomePanel({
             <button
               onClick={() => onSelectRepertoire("white")}
               className="w-full flex items-center gap-3 p-4 rounded-lg bg-surface-2 hover:bg-surface-3 border border-border/50 transition-colors group text-left cursor-pointer">
-              <div className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center shadow-sm">
-                <span className="text-lg">♔</span>
+              <div className="w-12 h-12 rounded-lg bg-zinc-100 flex items-center justify-center shadow-sm">
+                <span className="text-xl">♔</span>
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-base font-medium text-foreground">
                   White Repertoire
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="h-1.5 flex-1 bg-zinc-200 rounded-full overflow-hidden">
+                  <div className="h-2 flex-1 bg-zinc-200 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-primary transition-all"
                       style={{ width: "68%" }}
                     />
                   </div>
-                  <span className="text-xs text-muted-foreground">68%</span>
+                  <span className="text-sm text-muted-foreground">68%</span>
                 </div>
               </div>
               <ChevronRight
@@ -68,25 +68,25 @@ export function HomePanel({
             <button
               onClick={() => onSelectRepertoire("black")}
               className="w-full flex items-center gap-3 p-4 rounded-lg bg-surface-2 hover:bg-surface-3 border border-border/50 transition-colors group text-left cursor-pointer">
-              <div className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shadow-sm">
-                <span className="text-lg">♚</span>
+              <div className="w-12 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shadow-sm">
+                <span className="text-xl">♚</span>
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-base font-medium text-foreground">
                   Black Repertoire
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="h-1.5 flex-1 bg-zinc-200 rounded-full overflow-hidden">
+                  <div className="h-2 flex-1 bg-zinc-200 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-primary transition-all"
                       style={{ width: "45%" }}
                     />
                   </div>
-                  <span className="text-xs text-muted-foreground">45%</span>
+                  <span className="text-sm text-muted-foreground">45%</span>
                 </div>
               </div>
               <ChevronRight
-                size={16}
+                size={18}
                 className="text-muted-foreground group-hover:text-foreground transition-colors"
               />
             </button>
@@ -95,27 +95,27 @@ export function HomePanel({
 
         {/* Daily Tasks */}
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
             Daily Tasks
           </h3>
           <div className="bg-surface-2 rounded-lg border border-border/50 p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-2xl font-semibold text-foreground">32</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-3xl font-semibold text-foreground">32</p>
+                <p className="text-base text-muted-foreground">
                   moves to practice
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-primary font-medium">Due today</p>
-                <p className="text-xs text-muted-foreground">~8 min</p>
+                <p className="text-base text-primary font-medium">Due today</p>
+                <p className="text-sm text-muted-foreground">~8 min</p>
               </div>
             </div>
             <Button
               onClick={onStartPractice}
-              className="w-full gap-2"
+              className="w-full gap-2 text-base"
               size="lg">
-              <Play size={18} />
+              <Play size={20} />
               Practice Now
             </Button>
           </div>
@@ -123,27 +123,27 @@ export function HomePanel({
 
         {/* Progress Overview */}
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
             Progress
           </h3>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-              <p className="text-xs text-muted-foreground mb-1">
+              <p className="text-sm text-muted-foreground mb-2">
                 Lines Learned
               </p>
-              <p className="text-xl font-semibold text-foreground">156</p>
+              <p className="text-2xl font-semibold text-foreground">156</p>
             </div>
             <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-              <p className="text-xs text-muted-foreground mb-1">Accuracy</p>
-              <p className="text-xl font-semibold text-foreground">84%</p>
+              <p className="text-sm text-muted-foreground mb-2">Accuracy</p>
+              <p className="text-2xl font-semibold text-foreground">84%</p>
             </div>
             <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-              <p className="text-xs text-muted-foreground mb-1">Streak</p>
-              <p className="text-xl font-semibold text-foreground">12 days</p>
+              <p className="text-sm text-muted-foreground mb-2">Streak</p>
+              <p className="text-2xl font-semibold text-foreground">12 days</p>
             </div>
             <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-              <p className="text-xs text-muted-foreground mb-1">Time Today</p>
-              <p className="text-xl font-semibold text-foreground">23m</p>
+              <p className="text-sm text-muted-foreground mb-2">Time Today</p>
+              <p className="text-2xl font-semibold text-foreground">23m</p>
             </div>
           </div>
         </section>

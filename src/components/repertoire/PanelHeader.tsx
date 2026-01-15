@@ -22,14 +22,14 @@ export function PanelHeader({
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {icon && <div>{icon}</div>}
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+          <h2 className="text-xl font-semibold text-foreground">{title}</h2>
         </div>
         <Button
           variant="ghost"
           size="icon"
           className="text-muted-foreground hover:text-foreground"
           onClick={onBack}>
-          <ChevronLeft size={18} />
+          <ChevronLeft size={20} />
         </Button>
       </div>
       {children}

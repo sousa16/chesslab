@@ -99,21 +99,37 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     reset,
   }));
 
+  const isViewingHistory = currentMoveIndex !== moveHistory.length - 1;
+
   return (
-    <div
-      className="w-full aspect-square max-w-2xl rounded-lg overflow-hidden shadow-lg"
-      data-testid="board">
-      <Chessboard
-        options={{
-          position,
-          boardOrientation: playerColor,
-          onPieceDrop: handlePieceDrop,
-          showNotation: true,
-          lightSquareStyle: { backgroundColor: "#b8a06d" },
-          darkSquareStyle: { backgroundColor: "#2c5233" },
-          allowDragging: currentMoveIndex === moveHistory.length - 1,
-        }}
-      />
+    <div className="relative">
+      <div
+        className="w-full aspect-square max-w-2xl rounded-lg overflow-hidden shadow-lg"
+        data-testid="board">
+        <Chessboard
+          options={{
+            position,
+            boardOrientation: playerColor,
+            onPieceDrop: handlePieceDrop,
+            showNotation: true,
+            lightSquareStyle: { backgroundColor: "#b8a06d" },
+            darkSquareStyle: { backgroundColor: "#2c5233" },
+            allowDragging: currentMoveIndex === moveHistory.length - 1,
+          }}
+        />
+      </div>
+      {isViewingHistory && (
+        <div className="absolute inset-0 bg-black/30 rounded-lg flex items-center justify-center">
+          <div className="bg-background/90 px-6 py-3 rounded-lg text-center">
+            <p className="text-sm font-medium text-foreground">
+              Viewing move history
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Press "Last move" to continue playing
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

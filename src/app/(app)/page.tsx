@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { Logo } from "@/components/Logo";
 import { HomePanel } from "@/components/HomePanel";
 import { RepertoirePanel } from "@/components/RepertoirePanel";
-import { Board } from "@/components/Board";
+import { Board, BoardHandle } from "@/components/Board";
 import { BoardControls } from "@/components/BoardControls";
 
 type View = "home" | "repertoire";
@@ -19,6 +19,7 @@ export default function Home() {
   const [selectedColor, setSelectedColor] = useState<"white" | "black">(
     "white"
   );
+  const boardRef = useRef<BoardHandle>(null);
 
   useEffect(() => {
     // If session is loaded and user is not authenticated, redirect to auth
@@ -101,7 +102,7 @@ export default function Home() {
           </div>
 
           {/* Chessboard */}
-          <Board playerColor={selectedColor} />
+          <Board ref={boardRef} playerColor={selectedColor} />
 
           {/* Player Info - Bottom */}
           <div className="flex items-center gap-4 mt-3 px-1">
@@ -123,7 +124,13 @@ export default function Home() {
 
           {/* Board Controls */}
           <div className="mt-4">
-            <BoardControls isDisabled={true} />
+            <BoardControls
+              onFirstMove={() => boardRef.current?.goToFirst()}
+              onPreviousMove={() => boardRef.current?.goToPrevious()}
+              onNextMove={() => boardRef.current?.goToNext()}
+              onLastMove={() => boardRef.current?.goToLast()}
+              onReset={() => boardRef.current?.reset()}
+            />
           </div>
         </div>
       </div>

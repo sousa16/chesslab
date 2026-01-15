@@ -5,7 +5,10 @@ import { Board, BoardHandle } from "@/components/Board";
 // Mock react-chessboard
 jest.mock("react-chessboard", () => ({
   Chessboard: ({ options }: any) => (
-    <div data-testid="chessboard" data-fen={options.position} data-dragging-allowed={options.allowDragging}>
+    <div
+      data-testid="chessboard"
+      data-fen={options.position}
+      data-dragging-allowed={options.allowDragging}>
       Chessboard Component
     </div>
   ),
@@ -52,7 +55,7 @@ describe("Board Component", () => {
   it("should support move history navigation via ref", () => {
     const ref = React.createRef<BoardHandle>();
     render(<Board ref={ref} />);
-    
+
     expect(ref.current).toBeDefined();
     expect(ref.current?.goToFirst).toBeDefined();
     expect(ref.current?.goToPrevious).toBeDefined();
@@ -64,7 +67,7 @@ describe("Board Component", () => {
   it("should disable dragging when viewing history", () => {
     const ref = React.createRef<BoardHandle>();
     const { rerender } = render(<Board ref={ref} />);
-    
+
     // Navigate back (would disable dragging if we had moves)
     // Since we can't make actual moves in test with mocked chessboard,
     // we verify the structure exists
@@ -80,9 +83,8 @@ describe("Board Component", () => {
   it("should call onMoveHistoryChange callback when provided", () => {
     const mockOnMoveHistoryChange = jest.fn();
     render(<Board onMoveHistoryChange={mockOnMoveHistoryChange} />);
-    
+
     // The component should exist and be ready for moves
     expect(screen.getByTestId("chessboard")).toBeInTheDocument();
   });
 });
-

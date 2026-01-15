@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { SessionProvider } from "next-auth/react";
 import Home from "@/app/(app)/page";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 // Mock next-auth/react
 jest.mock("next-auth/react", () => ({
@@ -17,12 +17,22 @@ jest.mock("next-auth/react", () => ({
 // Mock next/navigation
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
+  useSearchParams: jest.fn(),
 }));
 
 // Mock Board component
 jest.mock("@/components/Board", () => ({
-  Board: React.forwardRef(({ playerColor }: any, ref: any) => (
-    <div data-testid="chessboard" data-player-color={playerColor}>
+  Board: React.forwardRef(({ playerColor, onMoveMade }: any, ref: any) => (
+    <div
+      data-testid="chessboard"
+      data-player-color={playerColor}
+      onClick={() =>
+        onMoveMade?.({
+          from: "e2",
+          to: "e4",
+          san: "e4",
+        })
+      }>
       Board Component
     </div>
   )),
@@ -31,7 +41,13 @@ jest.mock("@/components/Board", () => ({
 
 // Mock BoardControls component
 jest.mock("@/components/BoardControls", () => ({
-  BoardControls: ({ onFirstMove, onPreviousMove, onNextMove, onLastMove, onReset }: any) => (
+  BoardControls: ({
+    onFirstMove,
+    onPreviousMove,
+    onNextMove,
+    onLastMove,
+    onReset,
+  }: any) => (
     <div data-testid="board-controls">
       <button title="First move" onClick={onFirstMove} />
       <button title="Previous move" onClick={onPreviousMove} />
@@ -68,6 +84,9 @@ jest.mock("@/components/Logo", () => ({
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 const mockUseRouter = useRouter as jest.MockedFunction<typeof useRouter>;
+const mockUseSearchParams = useSearchParams as jest.MockedFunction<
+  typeof useSearchParams
+>;
 
 describe("Home Page", () => {
   const mockSession = {
@@ -86,6 +105,10 @@ describe("Home Page", () => {
       push: mockPush,
       replace: jest.fn(),
       prefetch: jest.fn(),
+    } as any);
+    // Mock useSearchParams to return empty params by default
+    mockUseSearchParams.mockReturnValue({
+      get: jest.fn(() => null),
     } as any);
   });
 
@@ -205,5 +228,40 @@ describe("Home Page", () => {
     render(<Home />);
 
     expect(screen.getByTitle("Rotate board")).toBeInTheDocument();
+  });
+
+  it("should navigate to build white page when a move is made with white", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
+
+    render(<Home />);
+
+    // Click the board to trigger onMoveMade (simulating a move)
+    fireEvent.click(screen.getByTestId("chessboard"));
+
+    // Verify navigation to build/white with the move
+    expect(mockPush).toHaveBeenCalledWith("/build/white?move=e4");
+  });
+
+  it("should navigate to build black page when a move is made with black", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
+
+    const { rerender } = render(<Home />);
+
+    // Rotate board to black
+    fireEvent.click(screen.getByTitle("Rotate board"));
+
+    // Click the board to trigger onMoveMade (simulating a move)
+    fireEvent.click(screen.getByTestId("chessboard"));
+
+    // Verify navigation to build/black with the move
+    expect(mockPush).toHaveBeenCalledWith("/build/black?move=e4");
   });
 });

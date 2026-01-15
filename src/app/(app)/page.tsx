@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useEffect } from "react";
 import { ArrowLeftRight } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { HomePanel } from "@/components/HomePanel";
@@ -16,6 +15,7 @@ type View = "home" | "repertoire";
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [view, setView] = useState<View>("home");
   const [selectedColor, setSelectedColor] = useState<"white" | "black">(
@@ -29,6 +29,14 @@ export default function Home() {
       router.push("/auth");
     }
   }, [status, router]);
+
+  useEffect(() => {
+    // Read color from query params and set it
+    const colorParam = searchParams.get("color");
+    if (colorParam === "white" || colorParam === "black") {
+      setSelectedColor(colorParam);
+    }
+  }, [searchParams]);
 
   if (status === "loading") {
     return (
@@ -77,6 +85,10 @@ export default function Home() {
     setSelectedColor(selectedColor === "white" ? "black" : "white");
   };
 
+  const handleMoveMade = (move: { from: string; to: string; san: string }) => {
+    router.push(`/build/${selectedColor}?move=${move.san}`);
+  };
+
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left Panel - Board */}
@@ -108,7 +120,11 @@ export default function Home() {
           </div>
 
           {/* Chessboard */}
-          <Board ref={boardRef} playerColor={selectedColor} />
+          <Board
+            ref={boardRef}
+            playerColor={selectedColor}
+            onMoveMade={handleMoveMade}
+          />
 
           {/* Player Info - Bottom */}
           <div className="flex items-center gap-4 mt-3 px-1">

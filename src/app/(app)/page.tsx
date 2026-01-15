@@ -4,11 +4,13 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
+import { ArrowLeftRight } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { HomePanel } from "@/components/HomePanel";
 import { RepertoirePanel } from "@/components/RepertoirePanel";
 import { Board, BoardHandle } from "@/components/Board";
 import { BoardControls } from "@/components/BoardControls";
+import { Button } from "@/components/ui/button";
 
 type View = "home" | "repertoire";
 
@@ -71,6 +73,10 @@ export default function Home() {
     router.push(`/training?color=${selectedColor}${query ? `&${query}` : ""}`);
   };
 
+  const handleRotateBoard = () => {
+    setSelectedColor(selectedColor === "white" ? "black" : "white");
+  };
+
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left Panel - Board */}
@@ -123,7 +129,7 @@ export default function Home() {
           </div>
 
           {/* Board Controls */}
-          <div className="mt-4">
+          <div className="mt-4 flex items-center gap-3">
             <BoardControls
               onFirstMove={() => boardRef.current?.goToFirst()}
               onPreviousMove={() => boardRef.current?.goToPrevious()}
@@ -131,6 +137,13 @@ export default function Home() {
               onLastMove={() => boardRef.current?.goToLast()}
               onReset={() => boardRef.current?.reset()}
             />
+            <Button
+              variant="ghost"
+              className="h-12 w-12 p-0 text-muted-foreground hover:text-foreground [&_svg]:size-auto"
+              title="Rotate board"
+              onClick={handleRotateBoard}>
+              <ArrowLeftRight size={26} />
+            </Button>
           </div>
         </div>
       </div>

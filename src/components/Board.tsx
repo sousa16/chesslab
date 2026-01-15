@@ -2,25 +2,49 @@
 
 import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
-import { useMemo } from "react";
+import { useRef, useState } from "react";
 
 interface BoardProps {
   playerColor?: "white" | "black";
 }
 
 export function Board({ playerColor = "white" }: BoardProps) {
-  const game = useMemo(() => new Chess(), []);
+  const gameRef = useRef(new Chess());
+  const [position, setPosition] = useState(gameRef.current.fen());
+
+  const handlePieceDrop = ({
+    sourceSquare,
+    targetSquare,
+  }: {
+    sourceSquare: string;
+    targetSquare: string;
+    piece: string;
+  }): boolean => {
+    try {
+      gameRef.current.move({
+        from: sourceSquare,
+        to: targetSquare,
+        promotion: "q",
+      });
+
+      setPosition(gameRef.current.fen());
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   return (
     <div className="w-full aspect-square max-w-2xl rounded-lg overflow-hidden shadow-lg">
       <Chessboard
         options={{
-          position: game.fen(),
+          position,
           boardOrientation: playerColor,
-          allowDragging: false,
+          onPieceDrop: handlePieceDrop,
           showNotation: true,
-          lightSquareStyle: { backgroundColor: "#b8a06d" }, // board-light
-          darkSquareStyle: { backgroundColor: "#2c5233" }, // board-dark
+          lightSquareStyle: { backgroundColor: "#b8a06d" },
+          darkSquareStyle: { backgroundColor: "#2c5233" },
+          allowDragging: true,
         }}
       />
     </div>

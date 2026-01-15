@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
+import { Logo } from "@/components/Logo";
 import { Board, BoardHandle } from "@/components/Board";
 import { BuildPanel } from "@/components/BuildPanel";
 
@@ -71,6 +72,11 @@ export default function BuildPage({
     <div className="min-h-screen bg-background flex">
       {/* Left Panel - Board */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0">
+        {/* Logo in corner */}
+        <div className="absolute top-4 left-4">
+          <Logo size="xl" />
+        </div>
+
         <div className="w-full max-w-2xl flex flex-col items-center gap-4">
           {/* Position indicator */}
           {currentMove && (

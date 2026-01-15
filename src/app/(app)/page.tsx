@@ -68,9 +68,7 @@ export default function Home() {
     if (openingId) params.set("opening", openingId);
     if (lineId) params.set("line", lineId);
     const query = params.toString();
-    router.push(
-      `/build/${selectedColor}${query ? `?${query}` : ""}`
-    );
+    router.push(`/build/${selectedColor}${query ? `?${query}` : ""}`);
   };
 
   const handleLearn = (openingId?: string, lineId?: string) => {

@@ -69,7 +69,7 @@ export default function Home() {
     if (lineId) params.set("line", lineId);
     const query = params.toString();
     router.push(
-      `/repertoire?color=${selectedColor}${query ? `&${query}` : ""}`
+      `/build/${selectedColor}${query ? `?${query}` : ""}`
     );
   };
 

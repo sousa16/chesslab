@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { SessionProvider } from "next-auth/react";
 import Home from "@/app/(app)/page";
 import { useSession } from "next-auth/react";
@@ -17,6 +17,53 @@ jest.mock("next-auth/react", () => ({
 // Mock next/navigation
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
+}));
+
+// Mock Board component
+jest.mock("@/components/Board", () => ({
+  Board: React.forwardRef(({ playerColor }: any, ref: any) => (
+    <div data-testid="chessboard" data-player-color={playerColor}>
+      Board Component
+    </div>
+  )),
+  BoardHandle: {},
+}));
+
+// Mock BoardControls component
+jest.mock("@/components/BoardControls", () => ({
+  BoardControls: ({ onFirstMove, onPreviousMove, onNextMove, onLastMove, onReset }: any) => (
+    <div data-testid="board-controls">
+      <button title="First move" onClick={onFirstMove} />
+      <button title="Previous move" onClick={onPreviousMove} />
+      <button title="Next move" onClick={onNextMove} />
+      <button title="Last move" onClick={onLastMove} />
+      <button title="Reset board" onClick={onReset} />
+    </div>
+  ),
+}));
+
+// Mock HomePanel and RepertoirePanel
+jest.mock("@/components/HomePanel", () => ({
+  HomePanel: () => (
+    <div>
+      <div>Dashboard</div>
+      <div>White Repertoire</div>
+      <div>Black Repertoire</div>
+      <div>Daily Tasks</div>
+      <div>Lines Learned</div>
+      <div>Accuracy</div>
+      <div>Streak</div>
+      <button>Practice Now</button>
+    </div>
+  ),
+}));
+
+jest.mock("@/components/RepertoirePanel", () => ({
+  RepertoirePanel: () => <div>Repertoire Panel</div>,
+}));
+
+jest.mock("@/components/Logo", () => ({
+  Logo: () => <div>Logo</div>,
 }));
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
@@ -128,5 +175,35 @@ describe("Home Page", () => {
     expect(screen.getByText("Lines Learned")).toBeInTheDocument();
     expect(screen.getByText("Accuracy")).toBeInTheDocument();
     expect(screen.getByText("Streak")).toBeInTheDocument();
+  });
+
+  it("should render board and controls when authenticated", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
+
+    render(<Home />);
+
+    // Check for board and control buttons
+    expect(screen.getByTestId("chessboard")).toBeInTheDocument();
+    expect(screen.getByTitle("First move")).toBeInTheDocument();
+    expect(screen.getByTitle("Previous move")).toBeInTheDocument();
+    expect(screen.getByTitle("Next move")).toBeInTheDocument();
+    expect(screen.getByTitle("Last move")).toBeInTheDocument();
+    expect(screen.getByTitle("Reset board")).toBeInTheDocument();
+  });
+
+  it("should have rotate board button", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
+
+    render(<Home />);
+
+    expect(screen.getByTitle("Rotate board")).toBeInTheDocument();
   });
 });

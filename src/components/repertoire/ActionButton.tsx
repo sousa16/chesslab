@@ -22,10 +22,10 @@ export function ActionButton({
     <Button
       onClick={onClick}
       variant={variant}
-      className="w-full h-auto flex flex-col items-start gap-2 p-4">
+      className="w-full h-auto flex flex-col items-start gap-2 p-3">
       <div className="flex items-center gap-2 w-full">
-        <Icon size={20} />
-        <span className="font-medium text-base">{title}</span>
+        <Icon size={16} />
+        <span className="font-medium text-sm">{title}</span>
       </div>
       <p className="text-sm opacity-90">{description}</p>
     </Button>

@@ -65,7 +65,7 @@ export function BuildPanel({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 p-4 space-y-4">
         {/* Opening Info */}
         {(openingName || lineName) && (
           <div className="bg-surface-2 rounded-lg p-3 border border-border/50">

@@ -88,7 +88,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex">
       {/* Left Panel - Board */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0">
         {/* Logo in corner */}
@@ -98,7 +98,7 @@ export default function Home() {
 
         <div className="w-full max-w-4xl h-full flex flex-col items-center justify-center gap-4">
           {/* Player Info - Top */}
-          <div className="flex items-center gap-4 mb-3 px-1">
+          <div className="flex items-center gap-4 mb-2 px-1">
             <div
               className={`w-12 h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "black"
@@ -125,7 +125,7 @@ export default function Home() {
           />
 
           {/* Player Info - Bottom */}
-          <div className="flex items-center gap-4 mt-3 px-1">
+          <div className="flex items-center gap-4 mt-2 mb-2 px-1">
             <div
               className={`w-12 h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "white"
@@ -143,7 +143,7 @@ export default function Home() {
           </div>
 
           {/* Board Controls */}
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-3 flex items-center gap-3">
             <BoardControls
               onFirstMove={() => boardRef.current?.goToFirst()}
               onPreviousMove={() => boardRef.current?.goToPrevious()}
@@ -163,7 +163,7 @@ export default function Home() {
       </div>
 
       {/* Right Panel */}
-      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0">
+      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0 flex flex-col overflow-hidden">
         {view === "home" ? (
           <HomePanel
             onSelectRepertoire={handleSelectRepertoire}

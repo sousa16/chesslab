@@ -68,7 +68,7 @@ export function RepertoirePanel({
 
   const totalPositions = openings.reduce(
     (sum, opening) => sum + countNodes(opening.root),
-    0
+    0,
   );
 
   return (
@@ -105,7 +105,7 @@ export function RepertoirePanel({
       </div>
 
       {/* Openings Tree */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 p-4 overflow-hidden">
         <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
           Lines
         </h3>

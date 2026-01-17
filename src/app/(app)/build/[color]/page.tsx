@@ -172,7 +172,7 @@ export default function BuildPage({
       </div>
 
       {/* Right Panel */}
-      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0">
+      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0 flex flex-col overflow-hidden">
         <BuildPanel
           color={color}
           onBack={handleBack}

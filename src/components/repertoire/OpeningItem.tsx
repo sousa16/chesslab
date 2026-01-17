@@ -75,14 +75,14 @@ export function OpeningItem({
           {lines.map((line) => (
             <div
               key={line.id}
-              className="flex items-center gap-2 p-2 rounded-lg bg-surface-1 border border-border/30 text-left group">
+              className="flex items-center gap-2 p-1 rounded-lg bg-surface-1 border border-border/30 text-left group">
               <div
                 className={`w-3 h-3 rounded-full flex-shrink-0 ${
                   line.learned ? "bg-primary" : "bg-border"
                 }`}
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-xs font-medium text-foreground">
                   {line.name}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">

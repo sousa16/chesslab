@@ -1,23 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { saveRepertoireLine, convertSanToUci, ensureUserRepertoires } from "@/lib/repertoire";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import {
+  saveRepertoireLine,
+  convertSanToUci,
+  ensureUserRepertoires,
+} from "@/lib/repertoire";
 
 /**
  * POST /api/repertoire-entries/save-line
- * 
+ *
  * Saves an opening line to a user's repertoire.
- * 
+ *
  * Request body:
  * {
  *   color: "white" | "black",
  *   movesInSan: string[], // e.g., ["e4", "c5", "Nf3", "d6"]
  * }
- * 
+ *
  * Response: { success: true, entriesCreated: number }
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
+    const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -55,7 +60,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Save the line
-    await saveRepertoireLine(session.user.id, color, [], movesInSan, movesInUci);
+    await saveRepertoireLine(
+      session.user.id,
+      color,
+      [],
+      movesInSan,
+      movesInUci
+    );
 
     return NextResponse.json(
       {
@@ -65,9 +76,10 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error saving line:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error saving line:", errorMessage);
 
-    if ((error as Error).message.includes("Repertoire not found")) {
+    if (errorMessage.includes("Repertoire not found")) {
       return NextResponse.json(
         {
           error: "Repertoire not found. Please create a repertoire first.",
@@ -77,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: "Failed to save line" },
+      { error: `Failed to save line: ${errorMessage}` },
       { status: 500 }
     );
   }

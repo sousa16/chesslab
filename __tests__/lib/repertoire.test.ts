@@ -95,13 +95,7 @@ describe("Opening Line Save Feature", () => {
       const movesInSan = ["e4", "c5", "Nf3"];
       const movesInUci = convertSanToUci(movesInSan);
 
-      await saveRepertoireLine(
-        testUserId,
-        "white",
-        [],
-        movesInSan,
-        movesInUci
-      );
+      await saveRepertoireLine(testUserId, "white", [], movesInSan, movesInUci);
 
       // Verify 3 positions were created
       const positions = await prisma.position.findMany();

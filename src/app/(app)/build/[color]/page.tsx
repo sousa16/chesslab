@@ -5,11 +5,14 @@ import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { Board, BoardHandle } from "@/components/Board";
 import { BuildPanel } from "@/components/BuildPanel";
+import { convertSanToUci } from "@/lib/repertoire";
 
 interface Move {
   number: number;
   white: string;
+  whiteUci: string;
   black?: string;
+  blackUci?: string;
 }
 
 export default function BuildPage({
@@ -61,12 +64,21 @@ export default function BuildPage({
     }
 
     try {
-      // Convert Move objects back to SAN format
+      // Convert Move objects to SAN format
       const movesInSan = moves.flatMap((move) => {
         const result = [move.white];
         if (move.black) result.push(move.black);
         return result;
       });
+
+      // Convert SAN to UCI format
+      let movesInUci: string[];
+      try {
+        movesInUci = convertSanToUci(movesInSan);
+      } catch (error) {
+        alert(`Invalid move: ${(error as Error).message}`);
+        return;
+      }
 
       const response = await fetch("/api/repertoire-entries/save-line", {
         method: "POST",
@@ -74,16 +86,30 @@ export default function BuildPage({
         body: JSON.stringify({
           color,
           movesInSan,
+          movesInUci,
         }),
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        alert(`Error saving line: ${data.error}`);
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error(
+          "Failed to parse response:",
+          response.status,
+          response.statusText
+        );
+        alert(
+          `Error: Server returned ${response.status} ${response.statusText}`
+        );
         return;
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        alert(`Error saving line: ${data.error || "Unknown error"}`);
+        return;
+      }
+
       alert(`✓ Line saved! ${data.entriesCreated} positions added.`);
       handleBack();
     } catch (error) {

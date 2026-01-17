@@ -25,15 +25,18 @@ export function OpeningItem({
 
   return (
     <div className="space-y-1">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center gap-2 p-3 rounded-lg bg-surface-2 hover:bg-surface-3 border border-border/50 transition-colors text-left group">
-        <ChevronDown
-          size={16}
-          className={`text-muted-foreground transition-transform ${
-            isExpanded ? "rotate-180" : ""
-          }`}
-        />
+      <div className="w-full flex items-center gap-2 p-3 rounded-lg bg-surface-2 hover:bg-surface-3 border border-border/50 transition-colors text-left group">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="p-0 -m-1 h-6 w-6 flex items-center justify-center hover:bg-surface-1 rounded transition-colors"
+          title={isExpanded ? "Collapse" : "Expand"}>
+          <ChevronDown
+            size={16}
+            className={`text-muted-foreground transition-transform ${
+              isExpanded ? "rotate-180" : ""
+            }`}
+          />
+        </button>
         <div className="flex-1 min-w-0">
           <p className="text-base font-medium text-foreground">{name}</p>
           <p className="text-sm text-muted-foreground">
@@ -64,7 +67,7 @@ export function OpeningItem({
             <GraduationCap size={14} />
           </Button>
         </div>
-      </button>
+      </div>
 
       {/* Lines */}
       {isExpanded && (

@@ -35,7 +35,7 @@ export default function BuildPage({
   const moveParam = searchParams.get("move");
   const initialMoves = useMemo(
     () => (moveParam ? [moveParam] : []),
-    [moveParam]
+    [moveParam],
   );
 
   const handleMovesUpdated = useCallback((updatedMoves: Move[]) => {
@@ -97,10 +97,10 @@ export default function BuildPage({
         console.error(
           "Failed to parse response:",
           response.status,
-          response.statusText
+          response.statusText,
         );
         alert(
-          `Error: Server returned ${response.status} ${response.statusText}`
+          `Error: Server returned ${response.status} ${response.statusText}`,
         );
         return;
       }

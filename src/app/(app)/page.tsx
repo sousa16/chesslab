@@ -19,8 +19,10 @@ export default function Home() {
   const { data: session, status } = useSession();
   const [view, setView] = useState<View>("home");
   const [selectedColor, setSelectedColor] = useState<"white" | "black">(
-    "white"
+    "white",
   );
+  const [initialMoves, setInitialMoves] = useState<string[]>([]);
+  const [initialFen, setInitialFen] = useState<string>("");
   const boardRef = useRef<BoardHandle>(null);
 
   useEffect(() => {
@@ -79,6 +81,12 @@ export default function Home() {
     router.push(`/training?color=${selectedColor}${query ? `&${query}` : ""}`);
   };
 
+  const handleLineClick = (moves: string[], startingFen: string) => {
+    // Create a new array reference to ensure React detects the change
+    setInitialMoves([...moves]);
+    setInitialFen(startingFen);
+  };
+
   const handleRotateBoard = () => {
     setSelectedColor(selectedColor === "white" ? "black" : "white");
   };
@@ -122,6 +130,8 @@ export default function Home() {
             ref={boardRef}
             playerColor={selectedColor}
             onMoveMade={handleMoveMade}
+            initialMoves={initialMoves}
+            initialFen={initialFen}
           />
 
           {/* Player Info - Bottom */}
@@ -175,6 +185,7 @@ export default function Home() {
             onBack={handleBack}
             onBuild={handleBuild}
             onLearn={handleLearn}
+            onLineClick={handleLineClick}
           />
         )}
       </aside>

@@ -30,6 +30,7 @@ interface RepertoirePanelProps {
   onBack: () => void;
   onBuild: (openingId?: string, lineId?: string) => void;
   onLearn: (openingId?: string, lineId?: string) => void;
+  onLineClick?: (moves: string[], startingFen: string) => void;
 }
 
 export function RepertoirePanel({
@@ -37,6 +38,7 @@ export function RepertoirePanel({
   onBack,
   onBuild,
   onLearn,
+  onLineClick,
 }: RepertoirePanelProps) {
   const [openings, setOpenings] = useState<Opening[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -132,6 +134,7 @@ export function RepertoirePanel({
                     root={opening.root}
                     onBuild={onBuild}
                     onLearn={onLearn}
+                    onLineClick={onLineClick}
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">No lines</p>

@@ -26,6 +26,7 @@ interface BoardProps {
   buildMode?: boolean;
   onBuildMove?: (move: { from: string; to: string }) => void;
   initialMoves?: string[];
+  initialFen?: string;
 }
 
 export interface BoardHandle {
@@ -54,6 +55,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       buildMode = false,
       onBuildMove,
       initialMoves = [],
+      initialFen,
     },
     ref,
   ) => {
@@ -65,8 +67,10 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
     // Initialize board with any initial moves
     useEffect(() => {
+      const startingFen = initialFen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+      gameRef.current = new Chess(startingFen);
+      
       if (initialMoves.length > 0) {
-        gameRef.current.reset();
         const newHistory: string[] = [];
         const newMoves: string[] = [];
 
@@ -77,8 +81,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               newMoves.push(move.san);
               newHistory.push(gameRef.current.fen());
             }
-          } catch {
+          } catch (e) {
             // Skip invalid moves
+            console.error(`Invalid move: ${moveSan}`, e);
           }
         }
 
@@ -86,8 +91,14 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         setMoveHistory(newHistory);
         setCurrentMoveIndex(newHistory.length - 1);
         setPosition(gameRef.current.fen());
+      } else {
+        // Reset to initial state
+        setMoves([]);
+        setMoveHistory([]);
+        setCurrentMoveIndex(-1);
+        setPosition(gameRef.current.fen());
       }
-    }, [initialMoves]);
+    }, [initialMoves, initialFen]);
 
     // Notify parent of moves changes
     useEffect(() => {
@@ -103,19 +114,25 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       const tempGame = new Chess();
       for (let i = 0; i < moves.length; i++) {
         const moveNumber = Math.floor(i / 2) + 1;
-        const moveObj = tempGame.move(moves[i]);
-        if (!moveObj) continue;
-
-        const uci = `${moveObj.from}${moveObj.to}${moveObj.promotion ? moveObj.promotion : ""}`;
-
-        if (i % 2 === 0) {
-          result.push({ number: moveNumber, white: moves[i], whiteUci: uci });
-        } else {
-          const lastMove = result[result.length - 1];
-          if (lastMove) {
-            lastMove.black = moves[i];
-            lastMove.blackUci = uci;
+        try {
+          const moveObj = tempGame.move(moves[i]);
+          if (!moveObj) {
+            continue;
           }
+
+          const uci = `${moveObj.from}${moveObj.to}${moveObj.promotion ? moveObj.promotion : ""}`;
+
+          if (i % 2 === 0) {
+            result.push({ number: moveNumber, white: moves[i], whiteUci: uci });
+          } else {
+            const lastMove = result[result.length - 1];
+            if (lastMove) {
+              lastMove.black = moves[i];
+              lastMove.blackUci = uci;
+            }
+          }
+        } catch (e) {
+          continue;
         }
       }
       onMovesUpdated?.(result);

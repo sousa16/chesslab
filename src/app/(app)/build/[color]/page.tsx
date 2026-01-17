@@ -5,11 +5,14 @@ import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { Board, BoardHandle } from "@/components/Board";
 import { BuildPanel } from "@/components/BuildPanel";
+import { convertSanToUci } from "@/lib/repertoire";
 
 interface Move {
   number: number;
   white: string;
+  whiteUci: string;
   black?: string;
+  blackUci?: string;
 }
 
 export default function BuildPage({
@@ -32,7 +35,7 @@ export default function BuildPage({
   const moveParam = searchParams.get("move");
   const initialMoves = useMemo(
     () => (moveParam ? [moveParam] : []),
-    [moveParam]
+    [moveParam],
   );
 
   const handleMovesUpdated = useCallback((updatedMoves: Move[]) => {
@@ -54,9 +57,64 @@ export default function BuildPage({
     router.back();
   };
 
-  const handleAddMove = () => {
-    // Save line logic here
-    handleBack();
+  const handleAddMove = async () => {
+    if (moves.length === 0) {
+      alert("No moves to save");
+      return;
+    }
+
+    try {
+      // Convert Move objects to SAN format
+      const movesInSan = moves.flatMap((move) => {
+        const result = [move.white];
+        if (move.black) result.push(move.black);
+        return result;
+      });
+
+      // Convert SAN to UCI format
+      let movesInUci: string[];
+      try {
+        movesInUci = convertSanToUci(movesInSan);
+      } catch (error) {
+        alert(`Invalid move: ${(error as Error).message}`);
+        return;
+      }
+
+      const response = await fetch("/api/repertoire-entries/save-line", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          color,
+          movesInSan,
+          movesInUci,
+        }),
+      });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error(
+          "Failed to parse response:",
+          response.status,
+          response.statusText,
+        );
+        alert(
+          `Error: Server returned ${response.status} ${response.statusText}`,
+        );
+        return;
+      }
+
+      if (!response.ok) {
+        alert(`Error saving line: ${data.error || "Unknown error"}`);
+        return;
+      }
+
+      alert(`✓ Line saved! ${data.entriesCreated} positions added.`);
+      handleBack();
+    } catch (error) {
+      alert(`Error: ${(error as Error).message}`);
+    }
   };
 
   const handleDeleteMove = (moveIndex: number) => {
@@ -114,7 +172,7 @@ export default function BuildPage({
       </div>
 
       {/* Right Panel */}
-      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0">
+      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0 flex flex-col overflow-hidden">
         <BuildPanel
           color={color}
           onBack={handleBack}

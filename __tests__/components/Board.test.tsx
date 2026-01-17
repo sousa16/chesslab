@@ -36,7 +36,7 @@ describe("Board Component", () => {
     const chessboard = screen.getByTestId("chessboard");
     // Standard chess starting position
     expect(chessboard.getAttribute("data-fen")).toBe(
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
     );
   });
 

@@ -19,8 +19,10 @@ export default function Home() {
   const { data: session, status } = useSession();
   const [view, setView] = useState<View>("home");
   const [selectedColor, setSelectedColor] = useState<"white" | "black">(
-    "white"
+    "white",
   );
+  const [initialMoves, setInitialMoves] = useState<string[]>([]);
+  const [initialFen, setInitialFen] = useState<string>("");
   const boardRef = useRef<BoardHandle>(null);
 
   useEffect(() => {
@@ -79,6 +81,12 @@ export default function Home() {
     router.push(`/training?color=${selectedColor}${query ? `&${query}` : ""}`);
   };
 
+  const handleLineClick = (moves: string[], startingFen: string) => {
+    // Create a new array reference to ensure React detects the change
+    setInitialMoves([...moves]);
+    setInitialFen(startingFen);
+  };
+
   const handleRotateBoard = () => {
     setSelectedColor(selectedColor === "white" ? "black" : "white");
   };
@@ -88,7 +96,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex">
       {/* Left Panel - Board */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0">
         {/* Logo in corner */}
@@ -98,7 +106,7 @@ export default function Home() {
 
         <div className="w-full max-w-4xl h-full flex flex-col items-center justify-center gap-4">
           {/* Player Info - Top */}
-          <div className="flex items-center gap-4 mb-3 px-1">
+          <div className="flex items-center gap-4 mb-2 px-1">
             <div
               className={`w-12 h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "black"
@@ -122,10 +130,12 @@ export default function Home() {
             ref={boardRef}
             playerColor={selectedColor}
             onMoveMade={handleMoveMade}
+            initialMoves={initialMoves}
+            initialFen={initialFen}
           />
 
           {/* Player Info - Bottom */}
-          <div className="flex items-center gap-4 mt-3 px-1">
+          <div className="flex items-center gap-4 mt-2 mb-2 px-1">
             <div
               className={`w-12 h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "white"
@@ -143,7 +153,7 @@ export default function Home() {
           </div>
 
           {/* Board Controls */}
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-3 flex items-center gap-3">
             <BoardControls
               onFirstMove={() => boardRef.current?.goToFirst()}
               onPreviousMove={() => boardRef.current?.goToPrevious()}
@@ -163,7 +173,7 @@ export default function Home() {
       </div>
 
       {/* Right Panel */}
-      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0">
+      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0 flex flex-col overflow-hidden">
         {view === "home" ? (
           <HomePanel
             onSelectRepertoire={handleSelectRepertoire}
@@ -175,6 +185,7 @@ export default function Home() {
             onBack={handleBack}
             onBuild={handleBuild}
             onLearn={handleLearn}
+            onLineClick={handleLineClick}
           />
         )}
       </aside>

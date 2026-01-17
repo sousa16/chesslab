@@ -15,11 +15,18 @@ interface BoardProps {
   onMoveHistoryChange?: (moveCount: number) => void;
   onMoveMade?: (move: { from: string; to: string; san: string }) => void;
   onMovesUpdated?: (
-    moves: { number: number; white: string; black?: string }[]
+    moves: {
+      number: number;
+      white: string;
+      whiteUci: string;
+      black?: string;
+      blackUci?: string;
+    }[],
   ) => void;
   buildMode?: boolean;
   onBuildMove?: (move: { from: string; to: string }) => void;
   initialMoves?: string[];
+  initialFen?: string;
 }
 
 export interface BoardHandle {
@@ -28,7 +35,13 @@ export interface BoardHandle {
   goToNext: () => void;
   goToLast: () => void;
   reset: () => void;
-  getMoveHistory: () => { number: number; white: string; black?: string }[];
+  getMoveHistory: () => {
+    number: number;
+    white: string;
+    whiteUci: string;
+    black?: string;
+    blackUci?: string;
+  }[];
   deleteToMove: (moveIndex: number) => void;
 }
 
@@ -42,8 +55,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       buildMode = false,
       onBuildMove,
       initialMoves = [],
+      initialFen,
     },
-    ref
+    ref,
   ) => {
     const gameRef = useRef(new Chess());
     const [position, setPosition] = useState(gameRef.current.fen());
@@ -53,8 +67,12 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
     // Initialize board with any initial moves
     useEffect(() => {
-      if (initialMoves.length > 0) {
-        gameRef.current.reset();
+      const startingFen =
+        initialFen ||
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+      gameRef.current = new Chess(startingFen);
+
+      if (initialMoves && initialMoves.length > 0) {
         const newHistory: string[] = [];
         const newMoves: string[] = [];
 
@@ -65,8 +83,8 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               newMoves.push(move.san);
               newHistory.push(gameRef.current.fen());
             }
-          } catch {
-            // Skip invalid moves
+          } catch (e) {
+            // Skip invalid moves silently
           }
         }
 
@@ -74,19 +92,48 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         setMoveHistory(newHistory);
         setCurrentMoveIndex(newHistory.length - 1);
         setPosition(gameRef.current.fen());
+      } else {
+        // Reset to initial state
+        setMoves([]);
+        setMoveHistory([]);
+        setCurrentMoveIndex(-1);
+        setPosition(gameRef.current.fen());
       }
-    }, [initialMoves]);
+    }, [initialFen, JSON.stringify(initialMoves)]);
 
     // Notify parent of moves changes
     useEffect(() => {
-      const result: { number: number; white: string; black?: string }[] = [];
+      const result: {
+        number: number;
+        white: string;
+        whiteUci: string;
+        black?: string;
+        blackUci?: string;
+      }[] = [];
+
+      // Replay moves to get both SAN and UCI
+      const tempGame = new Chess();
       for (let i = 0; i < moves.length; i++) {
         const moveNumber = Math.floor(i / 2) + 1;
-        if (i % 2 === 0) {
-          result.push({ number: moveNumber, white: moves[i] });
-        } else {
-          const lastMove = result[result.length - 1];
-          lastMove.black = moves[i];
+        try {
+          const moveObj = tempGame.move(moves[i]);
+          if (!moveObj) {
+            continue;
+          }
+
+          const uci = `${moveObj.from}${moveObj.to}${moveObj.promotion ? moveObj.promotion : ""}`;
+
+          if (i % 2 === 0) {
+            result.push({ number: moveNumber, white: moves[i], whiteUci: uci });
+          } else {
+            const lastMove = result[result.length - 1];
+            if (lastMove) {
+              lastMove.black = moves[i];
+              lastMove.blackUci = uci;
+            }
+          }
+        } catch (e) {
+          continue;
         }
       }
       onMovesUpdated?.(result);
@@ -200,17 +247,32 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
     const getMoveHistory = () => {
       // Convert the move array to the display format
-      const result: { number: number; white: string; black?: string }[] = [];
+      const result: {
+        number: number;
+        white: string;
+        whiteUci: string;
+        black?: string;
+        blackUci?: string;
+      }[] = [];
 
+      const tempGame = new Chess();
       for (let i = 0; i < moves.length; i++) {
         const moveNumber = Math.floor(i / 2) + 1;
+        const moveObj = tempGame.move(moves[i]);
+        if (!moveObj) continue;
+
+        const uci = `${moveObj.from}${moveObj.to}${moveObj.promotion ? moveObj.promotion : ""}`;
+
         if (i % 2 === 0) {
           // White move
-          result.push({ number: moveNumber, white: moves[i] });
+          result.push({ number: moveNumber, white: moves[i], whiteUci: uci });
         } else {
           // Black move
           const lastMove = result[result.length - 1];
-          lastMove.black = moves[i];
+          if (lastMove) {
+            lastMove.black = moves[i];
+            lastMove.blackUci = uci;
+          }
         }
       }
 
@@ -280,5 +342,5 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         )}
       </div>
     );
-  }
+  },
 );

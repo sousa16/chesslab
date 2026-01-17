@@ -10,10 +10,10 @@ export function ProgressCard({ label, current, total }: ProgressCardProps) {
   const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
 
   return (
-    <div className="bg-surface-2 rounded-lg p-4 border border-border/50">
+    <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="text-base font-semibold text-foreground">
+        <p className="text-sm font-semibold text-foreground">
           {current}/{total}
         </p>
       </div>

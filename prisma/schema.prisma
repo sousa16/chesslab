@@ -49,8 +49,9 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
+  accounts      Account[]
+  sessions      Session[]
+  repertoires   Repertoire[]
 }
 
 model VerificationToken {
@@ -59,4 +60,68 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ============================================================================
+// Chess Repertoire & Spaced Repetition System (SRS) Models
+// ============================================================================
+
+enum PieceColor {
+  White
+  Black
+}
+
+// Represents a single chess position (identified by FEN).
+// Positions are deduplicated globally and reused across all users/repertoires.
+model Position {
+  id                String                @id @default(cuid())
+  fen               String                @unique @db.Text // FEN string uniquely identifies the position
+  createdAt         DateTime              @default(now())
+  
+  repertoireEntries RepertoireEntry[]     // All repertoire entries that reference this position
+
+  @@index([fen])
+}
+
+// Represents a user-created opening repertoire for a specific color.
+// Repertoire naming is computed dynamically from move history, not stored.
+model Repertoire {
+  id        String      @id @default(cuid())
+  userId    String
+  color     PieceColor
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries           RepertoireEntry[]
+
+  @@index([userId])
+}
+
+// Represents an entry in a repertoire: a position + expected move + SRS state.
+// Multiple repertoires may reference the same position.
+// SRS fields (interval, easeFactor, repetitions, nextReviewDate) track learning progress.
+model RepertoireEntry {
+  id              String    @id @default(cuid())
+  repertoireId    String
+  positionId      String
+  expectedMove    String                      // UCI format (e.g., "e2e4") or SAN (e.g., "e4")
+  
+  // Spaced Repetition System (SRS) fields
+  interval        Int       @default(0)       // Days until next review
+  easeFactor      Float     @default(2.5)     // SM-2 algorithm ease factor
+  repetitions     Int       @default(0)       // Number of times reviewed
+  nextReviewDate  DateTime  @default(now())   // When this entry is due for review
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  repertoire      Repertoire @relation(fields: [repertoireId], references: [id], onDelete: Cascade)
+  position        Position   @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  // Ensure no duplicate entries (same position can't appear twice in same repertoire)
+  @@unique([repertoireId, positionId])
+  @@index([repertoireId])
+  @@index([positionId])
+  @@index([nextReviewDate]) // For efficient SRS due date queries
 }

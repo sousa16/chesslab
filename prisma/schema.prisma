@@ -95,6 +95,7 @@ model Repertoire {
   user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   entries           RepertoireEntry[]
 
+  @@unique([userId, color])
   @@index([userId])
 }
 

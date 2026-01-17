@@ -54,9 +54,41 @@ export default function BuildPage({
     router.back();
   };
 
-  const handleAddMove = () => {
-    // Save line logic here
-    handleBack();
+  const handleAddMove = async () => {
+    if (moves.length === 0) {
+      alert("No moves to save");
+      return;
+    }
+
+    try {
+      // Convert Move objects back to SAN format
+      const movesInSan = moves.flatMap((move) => {
+        const result = [move.white];
+        if (move.black) result.push(move.black);
+        return result;
+      });
+
+      const response = await fetch("/api/repertoire-entries/save-line", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          color,
+          movesInSan,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(`Error saving line: ${data.error}`);
+        return;
+      }
+
+      const data = await response.json();
+      alert(`✓ Line saved! ${data.entriesCreated} positions added.`);
+      handleBack();
+    } catch (error) {
+      alert(`Error: ${(error as Error).message}`);
+    }
   };
 
   const handleDeleteMove = (moveIndex: number) => {

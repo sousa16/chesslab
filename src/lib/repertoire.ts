@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { Chess } from "chess.js";
 
 /**
  * Ensure a user has repertoires for both colors.
@@ -24,24 +25,29 @@ export async function ensureUserRepertoires(userId: string) {
     await prisma.repertoire.createMany({ data: toCreate });
   }
 
-  return { created: toCreate.length, hasWhite: hasWhite || toCreate.some(r => r.color === "White"), hasBlack: hasBlack || toCreate.some(r => r.color === "Black") };
+  return {
+    created: toCreate.length,
+    hasWhite: hasWhite || toCreate.some((r) => r.color === "White"),
+    hasBlack: hasBlack || toCreate.some((r) => r.color === "Black"),
+  };
 }
 
 /**
  * Save an opening line to a user's repertoire.
- * 
+ *
  * This function implements the core save logic:
- * 1. For each move in the line, get the FEN before the move
- * 2. Create or reuse a Position (deduplicated by FEN)
- * 3. Create a RepertoireEntry linking the position to the expected move
- * 4. Initialize SRS fields for spaced repetition training
+ * 1. Play through the moves and find positions where it's the USER's turn
+ * 2. For each such position, the expectedMove is the user's next move
+ * 3. Create or reuse a Position (deduplicated by FEN)
+ * 4. Create a RepertoireEntry linking the position to the expected move
+ * 5. Initialize SRS fields for spaced repetition training
  */
 export async function saveRepertoireLine(
   userId: string,
   repertoireColor: "white" | "black",
   moveHistory: string[], // FEN positions after each move (in order)
   movesInSan: string[], // Moves in SAN notation (e.g., ["e4", "c5", "Nf3"])
-  movesInUci: string[] // Moves in UCI notation (e.g., ["e2e4", "c7c5", "g1f3"])
+  movesInUci: string[], // Moves in UCI notation (e.g., ["e2e4", "c7c5", "g1f3"])
 ) {
   if (movesInSan.length === 0) {
     throw new Error("Cannot save empty line");
@@ -49,6 +55,25 @@ export async function saveRepertoireLine(
 
   if (movesInSan.length !== movesInUci.length) {
     throw new Error("SAN and UCI move counts must match");
+  }
+
+  // Validate that the last move belongs to the user
+  // In chess, move indices: 0=White, 1=Black, 2=White, 3=Black, etc.
+  // White repertoire needs odd length (last move is White's)
+  // Black repertoire needs even length (last move is Black's)
+  const isWhiteRepertoire = repertoireColor === "white";
+  const lastMoveIsWhite = (movesInSan.length - 1) % 2 === 0; // 0-indexed
+
+  if (isWhiteRepertoire && !lastMoveIsWhite) {
+    throw new Error(
+      "White repertoire lines must end with a White move. Last move is from opponent.",
+    );
+  }
+
+  if (!isWhiteRepertoire && lastMoveIsWhite) {
+    throw new Error(
+      "Black repertoire lines must end with a Black move. Last move is from opponent.",
+    );
   }
 
   // Get or create the repertoire for this user and color
@@ -63,15 +88,10 @@ export async function saveRepertoireLine(
 
   if (!repertoire) {
     throw new Error(
-      `Repertoire not found for user ${userId} and color ${repertoireColor}`
+      `Repertoire not found for user ${userId} and color ${repertoireColor}`,
     );
   }
 
-  // We need to reconstruct the FEN before each move
-  // moveHistory contains FENs AFTER each move
-  // So we need to work backward or use chess.js to replay
-  
-  const Chess = require("chess.js").Chess;
   const game = new Chess();
   const fensBeforeMoves: string[] = [];
 
@@ -81,8 +101,16 @@ export async function saveRepertoireLine(
     game.move(movesInSan[i]);
   }
 
-  // Save each move as a separate entry
+  // Save only positions where it's the USER's turn to move
+  // For White repertoire: save positions before White's moves (even indices: 0, 2, 4...)
+  // For Black repertoire: save positions before Black's moves (odd indices: 1, 3, 5...)
   for (let i = 0; i < movesInSan.length; i++) {
+    const isWhiteMove = i % 2 === 0; // 0, 2, 4... are White's moves
+
+    // Only save if this move belongs to the user
+    if (isWhiteRepertoire && !isWhiteMove) continue; // Skip Black's moves for White repertoire
+    if (!isWhiteRepertoire && isWhiteMove) continue; // Skip White's moves for Black repertoire
+
     const fenBefore = fensBeforeMoves[i];
     const uciMove = movesInUci[i];
 
@@ -94,12 +122,13 @@ export async function saveRepertoireLine(
     });
 
     // Create or update the repertoire entry
-    // If it already exists, don't overwrite SRS data
+    // If it already exists with the same expectedMove, don't overwrite SRS data
     await prisma.repertoireEntry.upsert({
       where: {
-        repertoireId_positionId: {
+        repertoireId_positionId_expectedMove: {
           repertoireId: repertoire.id,
           positionId: position.id,
+          expectedMove: uciMove,
         },
       },
       update: {}, // Don't modify if exists (preserve SRS)
@@ -120,7 +149,6 @@ export async function saveRepertoireLine(
  * Convert SAN moves to UCI format using chess.js
  */
 export function convertSanToUci(movesInSan: string[]): string[] {
-  const Chess = require("chess.js").Chess;
   const game = new Chess();
   const uciMoves: string[] = [];
 

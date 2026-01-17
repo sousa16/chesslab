@@ -120,8 +120,9 @@ model RepertoireEntry {
   repertoire      Repertoire @relation(fields: [repertoireId], references: [id], onDelete: Cascade)
   position        Position   @relation(fields: [positionId], references: [id], onDelete: Cascade)
 
-  // Ensure no duplicate entries (same position can't appear twice in same repertoire)
-  @@unique([repertoireId, positionId])
+  // Allow multiple entries per position (for different moves from same position)
+  // but prevent duplicates of the same (repertoire, position, expectedMove) triple
+  @@unique([repertoireId, positionId, expectedMove])
   @@index([repertoireId])
   @@index([positionId])
   @@index([nextReviewDate]) // For efficient SRS due date queries

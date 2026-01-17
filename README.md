@@ -1,104 +1,115 @@
 # Chesslab
 
-Minimal, focused, training-first platform for chess improvement.
+A chess opening repertoire builder and training platform. Build, manage, and practice chess opening lines.
 
-## Stack
+## Tech Stack
 
-- **Framework**: [Next.js](https://nextjs.org) 16 (App Router)
-- **Auth**: [Auth.js](https://authjs.dev) with Google OAuth + Email/Password
-- **Database**: PostgreSQL via [Neon](https://neon.tech)
-- **ORM**: [Prisma](https://www.prisma.io)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com) 4 with custom color system
-- **UI**: Custom component library with [Radix UI](https://www.radix-ui.com) primitives
-- **Chess**: [react-chessboard](https://www.npmjs.com/package/react-chessboard) + [chess.js](https://www.npmjs.com/package/chess.js)
-- **Language**: TypeScript
+- **Frontend**: Next.js 16 (App Router), React 19, TypeScript
+- **Backend**: Node.js, NextAuth.js (Google OAuth + Email/Password)
+- **Database**: PostgreSQL + Prisma ORM
+- **Styling**: Tailwind CSS 4, Radix UI components
+- **Chess**: react-chessboard + chess.js
+- **Email**: Resend
+- **Testing**: Jest + React Testing Library
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL database (Neon recommended)
-- Google OAuth credentials (for authentication)
-
-### Setup
-
-1. Clone the repo and install dependencies:
+1. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Create `.env` with:
+2. Create `.env.local`:
 ```env
 DATABASE_URL="postgresql://..."
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="$(openssl rand -base64 32)"
 GOOGLE_CLIENT_ID="..."
 GOOGLE_CLIENT_SECRET="..."
+RESEND_API_KEY="..."
+FROM_EMAIL="noreply@chesslab.dev"
 ```
 
-3. Initialize the database:
+3. Setup database and run:
 ```bash
-npx prisma generate
 npx prisma db push
-```
-
-4. Run the development server:
-```bash
 npm run dev
 ```
-
-Open [http://localhost:3000](http://localhost:3000)
-
-## Authentication
-
-- **Google OAuth**: Click "Continue with Google" on the auth page
-- **Email/Password**: Create an account or sign in with credentials
-- Passwords are hashed with bcryptjs; sessions use JWT
 
 ## Project Structure
 
 ```
 src/
 ├── app/
-│   ├── (auth)/        # Auth pages and routes
-│   ├── (app)/         # Protected app pages with chessboard
-│   ├── api/auth/      # Auth.js API routes
-│   └── layout.tsx     # Root layout
+│   ├── (app)/              # Protected routes (require auth)
+│   │   ├── page.tsx        # Home/dashboard
+│   │   ├── build/[color]/  # Build repertoire
+│   │   ├── repertoire/     # View openings
+│   │   ├── training/       # Practice mode
+│   │   └── settings/       # User settings
+│   ├── (auth)/auth/        # Login/register
+│   └── api/auth/           # NextAuth handlers
 ├── components/
-│   ├── Board.tsx          # Interactive chessboard display
-│   ├── BoardControls.tsx  # Move navigation controls
-│   └── ...                # Other UI components
-├── lib/              # Auth config, Prisma client, utilities
-├── types/            # TypeScript types
-└── app.css           # Tailwind styles
+│   ├── Board.tsx           # Interactive chess board
+│   ├── BuildPanel.tsx      # Repertoire editor
+│   ├── RepertoirePanel.tsx # Opening browser
+│   ├── Sidebar.tsx         # Navigation
+│   └── ui/                 # Radix UI wrappers
+├── lib/
+│   ├── auth.ts             # Auth config
+│   ├── email.ts            # Email service
+│   └── prisma.ts           # DB client
+├── proxy.ts                # Route protection logic
+└── types/                  # TypeScript types
+
+prisma/schema.prisma        # Database schema
+__tests__/                  # Tests
 ```
 
-## Development
+## Route Protection
 
-- Use `npm run dev` to start dev server
-- Use `npm run build` to build for production
-- Use `npm run lint` to check code style
-- Use `npm test` to run tests (backend + component tests)
+Unauthenticated users accessing protected routes (`/`, `/build/*`, `/repertoire`, `/training`, `/settings`) are redirected to `/auth` page via client-side session checks in protected pages. Route protection logic is defined in `src/proxy.ts` but wired up at the page level using `useSession()` hook.
 
 ## Features
 
-### Chessboard
-- Full interactive chess board with piece rendering
-- Board controls for move navigation (First, Previous, Next, Last, Reset)
-- Responsive sizing with proper aspect ratio
-- Custom color palette matching the design system
+- **Authentication**: Email/password (with verification) + Google OAuth
+- **Repertoire Builder**: Interactive board to add opening lines by color
+- **Move Navigation**: First, previous, next, last, reset controls
+- **Progress Tracking**: Track learned lines per opening
+- **Build Mode**: Add new moves to repertoires
+- **Playback Mode**: Navigate through recorded lines
 
-### Testing
-- Backend tests with Jest for API routes and utilities
-- Component tests using React Testing Library
-- Tests for Board and BoardControls components included
+## Authentication Flow
 
-## Color System
+### Email/Password Registration
+1. User enters email and password on `/auth` page
+2. System checks for existing user
+3. Password hashed and user created with `emailVerified: null`
+4. 24-hour verification token generated
+5. Email sent via Resend with verification link
+6. **User cannot login until email verified**
 
-Custom HSL-based palette:
-- **Background**: Deep charcoal (220 12% 9%)
-- **Foreground**: Warm off-white (220 10% 82%)
-- **Primary**: Deep muted green (158 35% 38%)
-- **Surfaces**: 3 levels for depth
-- **Status**: Success (green), Error (red), Warning (orange)
+### Email/Password Login
+1. User enters credentials
+2. Password compared with hash
+3. If not verified: new verification token sent, login blocked
+4. If verified: JWT session created
+
+### Google OAuth
+1. User clicks "Continue with Google"
+2. Redirects to Google consent screen
+3. Account created/linked if new user
+4. **Immediately logged in** (no email verification)
+
+## Scripts
+
+```bash
+npm run dev              # Start dev server
+npm run build            # Build for production
+npm start                # Start production server
+npm run lint             # Run ESLint
+npm test                 # Run all tests
+npm run test:watch      # Watch mode
+npm run test:coverage   # Coverage report
+```
+

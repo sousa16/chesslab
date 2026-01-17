@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 interface Move {
   number: number;
   white: string;
+  whiteUci: string;
   black?: string;
+  blackUci?: string;
 }
 
 interface BuildPanelProps {
@@ -102,36 +104,46 @@ export function BuildPanel({
             Moves
           </p>
           <div className="space-y-1">
-            {moves.map((move, index) => (
-              <div
-                key={index}
-                className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-                  index < currentMoveIndex
-                    ? "bg-surface-2 text-foreground"
-                    : "bg-muted text-muted-foreground"
-                }`}>
-                <div className="flex items-center gap-2 flex-1">
-                  <span className="text-sm font-medium w-6">
-                    {move.number}.
-                  </span>
-                  <span className="font-mono text-base">{move.white}</span>
-                  {move.black && (
-                    <>
-                      <span className="font-mono text-base">{move.black}</span>
-                    </>
+            {moves.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic py-2">
+                No moves yet
+              </p>
+            ) : (
+              moves.map((move, index) => (
+                <div
+                  key={index}
+                  className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+                    index < currentMoveIndex
+                      ? "bg-surface-2 text-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}>
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="text-sm font-medium w-6">
+                      {move.number}.
+                    </span>
+                    <span className="font-mono text-base">
+                      {move.whiteUci || move.white}
+                    </span>
+                    {(move.blackUci || move.black) && (
+                      <>
+                        <span className="font-mono text-base">
+                          {move.blackUci || move.black}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  {index < currentMoveIndex && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => onDeleteMove?.(index)}>
+                      <X size={16} />
+                    </Button>
                   )}
                 </div>
-                {index < currentMoveIndex && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                    onClick={() => onDeleteMove?.(index)}>
-                    <X size={16} />
-                  </Button>
-                )}
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 

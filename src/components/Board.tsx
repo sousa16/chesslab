@@ -15,7 +15,13 @@ interface BoardProps {
   onMoveHistoryChange?: (moveCount: number) => void;
   onMoveMade?: (move: { from: string; to: string; san: string }) => void;
   onMovesUpdated?: (
-    moves: { number: number; white: string; black?: string }[]
+    moves: {
+      number: number;
+      white: string;
+      whiteUci: string;
+      black?: string;
+      blackUci?: string;
+    }[],
   ) => void;
   buildMode?: boolean;
   onBuildMove?: (move: { from: string; to: string }) => void;
@@ -28,7 +34,13 @@ export interface BoardHandle {
   goToNext: () => void;
   goToLast: () => void;
   reset: () => void;
-  getMoveHistory: () => { number: number; white: string; black?: string }[];
+  getMoveHistory: () => {
+    number: number;
+    white: string;
+    whiteUci: string;
+    black?: string;
+    blackUci?: string;
+  }[];
   deleteToMove: (moveIndex: number) => void;
 }
 
@@ -43,7 +55,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       onBuildMove,
       initialMoves = [],
     },
-    ref
+    ref,
   ) => {
     const gameRef = useRef(new Chess());
     const [position, setPosition] = useState(gameRef.current.fen());
@@ -79,14 +91,31 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
     // Notify parent of moves changes
     useEffect(() => {
-      const result: { number: number; white: string; black?: string }[] = [];
+      const result: {
+        number: number;
+        white: string;
+        whiteUci: string;
+        black?: string;
+        blackUci?: string;
+      }[] = [];
+
+      // Replay moves to get both SAN and UCI
+      const tempGame = new Chess();
       for (let i = 0; i < moves.length; i++) {
         const moveNumber = Math.floor(i / 2) + 1;
+        const moveObj = tempGame.move(moves[i]);
+        if (!moveObj) continue;
+
+        const uci = `${moveObj.from}${moveObj.to}${moveObj.promotion ? moveObj.promotion : ""}`;
+
         if (i % 2 === 0) {
-          result.push({ number: moveNumber, white: moves[i] });
+          result.push({ number: moveNumber, white: moves[i], whiteUci: uci });
         } else {
           const lastMove = result[result.length - 1];
-          lastMove.black = moves[i];
+          if (lastMove) {
+            lastMove.black = moves[i];
+            lastMove.blackUci = uci;
+          }
         }
       }
       onMovesUpdated?.(result);
@@ -200,17 +229,32 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
     const getMoveHistory = () => {
       // Convert the move array to the display format
-      const result: { number: number; white: string; black?: string }[] = [];
+      const result: {
+        number: number;
+        white: string;
+        whiteUci: string;
+        black?: string;
+        blackUci?: string;
+      }[] = [];
 
+      const tempGame = new Chess();
       for (let i = 0; i < moves.length; i++) {
         const moveNumber = Math.floor(i / 2) + 1;
+        const moveObj = tempGame.move(moves[i]);
+        if (!moveObj) continue;
+
+        const uci = `${moveObj.from}${moveObj.to}${moveObj.promotion ? moveObj.promotion : ""}`;
+
         if (i % 2 === 0) {
           // White move
-          result.push({ number: moveNumber, white: moves[i] });
+          result.push({ number: moveNumber, white: moves[i], whiteUci: uci });
         } else {
           // Black move
           const lastMove = result[result.length - 1];
-          lastMove.black = moves[i];
+          if (lastMove) {
+            lastMove.black = moves[i];
+            lastMove.blackUci = uci;
+          }
         }
       }
 
@@ -280,5 +324,5 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         )}
       </div>
     );
-  }
+  },
 );

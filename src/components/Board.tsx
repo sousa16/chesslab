@@ -67,10 +67,12 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
     // Initialize board with any initial moves
     useEffect(() => {
-      const startingFen = initialFen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+      const startingFen =
+        initialFen ||
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
       gameRef.current = new Chess(startingFen);
-      
-      if (initialMoves.length > 0) {
+
+      if (initialMoves && initialMoves.length > 0) {
         const newHistory: string[] = [];
         const newMoves: string[] = [];
 
@@ -82,8 +84,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               newHistory.push(gameRef.current.fen());
             }
           } catch (e) {
-            // Skip invalid moves
-            console.error(`Invalid move: ${moveSan}`, e);
+            // Skip invalid moves silently
           }
         }
 
@@ -98,7 +99,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         setCurrentMoveIndex(-1);
         setPosition(gameRef.current.fen());
       }
-    }, [initialMoves, initialFen]);
+    }, [initialFen, JSON.stringify(initialMoves)]);
 
     // Notify parent of moves changes
     useEffect(() => {

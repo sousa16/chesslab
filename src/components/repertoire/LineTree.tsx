@@ -24,7 +24,12 @@ interface LineTreeProps {
   onLineClick?: (moves: string[], startingFen: string) => void; // Callback with moves and starting position
 }
 
-export function LineTree({ root, onBuild, onLearn, onLineClick }: LineTreeProps) {
+export function LineTree({
+  root,
+  onBuild,
+  onLearn,
+  onLineClick,
+}: LineTreeProps) {
   // Helper function to extract all moves from a node's moveSequence and convert to SAN
   const extractMovesForNode = (targetNode: LineNode): string[] => {
     const moveSequence = targetNode.moveSequence;
@@ -40,7 +45,12 @@ export function LineTree({ root, onBuild, onLearn, onLineClick }: LineTreeProps)
 
     for (const part of parts) {
       // Skip invalid parts
-      if (!part || part === "..." || part === "[object Object]" || part.includes("[object Object]")) {
+      if (
+        !part ||
+        part === "..." ||
+        part === "[object Object]" ||
+        part.includes("[object Object]")
+      ) {
         continue;
       }
 
@@ -48,10 +58,20 @@ export function LineTree({ root, onBuild, onLearn, onLineClick }: LineTreeProps)
         // Format: "1.e2e4" - extract the move part after the dot
         const movePart = part.split(".")[1];
         // Validate it's a string and looks like a valid UCI move
-        if (movePart && typeof movePart === "string" && movePart.length >= 4 && /^[a-h][1-8][a-h][1-8]/.test(movePart)) {
+        if (
+          movePart &&
+          typeof movePart === "string" &&
+          movePart.length >= 4 &&
+          /^[a-h][1-8][a-h][1-8]/.test(movePart)
+        ) {
           uciMoves.push(movePart);
         }
-      } else if (part.length >= 4 && !part.includes(".") && typeof part === "string" && /^[a-h][1-8][a-h][1-8]/.test(part)) {
+      } else if (
+        part.length >= 4 &&
+        !part.includes(".") &&
+        typeof part === "string" &&
+        /^[a-h][1-8][a-h][1-8]/.test(part)
+      ) {
         // Format: "c7c5" - bare move without number (validate square notation)
         uciMoves.push(part);
       }

@@ -68,7 +68,7 @@ describe("Opening Line Save Feature", () => {
 
       expect(repertoires).toHaveLength(2);
       expect(repertoires.map((r) => r.color)).toEqual(
-        expect.arrayContaining(["White", "Black"])
+        expect.arrayContaining(["White", "Black"]),
       );
     });
 
@@ -97,9 +97,9 @@ describe("Opening Line Save Feature", () => {
 
       await saveRepertoireLine(testUserId, "white", [], movesInSan, movesInUci);
 
-      // Verify 3 positions were created
+      // Verify positions were created
       const positions = await prisma.position.findMany();
-      expect(positions.length).toBeGreaterThanOrEqual(3);
+      expect(positions.length).toBeGreaterThanOrEqual(2);
 
       // Verify repertoire entries were created
       const repertoire = await prisma.repertoire.findUnique({
@@ -112,7 +112,9 @@ describe("Opening Line Save Feature", () => {
         include: { entries: true },
       });
 
-      expect(repertoire?.entries).toHaveLength(3);
+      // For White repertoire with moves [e4, c5, Nf3], only e4 (index 0) and Nf3 (index 2) are saved
+      // c5 is Black's move and is not saved for White repertoire
+      expect(repertoire?.entries).toHaveLength(2);
 
       // Verify SRS fields are initialized
       repertoire?.entries.forEach((entry) => {
@@ -126,29 +128,33 @@ describe("Opening Line Save Feature", () => {
     it("reuses Position when saving transposed lines", async () => {
       await ensureUserRepertoires(testUserId);
 
-      // Line 1: 1. e4 c5
-      const line1 = convertSanToUci(["e4", "c5"]);
-      await saveRepertoireLine(testUserId, "white", [], ["e4", "c5"], line1);
-
-      const positionsBefore = await prisma.position.findMany();
-
-      // Line 2: 1. c5 e4 (different move order, same position)
-      // This won't transpose in standard chess, but demonstrates the principle
-      // For true transposition test, we'd need Sicilian vs French that meet at a square
-      const line2 = convertSanToUci(["e4", "c5", "Nf3"]);
+      // Line 1: 1. e4 c5 2. Nf3 (ends with White move)
+      const line1 = convertSanToUci(["e4", "c5", "Nf3"]);
       await saveRepertoireLine(
         testUserId,
         "white",
         [],
         ["e4", "c5", "Nf3"],
-        line2
+        line1,
+      );
+
+      const positionsBefore = await prisma.position.findMany();
+
+      // Line 2: 1. e4 e5 2. Nf3 (different line but reuses e4 position)
+      const line2 = convertSanToUci(["e4", "e5", "Nf3"]);
+      await saveRepertoireLine(
+        testUserId,
+        "white",
+        [],
+        ["e4", "e5", "Nf3"],
+        line2,
       );
 
       const positionsAfter = await prisma.position.findMany();
 
-      // The e4 c5 position is reused, so we only added 1 new position
+      // The e4 position should be reused, so we shouldn't add too many new positions
       expect(positionsAfter.length).toBeLessThanOrEqual(
-        positionsBefore.length + 2
+        positionsBefore.length + 2,
       );
     });
 
@@ -198,7 +204,7 @@ describe("Opening Line Save Feature", () => {
       const moves = convertSanToUci(["e4"]);
 
       await expect(
-        saveRepertoireLine(testUserId, "white", [], ["e4"], moves)
+        saveRepertoireLine(testUserId, "white", [], ["e4"], moves),
       ).rejects.toThrow("Repertoire not found");
     });
   });
@@ -207,9 +213,15 @@ describe("Opening Line Save Feature", () => {
     it("stores same position only once globally", async () => {
       await ensureUserRepertoires(testUserId);
 
-      // Save line 1
-      const line1 = convertSanToUci(["e4", "c5"]);
-      await saveRepertoireLine(testUserId, "white", [], ["e4", "c5"], line1);
+      // Save line 1: 1. e4 c5 2. Nf3 (White's moves at indices 0, 2)
+      const line1 = convertSanToUci(["e4", "c5", "Nf3"]);
+      await saveRepertoireLine(
+        testUserId,
+        "white",
+        [],
+        ["e4", "c5", "Nf3"],
+        line1,
+      );
 
       // Create second user and save overlapping line
       const user2Id = "test-user-456";
@@ -218,8 +230,14 @@ describe("Opening Line Save Feature", () => {
       });
       await ensureUserRepertoires(user2Id);
 
-      const line2 = convertSanToUci(["e4", "c5"]);
-      await saveRepertoireLine(user2Id, "white", [], ["e4", "c5"], line2);
+      const line2 = convertSanToUci(["e4", "c5", "Nf3"]);
+      await saveRepertoireLine(
+        user2Id,
+        "white",
+        [],
+        ["e4", "c5", "Nf3"],
+        line2,
+      );
 
       // Both users should reference same Position records
       const user1Entries = await prisma.repertoireEntry.findMany({

@@ -163,9 +163,23 @@ export default function BuildPage({
           {/* Hint */}
           <div className="text-center">
             <p className="text-base text-muted-foreground">
-              {color === "white"
-                ? "Black's turn. Click a square to add response."
-                : "White's turn. Click a square to add move."}
+              {(() => {
+                // Determine whose turn it is based on the moves array
+                // If the last move is complete (has both white and black), it's the player's turn
+                // If the last move is incomplete (only white, no black), it's the opponent's turn
+                const lastMove = moves[moves.length - 1];
+                const isOpponentTurn = lastMove && !lastMove.black;
+
+                if (isOpponentTurn) {
+                  return color === "white"
+                    ? "Black's turn. Click a square to add response."
+                    : "White's turn. Click a square to add response.";
+                } else {
+                  return color === "white"
+                    ? "White's turn. Click a square to add move."
+                    : "Black's turn. Click a square to add move.";
+                }
+              })()}
             </p>
           </div>
         </div>

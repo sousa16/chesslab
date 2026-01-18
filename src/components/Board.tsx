@@ -64,6 +64,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     const [moveHistory, setMoveHistory] = useState<string[]>([]);
     const [moves, setMoves] = useState<string[]>([]);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
+    const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
 
     // Initialize board with any initial moves
     useEffect(() => {
@@ -138,6 +139,43 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       }
       onMovesUpdated?.(result);
     }, [moves, onMovesUpdated]);
+
+    const handleSquareClick = (square: string) => {
+      // If no square is selected, select this square if it has a piece
+      if (!selectedSquare) {
+        const piece = gameRef.current.get(square as any);
+        if (piece) {
+          setSelectedSquare(square);
+        }
+        return;
+      }
+
+      // If a square is already selected, try to make a move
+      if (selectedSquare === square) {
+        // Deselect if clicking the same square
+        setSelectedSquare(null);
+        return;
+      }
+
+      // Try to make a move from selected square to clicked square
+      const success = handlePieceDrop({
+        sourceSquare: selectedSquare,
+        targetSquare: square,
+        piece: { isSparePiece: false, position: selectedSquare, pieceType: "" },
+      });
+
+      if (success) {
+        setSelectedSquare(null);
+      } else {
+        // If move failed, check if the clicked square has a piece and select it
+        const piece = gameRef.current.get(square as any);
+        if (piece) {
+          setSelectedSquare(square);
+        } else {
+          setSelectedSquare(null);
+        }
+      }
+    };
 
     const handlePieceDrop = ({
       sourceSquare,
@@ -314,8 +352,32 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     return (
       <div className="relative">
         <div
-          className="w-full aspect-square max-w-2xl rounded-lg overflow-hidden shadow-lg"
-          data-testid="board">
+          className="w-full aspect-square max-w-2xl rounded-lg overflow-hidden shadow-lg cursor-pointer"
+          data-testid="board"
+          onClick={(e) => {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const squareSize = rect.width / 8;
+            let file = Math.floor(x / squareSize);
+            let rank = 7 - Math.floor(y / squareSize); // Invert rank (top = 8, bottom = 1)
+
+            // Adjust for board orientation
+            if (playerColor === "black") {
+              file = 7 - file;
+              rank = 7 - rank;
+            }
+
+            const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+            const ranks = ["1", "2", "3", "4", "5", "6", "7", "8"];
+            const squareFile = files[file];
+            const squareRank = ranks[rank];
+
+            if (squareFile && squareRank) {
+              const square = squareFile + squareRank;
+              handleSquareClick(square);
+            }
+          }}>
           <Chessboard
             options={{
               position,
@@ -325,6 +387,13 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               lightSquareStyle: { backgroundColor: "#b8a06d" },
               darkSquareStyle: { backgroundColor: "#2c5233" },
               allowDragging: currentMoveIndex === moveHistory.length - 1,
+              squareStyles: selectedSquare
+                ? {
+                    [selectedSquare]: {
+                      backgroundColor: "rgba(255, 200, 0, 0.4)",
+                    },
+                  }
+                : {},
             }}
           />
         </div>

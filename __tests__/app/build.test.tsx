@@ -14,7 +14,10 @@ jest.mock("next/navigation", () => ({
 const mockBoardReset = jest.fn();
 jest.mock("@/components/Board", () => ({
   Board: React.forwardRef(
-    ({ playerColor, buildMode, onMovesUpdated, initialMoves }: any, ref: any) => {
+    (
+      { playerColor, buildMode, onMovesUpdated, initialMoves }: any,
+      ref: any,
+    ) => {
       React.useImperativeHandle(ref, () => ({
         reset: mockBoardReset,
         goToFirst: jest.fn(),
@@ -41,7 +44,7 @@ jest.mock("@/components/Board", () => ({
           Board Component
         </div>
       );
-    }
+    },
   ),
   BoardHandle: {},
 }));
@@ -104,7 +107,7 @@ describe("Build Page", () => {
     render(<BuildPage params={{ color: "white" }} />);
 
     expect(
-      screen.getByText("White's turn. Click a square to add move.")
+      screen.getByText("White's turn. Click a square to add move."),
     ).toBeInTheDocument();
   });
 
@@ -116,7 +119,7 @@ describe("Build Page", () => {
     render(<BuildPage params={{ color: "black" }} />);
 
     expect(
-      screen.getByText("Black's turn. Click a square to add move.")
+      screen.getByText("Black's turn. Click a square to add move."),
     ).toBeInTheDocument();
   });
 
@@ -125,7 +128,7 @@ describe("Build Page", () => {
 
     // Initially white's turn
     expect(
-      screen.getByText("White's turn. Click a square to add move.")
+      screen.getByText("White's turn. Click a square to add move."),
     ).toBeInTheDocument();
 
     // Make a move (white makes e4)
@@ -133,7 +136,7 @@ describe("Build Page", () => {
 
     // After white's move, it should be black's turn
     expect(
-      screen.getByText("Black's turn. Click a square to add response.")
+      screen.getByText("Black's turn. Click a square to add response."),
     ).toBeInTheDocument();
   });
 
@@ -146,7 +149,7 @@ describe("Build Page", () => {
 
     // Initially black's turn
     expect(
-      screen.getByText("Black's turn. Click a square to add move.")
+      screen.getByText("Black's turn. Click a square to add move."),
     ).toBeInTheDocument();
 
     // Make a move (black makes e5)
@@ -154,7 +157,7 @@ describe("Build Page", () => {
 
     // After black's move, it should be white's turn
     expect(
-      screen.getByText("White's turn. Click a square to add response.")
+      screen.getByText("White's turn. Click a square to add response."),
     ).toBeInTheDocument();
   });
 

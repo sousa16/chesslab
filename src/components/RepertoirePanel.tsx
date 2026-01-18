@@ -109,7 +109,7 @@ export function RepertoirePanel({
       {/* Openings Tree */}
       <div className="flex-1 p-4 overflow-hidden">
         <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
-          Lines
+          Opening Lines
         </h3>
         {isLoading ? (
           <div className="text-center py-8">
@@ -126,9 +126,6 @@ export function RepertoirePanel({
           <div className="space-y-4">
             {openings.map((opening) => (
               <div key={opening.id}>
-                <h4 className="text-sm font-semibold text-foreground mb-2">
-                  {opening.name}
-                </h4>
                 {opening.root ? (
                   <LineTree
                     root={opening.root}

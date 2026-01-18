@@ -284,20 +284,6 @@ function formatBranchMoveSequence(
  * Compute an opening name based on the opening moves
  */
 function computeOpeningName(node: LineNode): string {
-  const seq = node.moveSequence.toLowerCase();
-
-  // Check for common openings
-  if (seq.includes("e2e4")) {
-    if (seq.includes("c7c5")) return "Sicilian Defense";
-    if (seq.includes("e7e5")) return "Open Games (1. e4 e5)";
-    return "1. e4 Openings";
-  }
-  if (seq.includes("d2d4")) {
-    if (seq.includes("d7d5")) return "Queen's Gambit";
-    if (seq.includes("g8f6")) return "1. d4 Nf6";
-    return "1. d4 Openings";
-  }
-  if (seq.includes("c2c4")) return "English Opening";
-
-  return "Opening Lines";
+  // Return a generic opening name for all lines
+  return "Opening Line";
 }

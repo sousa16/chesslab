@@ -40,6 +40,12 @@ export default function Home() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    // Reset board when coming back from build/training pages
+    // The board should be reset to initial state when on the home page
+    boardRef.current?.reset();
+  }, []);
+
   if (status === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center">

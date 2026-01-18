@@ -127,18 +127,18 @@ export default function BuildPage({
   const currentMove = moves[currentMoveIndex - 1];
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex">
       {/* Left Panel - Board */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
         {/* Logo in corner */}
         <div className="absolute top-4 left-4">
           <Logo size="xl" />
         </div>
 
-        <div className="w-full max-w-2xl flex flex-col items-center gap-4">
+        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-4">
           {/* Position indicator */}
-          {currentMove && (
-            <div className="w-full px-1">
+          <div className="w-full px-1 h-14 flex items-center">
+            {currentMove && (
               <div className="bg-surface-2 rounded-lg px-4 py-3 border border-border/50 inline-flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
                   Position after
@@ -148,8 +148,8 @@ export default function BuildPage({
                   {currentMove.black && ` ${currentMove.black}`}
                 </span>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Board */}
           <Board
@@ -161,7 +161,7 @@ export default function BuildPage({
           />
 
           {/* Hint */}
-          <div className="text-center">
+          <div className="text-center h-14 flex items-center">
             <p className="text-base text-muted-foreground">
               {(() => {
                 // Determine whose turn it is based on the moves array
@@ -186,6 +186,19 @@ export default function BuildPage({
                 }
               })()}
             </p>
+          </div>
+
+          {/* Invisible placeholder for board controls alignment */}
+          <div className="flex items-center gap-3 invisible">
+            <div className="flex items-center justify-center gap-3">
+              <button className="h-14 w-14 p-0" />
+              <button className="h-14 w-14 p-0" />
+              <button className="h-14 w-14 p-0" />
+              <button className="h-14 w-14 p-0" />
+              <div className="w-px h-10 bg-border mx-3" />
+              <button className="h-14 w-14 p-0" />
+            </div>
+            <button className="h-12 w-12 p-0" />
           </div>
         </div>
       </div>

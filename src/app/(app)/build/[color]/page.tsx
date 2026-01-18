@@ -170,14 +170,19 @@ export default function BuildPage({
                 const lastMove = moves[moves.length - 1];
                 const isOpponentTurn = lastMove && !lastMove.black;
 
-                if (isOpponentTurn) {
-                  return color === "white"
-                    ? "Black's turn. Click a square to add response."
-                    : "White's turn. Click a square to add response.";
+                if (color === "white") {
+                  if (isOpponentTurn) {
+                    return "Black's turn. Click a square to add response.";
+                  } else {
+                    return "White's turn. Click a square to add move.";
+                  }
                 } else {
-                  return color === "white"
-                    ? "White's turn. Click a square to add move."
-                    : "Black's turn. Click a square to add move.";
+                  // Black repertoire
+                  if (isOpponentTurn) {
+                    return "Black's turn. Click a square to add response.";
+                  } else {
+                    return "White's turn. Click a square to add move.";
+                  }
                 }
               })()}
             </p>

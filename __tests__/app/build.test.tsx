@@ -119,7 +119,7 @@ describe("Build Page", () => {
     render(<BuildPage params={{ color: "black" }} />);
 
     expect(
-      screen.getByText("Black's turn. Click a square to add move."),
+      screen.getByText("White's turn. Click a square to add move."),
     ).toBeInTheDocument();
   });
 
@@ -147,17 +147,17 @@ describe("Build Page", () => {
 
     render(<BuildPage params={{ color: "black" }} />);
 
-    // Initially black's turn
+    // Initially white's turn (white goes first)
     expect(
-      screen.getByText("Black's turn. Click a square to add move."),
+      screen.getByText("White's turn. Click a square to add move."),
     ).toBeInTheDocument();
 
-    // Make a move (black makes e5)
+    // Make a move (white makes e4)
     fireEvent.click(screen.getByTestId("chessboard"));
 
-    // After black's move, it should be white's turn
+    // After white's move, it should be black's turn
     expect(
-      screen.getByText("White's turn. Click a square to add response."),
+      screen.getByText("Black's turn. Click a square to add response."),
     ).toBeInTheDocument();
   });
 

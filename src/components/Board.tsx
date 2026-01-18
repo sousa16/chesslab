@@ -355,7 +355,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           className="w-full aspect-square max-w-2xl rounded-lg overflow-hidden shadow-lg cursor-pointer"
           data-testid="board"
           onClick={(e) => {
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const rect = (
+              e.currentTarget as HTMLElement
+            ).getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             const squareSize = rect.width / 8;

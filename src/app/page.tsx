@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AuthModal } from "@/components/AuthModal";
 import { Button } from "@/components/ui/button";
 import {
   Brain,
@@ -16,6 +18,8 @@ import {
 } from "lucide-react";
 
 export default function LandingPage() {
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white light:from-white light:via-slate-50 light:to-white light:text-slate-900">
       {/* Navigation */}
@@ -24,14 +28,16 @@ export default function LandingPage() {
           <Logo size="md" />
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <Link href="/auth" className="text-slate-400 dark:text-slate-400 light:text-slate-600 hover:text-white dark:hover:text-white light:hover:text-slate-900 transition-colors">
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="text-slate-400 dark:text-slate-400 light:text-slate-600 hover:text-white dark:hover:text-white light:hover:text-slate-900 transition-colors">
               Sign In
-            </Link>
-            <Link href="/auth">
-              <Button className="bg-green-500 hover:bg-green-600 text-white">
-                Get Started
-              </Button>
-            </Link>
+            </button>
+            <Button
+              onClick={() => setAuthModalOpen(true)}
+              className="bg-green-500 hover:bg-green-600 text-white">
+              Get Started
+            </Button>
           </div>
         </div>
       </nav>
@@ -54,20 +60,19 @@ export default function LandingPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/auth?mode=white">
-                  <Button className="w-full sm:w-auto h-12 bg-green-500 hover:bg-green-600 text-white text-lg flex items-center justify-center gap-2">
-                    Start White Repertoire
-                    <ChevronRight className="w-5 h-5" />
-                  </Button>
-                </Link>
-                <Link href="/auth?mode=black">
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto h-12 border-slate-600 text-white hover:bg-slate-800/50 text-lg flex items-center justify-center gap-2">
-                    Build Black Repertoire
-                    <ChevronRight className="w-5 h-5" />
-                  </Button>
-                </Link>
+                <Button
+                  onClick={() => setAuthModalOpen(true)}
+                  className="w-full sm:w-auto h-12 bg-green-500 hover:bg-green-600 text-white text-lg flex items-center justify-center gap-2">
+                  Start White Repertoire
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
+                <Button
+                  onClick={() => setAuthModalOpen(true)}
+                  variant="outline"
+                  className="w-full sm:w-auto h-12 border-slate-600 text-white hover:bg-slate-800/50 text-lg flex items-center justify-center gap-2">
+                  Build Black Repertoire
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
               </div>
 
               <div className="flex items-center gap-8 pt-4">
@@ -343,18 +348,17 @@ export default function LandingPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth">
-              <Button className="h-12 bg-green-500 hover:bg-green-600 text-white text-lg px-8">
-                Start Training Now
-              </Button>
-            </Link>
-            <Link href="/auth?mode=demo">
-              <Button
-                variant="outline"
-                className="h-12 border-slate-600 text-white hover:bg-slate-800/50 text-lg px-8">
-                See Demo
-              </Button>
-            </Link>
+            <Button
+              onClick={() => setAuthModalOpen(true)}
+              className="h-12 bg-green-500 hover:bg-green-600 text-white text-lg px-8">
+              Start Training Now
+            </Button>
+            <Button
+              onClick={() => setAuthModalOpen(true)}
+              variant="outline"
+              className="h-12 border-slate-600 text-white hover:bg-slate-800/50 text-lg px-8">
+              See Demo
+            </Button>
           </div>
         </div>
       </section>
@@ -379,6 +383,9 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Auth Modal */}
+      <AuthModal open={authModalOpen} onOpenChange={setAuthModalOpen} />
     </div>
   );
 }

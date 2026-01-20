@@ -74,6 +74,54 @@
     --warning: 38 50% 50%;
     --error: 0 40% 48%;
   }
+
+  /* Light mode */
+  html:not(.dark) {
+    --background: 0 0% 100%;
+    --foreground: 220 10% 10%;
+
+    --card: 0 0% 96%;
+    --card-foreground: 220 10% 10%;
+
+    --popover: 0 0% 96%;
+    --popover-foreground: 220 10% 10%;
+
+    --primary: 158 35% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 10% 85%;
+    --secondary-foreground: 220 10% 20%;
+
+    --muted: 220 10% 85%;
+    --muted-foreground: 220 8% 40%;
+
+    --accent: 158 20% 30%;
+    --accent-foreground: 158 25% 95%;
+
+    --destructive: 0 45% 60%;
+    --destructive-foreground: 0 20% 100%;
+
+    --border: 220 10% 90%;
+    --input: 220 10% 90%;
+    --ring: 158 35% 45%;
+
+    --sidebar-background: 220 10% 95%;
+    --sidebar-foreground: 220 10% 20%;
+    --sidebar-primary: 158 35% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 10% 85%;
+    --sidebar-accent-foreground: 220 10% 10%;
+    --sidebar-border: 220 10% 90%;
+    --sidebar-ring: 158 35% 45%;
+
+    --surface-1: 220 10% 97%;
+    --surface-2: 220 10% 94%;
+    --surface-3: 220 10% 91%;
+
+    --success: 158 40% 50%;
+    --warning: 38 50% 60%;
+    --error: 0 40% 58%;
+  }
 }
 
 @layer base {

@@ -32,9 +32,7 @@ describe("AuthPage Component", () => {
     it("should render the auth page with logo and title", () => {
       render(<AuthPage />);
 
-      expect(
-        screen.getByText("Master your opening repertoire")
-      ).toBeInTheDocument();
+      // Text removed from auth page - now just checks for title
       expect(screen.getByText("Welcome back")).toBeInTheDocument();
     });
 
@@ -50,7 +48,7 @@ describe("AuthPage Component", () => {
     it("should render Google sign-in button", () => {
       render(<AuthPage />);
 
-      expect(screen.getByText("Continue with Google")).toBeInTheDocument();
+      expect(screen.getByText("Google")).toBeInTheDocument();
     });
 
     it("should render sign in/up toggle link", () => {
@@ -67,7 +65,7 @@ describe("AuthPage Component", () => {
       render(<AuthPage />);
 
       expect(screen.getByText("Welcome back")).toBeInTheDocument();
-      expect(screen.getByText("Sign in")).toBeInTheDocument();
+      // Login button is rendered instead of "Sign in" text
 
       const toggleButton = screen.getByText("Sign up");
       await user.click(toggleButton);
@@ -121,7 +119,7 @@ describe("AuthPage Component", () => {
 
       const emailInput = screen.getByPlaceholderText("you@example.com");
       const passwordInput = screen.getByPlaceholderText("••••••••");
-      const submitButton = screen.getByRole("button", { name: /sign in/i });
+      const submitButton = screen.getByRole("button", { name: /login/i });
 
       await user.type(emailInput, "test@example.com");
       await user.type(passwordInput, "password123");
@@ -138,11 +136,11 @@ describe("AuthPage Component", () => {
       const user = userEvent.setup();
       render(<AuthPage />);
 
-      const googleButton = screen.getByText("Continue with Google");
+      const googleButton = screen.getByText("Google");
       await user.click(googleButton);
 
       expect(mockSignIn).toHaveBeenCalledWith("google", {
-        callbackUrl: "/",
+        callbackUrl: "/build/color",
       });
     });
 
@@ -157,7 +155,7 @@ describe("AuthPage Component", () => {
           })
       );
 
-      const googleButton = screen.getByText("Continue with Google");
+      const googleButton = screen.getByText("Google");
       await user.click(googleButton);
 
       expect(googleButton).toBeDisabled();
@@ -173,7 +171,7 @@ describe("AuthPage Component", () => {
 
       const emailInput = screen.getByPlaceholderText("you@example.com");
       const passwordInput = screen.getByPlaceholderText("••••••••");
-      const submitButton = screen.getByRole("button", { name: /sign in/i });
+      const submitButton = screen.getByRole("button", { name: /login/i });
 
       await user.type(emailInput, "test@example.com");
       await user.type(passwordInput, "password123");
@@ -198,7 +196,7 @@ describe("AuthPage Component", () => {
 
       const emailInput = screen.getByPlaceholderText("you@example.com");
       const passwordInput = screen.getByPlaceholderText("••••••••");
-      const submitButton = screen.getByRole("button", { name: /sign in/i });
+      const submitButton = screen.getByRole("button", { name: /login/i });
 
       await user.type(emailInput, "wrong@example.com");
       await user.type(passwordInput, "wrongpassword");
@@ -219,7 +217,7 @@ describe("AuthPage Component", () => {
 
       const emailInput = screen.getByPlaceholderText("you@example.com");
       const passwordInput = screen.getByPlaceholderText("••••••••");
-      const submitButton = screen.getByRole("button", { name: /sign in/i });
+      const submitButton = screen.getByRole("button", { name: /login/i });
 
       await user.type(emailInput, "test@example.com");
       await user.type(passwordInput, "password123");
@@ -300,7 +298,7 @@ describe("AuthPage Component", () => {
 
       const emailInput = screen.getByPlaceholderText("you@example.com");
       const passwordInput = screen.getByPlaceholderText("••••••••");
-      const submitButton = screen.getByRole("button", { name: /sign in/i });
+      const submitButton = screen.getByRole("button", { name: /login/i });
 
       await user.type(emailInput, "test@example.com");
       await user.type(passwordInput, "password123");
@@ -308,7 +306,7 @@ describe("AuthPage Component", () => {
 
       await waitFor(() => {
         const errorMessage = screen.getByText("Invalid email or password");
-        expect(errorMessage).toHaveClass("text-red-500");
+        expect(errorMessage).toHaveClass("text-red-400");
       });
     });
   });

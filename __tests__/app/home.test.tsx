@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SessionProvider } from "next-auth/react";
-import Home from "@/app/(app)/page";
+import Home from "@/app/(app)/home/page";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -137,7 +137,7 @@ describe("Home Page", () => {
     expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
 
-  it("should redirect to auth when unauthenticated", () => {
+  it("should redirect to landing page when unauthenticated", () => {
     mockUseSession.mockReturnValue({
       data: null,
       status: "unauthenticated",
@@ -146,7 +146,7 @@ describe("Home Page", () => {
 
     render(<Home />);
 
-    expect(mockPush).toHaveBeenCalledWith("/auth");
+    expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   it("should render home page when user is authenticated", () => {

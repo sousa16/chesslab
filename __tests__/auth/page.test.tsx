@@ -140,7 +140,7 @@ describe("AuthPage Component", () => {
       await user.click(googleButton);
 
       expect(mockSignIn).toHaveBeenCalledWith("google", {
-        callbackUrl: "/build/color",
+        callbackUrl: "/home",
       });
     });
 

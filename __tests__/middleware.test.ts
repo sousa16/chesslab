@@ -47,6 +47,17 @@ describe("Middleware - Route Protection", () => {
   });
 
   describe("Protected Routes (No Token)", () => {
+    it("should redirect from /home to / when not authenticated", async () => {
+      mockGetToken.mockResolvedValue(null);
+      const request = new NextRequest("http://localhost:3000/home");
+
+      const response = await proxy(request);
+
+      expect(response?.status).toBe(307);
+      expect(response?.headers.get("location")).toContain("/");
+      expect(response?.headers.get("location")).not.toContain("/home");
+    });
+
     it("should redirect from /repertoire to / when not authenticated", async () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/repertoire");
@@ -96,6 +107,15 @@ describe("Middleware - Route Protection", () => {
       email: "test@example.com",
       iat: Math.floor(Date.now() / 1000),
     };
+
+    it("should allow access to /home when authenticated", async () => {
+      mockGetToken.mockResolvedValue(mockToken as unknown as Awaited<ReturnType<typeof getToken>>);
+      const request = new NextRequest("http://localhost:3000/home");
+
+      const response = await proxy(request);
+
+      expect(response?.status).toBe(200);
+    });
 
     it("should allow access to /repertoire when authenticated", async () => {
       mockGetToken.mockResolvedValue(mockToken as unknown as Awaited<ReturnType<typeof getToken>>);

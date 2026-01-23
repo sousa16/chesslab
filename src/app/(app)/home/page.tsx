@@ -26,9 +26,9 @@ export default function Home() {
   const boardRef = useRef<BoardHandle>(null);
 
   useEffect(() => {
-    // If session is loaded and user is not authenticated, redirect to auth
+    // If session is loaded and user is not authenticated, redirect to landing page
     if (status === "unauthenticated") {
-      router.push("/auth");
+      router.push("/");
     }
   }, [status, router]);
 

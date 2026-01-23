@@ -61,7 +61,7 @@ export default function AuthPage() {
           setShowResendButton(true);
         }
       } else if (result?.ok) {
-        window.location.href = "/build/color";
+        window.location.href = "/home";
       }
     } catch (error) {
       setError("An unexpected error occurred");
@@ -105,7 +105,7 @@ export default function AuthPage() {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    await signIn("google", { callbackUrl: "/build/color" });
+    await signIn("google", { callbackUrl: "/home" });
   };
 
   return (

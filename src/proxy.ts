@@ -2,7 +2,7 @@ import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
 
 // Protected routes that require authentication
-const protectedRoutes = ["/repertoire", "/training", "/build", "/settings"];
+const protectedRoutes = ["/home", "/repertoire", "/training", "/build", "/settings"];
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;

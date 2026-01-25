@@ -101,18 +101,23 @@ model Repertoire {
 
 // Represents an entry in a repertoire: a position + expected move + SRS state.
 // Multiple repertoires may reference the same position.
-// SRS fields (interval, easeFactor, repetitions, nextReviewDate) track learning progress.
+// SRS fields (interval, easeFactor, repetitions, nextReviewDate) track learning progress using Anki SM-2.
 model RepertoireEntry {
   id              String    @id @default(cuid())
   repertoireId    String
   positionId      String
   expectedMove    String                      // UCI format (e.g., "e2e4") or SAN (e.g., "e4")
   
-  // Spaced Repetition System (SRS) fields
+  // Spaced Repetition System (SRS) fields - Anki SM-2 Algorithm
   interval        Int       @default(0)       // Days until next review
-  easeFactor      Float     @default(2.5)     // SM-2 algorithm ease factor
-  repetitions     Int       @default(0)       // Number of times reviewed
+  easeFactor      Float     @default(2.5)     // SM-2 algorithm ease factor (starts at 2.3)
+  repetitions     Int       @default(0)       // Number of successful reviews
   nextReviewDate  DateTime  @default(now())   // When this entry is due for review
+  lastReviewDate  DateTime?                   // Last time this entry was reviewed
+  phase           String    @default("learning") // "learning", "exponential", or "relearning"
+  
+  // Learning phase tracking
+  learningStepIndex Int     @default(0)       // Current step in learning/relearning phases
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

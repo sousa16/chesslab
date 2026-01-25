@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Plus, X } from "lucide-react";
+import { ChevronLeft, Plus, X, Save, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Move {
@@ -35,42 +35,50 @@ export function BuildPanel({
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border flex items-center justify-between bg-surface-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground hover:text-foreground"
-          onClick={onBack}>
-          <ChevronLeft size={20} />
-        </Button>
-        <div className="flex-1 flex flex-col items-center gap-1">
-          <h2 className="text-base font-semibold text-muted-foreground uppercase tracking-wide">
-            Building
-          </h2>
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-7 h-7 rounded flex items-center justify-center text-base ${
-                color === "white"
-                  ? "bg-zinc-100 text-zinc-900"
-                  : "bg-zinc-800 text-zinc-100"
-              }`}>
-              {color === "white" ? "♔" : "♚"}
-            </div>
-            <span className="text-lg font-semibold text-foreground capitalize">
-              {color}
-            </span>
+      <div className="p-5 border-b border-border/50 glass-panel">
+        <div className="flex items-center justify-between mb-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground hover:bg-surface-2 rounded-xl -ml-2"
+            onClick={onBack}>
+            <ChevronLeft size={20} />
+          </Button>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium uppercase tracking-wide">
+            <Sparkles size={12} />
+            Building Mode
           </div>
         </div>
-        <div className="w-10" />
+        
+        {/* Color Badge - Hero Style */}
+        <div className="flex items-center gap-4">
+          <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
+            color === "white"
+              ? "bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50"
+              : "bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50"
+          }`}>
+            <span className={`text-2xl drop-shadow-sm ${color === "black" ? "text-zinc-300" : ""}`}>
+              {color === "white" ? "♔" : "♚"}
+            </span>
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-foreground capitalize">
+              {color} Repertoire
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {moves.length} moves added
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-4 space-y-4">
+      <div className="flex-1 p-5 space-y-5 overflow-y-auto">
         {/* Opening Info */}
         {(openingName || lineName) && (
-          <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
+          <div className="glass-card rounded-xl p-4">
             {openingName && (
-              <p className="text-base font-medium text-foreground mb-1">
+              <p className="text-base font-semibold text-foreground mb-1">
                 {openingName}
               </p>
             )}
@@ -80,94 +88,111 @@ export function BuildPanel({
           </div>
         )}
 
-        {/* Repertoire Color */}
-        <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-          <p className="text-sm text-muted-foreground mb-2">Building</p>
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                color === "white"
-                  ? "bg-zinc-100"
-                  : "bg-zinc-800 border border-zinc-700"
-              }`}>
-              <span className="text-xl">{color === "white" ? "♔" : "♚"}</span>
+        {/* Add Move Prompt - Prominent with animation */}
+        <div className="relative overflow-hidden rounded-xl p-5 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30 animate-pulse-subtle">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-12 -mt-12 animate-glow" />
+          <div className="relative">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                <Sparkles size={18} className="text-primary" />
+              </div>
+              <div>
+                <p className="text-base text-foreground font-semibold">
+                  {moves.length === 0 ? "Start building your line" : "Add next move"}
+                </p>
+                <p className="text-xs text-primary font-medium">
+                  {moves.length === 0 ? "Make your first move" : "Continue the sequence"}
+                </p>
+              </div>
             </div>
-            <span className="text-base font-medium text-foreground capitalize">
-              {color} Repertoire
-            </span>
+            <div className="flex items-start gap-2 pl-13">
+              <div className="w-1 h-1 rounded-full bg-primary mt-2 flex-shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                Click any piece on the board, then click where you want to move it.
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Move List */}
         <div>
-          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">
-            Moves
-          </p>
-          <div className="space-y-1">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Move Sequence
+            </p>
+            {moves.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {moves.length} {moves.length === 1 ? "move" : "moves"}
+              </span>
+            )}
+          </div>
+          
+          <div className="glass-card rounded-xl overflow-hidden">
             {moves.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic py-2">
-                No moves yet
-              </p>
+              <div className="p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-3">
+                  <span className="text-2xl opacity-50">♟</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  No moves yet. Start building your line!
+                </p>
+              </div>
             ) : (
-              moves.map((move, index) => (
-                <div
-                  key={index}
-                  className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-                    index < currentMoveIndex
-                      ? "bg-surface-2 text-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}>
-                  <div className="flex items-center gap-2 flex-1">
-                    <span className="text-sm font-medium w-6">
-                      {move.number}.
-                    </span>
-                    <span className="font-mono text-base">
-                      {move.whiteUci || move.white}
-                    </span>
-                    {(move.blackUci || move.black) && (
-                      <>
-                        <span className="font-mono text-base">
-                          {move.blackUci || move.black}
+              <div className="divide-y divide-border/30">
+                {moves.map((move, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-center justify-between p-3 transition-all group ${
+                      index < currentMoveIndex
+                        ? "bg-transparent hover:bg-surface-2"
+                        : "bg-muted/30"
+                    }`}>
+                    <div className="flex items-center gap-3 flex-1">
+                      <span className="text-xs font-medium text-muted-foreground w-6 text-right">
+                        {move.number}.
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="move-badge move-badge-white">
+                          {move.whiteUci || move.white}
                         </span>
-                      </>
+                        {(move.blackUci || move.black) && (
+                          <span className="move-badge move-badge-black">
+                            {move.blackUci || move.black}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {index < currentMoveIndex && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
+                        onClick={() => onDeleteMove?.(index)}>
+                        <X size={14} />
+                      </Button>
                     )}
                   </div>
-                  {index < currentMoveIndex && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      onClick={() => onDeleteMove?.(index)}>
-                      <X size={16} />
-                    </Button>
-                  )}
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>
-
-        {/* Add Move Prompt */}
-        {currentMoveIndex === moves.length && (
-          <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
-            <p className="text-base text-foreground font-medium mb-2">
-              Add next move
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Click on a square on the board to add a move.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Footer */}
-      <div className="border-t border-border p-4 space-y-2">
+      <div className="border-t border-border/50 p-5 glass-panel">
         <Button
-          className="w-full h-12 text-base"
-          onClick={() => onAddMove?.("")}>
-          <Plus size={20} className="mr-2" />
+          className="w-full h-12 text-base btn-primary-gradient rounded-xl font-medium gap-2.5"
+          onClick={() => onAddMove?.("")}
+          disabled={moves.length === 0}>
+          <Save size={18} />
           Save Line
         </Button>
+        {moves.length > 0 && (
+          <p className="text-xs text-muted-foreground text-center mt-3">
+            This will add {moves.length} positions to your repertoire
+          </p>
+        )}
       </div>
     </div>
   );

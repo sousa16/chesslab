@@ -349,10 +349,17 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
     const isViewingHistory = currentMoveIndex !== moveHistory.length - 1;
 
+    // Board theme colors - Midnight theme (muted slate for reduced eye strain)
+    const boardColors = {
+      light: "#c8c4bc", // soft cream/slate
+      dark: "#5c6370",  // muted slate gray
+      highlight: "rgba(255, 200, 0, 0.4)",
+    };
+
     return (
       <div className="relative">
         <div
-          className="w-full aspect-square max-w-2xl rounded-lg overflow-hidden shadow-lg cursor-pointer"
+          className="w-full aspect-square max-w-2xl rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
           data-testid="board"
           onClick={(e) => {
             const rect = (
@@ -386,13 +393,13 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               boardOrientation: playerColor,
               onPieceDrop: handlePieceDrop,
               showNotation: true,
-              lightSquareStyle: { backgroundColor: "#b8a06d" },
-              darkSquareStyle: { backgroundColor: "#2c5233" },
+              lightSquareStyle: { backgroundColor: boardColors.light },
+              darkSquareStyle: { backgroundColor: boardColors.dark },
               allowDragging: currentMoveIndex === moveHistory.length - 1,
               squareStyles: selectedSquare
                 ? {
                     [selectedSquare]: {
-                      backgroundColor: "rgba(255, 200, 0, 0.4)",
+                      backgroundColor: boardColors.highlight,
                     },
                   }
                 : {},
@@ -400,8 +407,8 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           />
         </div>
         {isViewingHistory && (
-          <div className="absolute inset-0 bg-black/30 rounded-lg flex items-center justify-center">
-            <div className="bg-background/90 px-6 py-3 rounded-lg text-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-2xl flex items-center justify-center">
+            <div className="glass-card px-6 py-4 rounded-xl text-center">
               <p className="text-base font-medium text-foreground">
                 Viewing move history
               </p>

@@ -33,8 +33,16 @@ export default function Home() {
   }, [status, router]);
 
   useEffect(() => {
-    // Read color from query params and set it
+    // Read panel and color from query params
+    const panelParam = searchParams.get("panel");
     const colorParam = searchParams.get("color");
+    
+    if (panelParam === "repertoire") {
+      setView("repertoire");
+    } else {
+      setView("home");
+    }
+    
     if (colorParam === "white" || colorParam === "black") {
       setSelectedColor(colorParam);
     }
@@ -107,7 +115,7 @@ export default function Home() {
       <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
         {/* Logo in corner */}
         <div className="absolute top-4 left-4">
-          <Logo size="xl" />
+          <Logo size="xl" clickable={true} onLogoClick={() => setView("home")} />
         </div>
 
         <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-4">

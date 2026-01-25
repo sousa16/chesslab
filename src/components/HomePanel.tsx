@@ -1,8 +1,23 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Play, Settings, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+
+interface ColorStats {
+  learned: number;
+  total: number;
+}
+
+interface TrainingStats {
+  dueCount: number;
+  totalPositions: number;
+  colorStats: {
+    white: ColorStats;
+    black: ColorStats;
+  };
+}
 
 interface HomePanelProps {
   onSelectRepertoire: (color: "white" | "black") => void;
@@ -14,6 +29,33 @@ export function HomePanel({
   onStartPractice,
 }: HomePanelProps) {
   const router = useRouter();
+  const [stats, setStats] = useState<TrainingStats>({
+    dueCount: 0,
+    totalPositions: 0,
+    colorStats: {
+      white: { learned: 0, total: 0 },
+      black: { learned: 0, total: 0 },
+    },
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch("/api/training-stats");
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Error fetching training stats:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   return (
     <div className="h-full flex flex-col">
@@ -49,13 +91,19 @@ export function HomePanel({
                   White Repertoire
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="h-2 flex-1 bg-zinc-200 rounded-full overflow-hidden">
+                  <div className="h-2 flex-1 bg-zinc-300 dark:bg-zinc-700 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary transition-all"
-                      style={{ width: "68%" }}
+                      className="h-full bg-zinc-100 transition-all"
+                      style={{
+                        width: `${stats.colorStats.white.total > 0 ? Math.round((stats.colorStats.white.learned / stats.colorStats.white.total) * 100) : 100}%`,
+                      }}
                     />
                   </div>
-                  <span className="text-sm text-muted-foreground">68%</span>
+                  <span className="text-sm text-muted-foreground">
+                    {stats.colorStats.white.total > 0
+                      ? `${Math.round((stats.colorStats.white.learned / stats.colorStats.white.total) * 100)}%`
+                      : "100%"}
+                  </span>
                 </div>
               </div>
               <ChevronRight
@@ -76,13 +124,19 @@ export function HomePanel({
                   Black Repertoire
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="h-2 flex-1 bg-zinc-200 rounded-full overflow-hidden">
+                  <div className="h-2 flex-1 bg-zinc-300 dark:bg-zinc-600 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary transition-all"
-                      style={{ width: "45%" }}
+                      className="h-full bg-zinc-800 transition-all"
+                      style={{
+                        width: `${stats.colorStats.black.total > 0 ? Math.round((stats.colorStats.black.learned / stats.colorStats.black.total) * 100) : 100}%`,
+                      }}
                     />
                   </div>
-                  <span className="text-sm text-muted-foreground">45%</span>
+                  <span className="text-sm text-muted-foreground">
+                    {stats.colorStats.black.total > 0
+                      ? `${Math.round((stats.colorStats.black.learned / stats.colorStats.black.total) * 100)}%`
+                      : "100%"}
+                  </span>
                 </div>
               </div>
               <ChevronRight
@@ -101,22 +155,31 @@ export function HomePanel({
           <div className="bg-surface-2 rounded-lg border border-border/50 p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-2xl font-semibold text-foreground">32</p>
+                <p className="text-2xl font-semibold text-foreground">
+                  {isLoading ? "..." : stats.dueCount}
+                </p>
                 <p className="text-sm text-muted-foreground">
                   moves to practice
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-base text-primary font-medium">Due today</p>
-                <p className="text-sm text-muted-foreground">~8 min</p>
+                <p className="text-base text-primary font-medium">
+                  {stats.dueCount > 0 ? "Due now" : "All caught up!"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {stats.dueCount > 0
+                    ? `~${Math.max(1, Math.ceil(stats.dueCount / 4))} min`
+                    : "Great job!"}
+                </p>
               </div>
             </div>
             <Button
               onClick={onStartPractice}
               className="w-full gap-2 text-base"
-              size="lg">
+              size="lg"
+              disabled={stats.dueCount === 0}>
               <Play size={20} />
-              Practice Now
+              {stats.dueCount > 0 ? "Practice Now" : "Nothing to Practice"}
             </Button>
           </div>
         </section>
@@ -129,21 +192,17 @@ export function HomePanel({
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
               <p className="text-sm text-muted-foreground mb-2">
-                Lines Learned
+                Total Positions
               </p>
-              <p className="text-2xl font-semibold text-foreground">156</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {isLoading ? "..." : stats.totalPositions}
+              </p>
             </div>
             <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-              <p className="text-sm text-muted-foreground mb-2">Accuracy</p>
-              <p className="text-2xl font-semibold text-foreground">84%</p>
-            </div>
-            <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-              <p className="text-sm text-muted-foreground mb-2">Streak</p>
-              <p className="text-2xl font-semibold text-foreground">12 days</p>
-            </div>
-            <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-              <p className="text-sm text-muted-foreground mb-2">Time Today</p>
-              <p className="text-2xl font-semibold text-foreground">23m</p>
+              <p className="text-sm text-muted-foreground mb-2">Due Today</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {isLoading ? "..." : stats.dueCount}
+              </p>
             </div>
           </div>
         </section>

@@ -30,6 +30,7 @@ interface RepertoirePanelProps {
   onBack: () => void;
   onBuild: (openingId?: string, lineId?: string) => void;
   onLearn: (openingId?: string, lineId?: string) => void;
+  onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (moves: string[], startingFen: string) => void;
 }
 
@@ -38,6 +39,7 @@ export function RepertoirePanel({
   onBack,
   onBuild,
   onLearn,
+  onDelete,
   onLineClick,
 }: RepertoirePanelProps) {
   const [openings, setOpenings] = useState<Opening[]>([]);
@@ -131,6 +133,7 @@ export function RepertoirePanel({
                     root={opening.root}
                     onBuild={onBuild}
                     onLearn={onLearn}
+                    onDelete={onDelete}
                     onLineClick={onLineClick}
                   />
                 ) : (

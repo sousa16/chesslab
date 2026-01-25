@@ -68,7 +68,7 @@ export default function Home() {
   };
 
   const handleStartPractice = () => {
-    router.push("/training?color=white");
+    router.push("/training");
   };
 
   const handleBuild = (openingId?: string, lineId?: string) => {
@@ -81,16 +81,31 @@ export default function Home() {
 
   const handleLearn = (openingId?: string, lineId?: string) => {
     const params = new URLSearchParams();
+    params.set("color", selectedColor);
+    params.set("mode", "practice"); // Practice mode - no SRS updates
     if (openingId) params.set("opening", openingId);
     if (lineId) params.set("line", lineId);
-    const query = params.toString();
-    router.push(`/training?color=${selectedColor}${query ? `&${query}` : ""}`);
+    router.push(`/training?${params.toString()}`);
   };
 
   const handleLineClick = (moves: string[], startingFen: string) => {
     // Create a new array reference to ensure React detects the change
     setInitialMoves([...moves]);
     setInitialFen(startingFen);
+  };
+
+  const handleDelete = async (nodeId: string) => {
+    const response = await fetch(`/api/repertoire-entries/${nodeId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to delete line");
+    }
+
+    // Refresh the page to reflect the changes
+    window.location.reload();
   };
 
   const handleRotateBoard = () => {
@@ -191,6 +206,7 @@ export default function Home() {
             onBack={handleBack}
             onBuild={handleBuild}
             onLearn={handleLearn}
+            onDelete={handleDelete}
             onLineClick={handleLineClick}
           />
         )}

@@ -3,8 +3,16 @@
  * Shows positions and expected moves with proper algebraic notation
  */
 
-import { ChevronDown, Hammer, GraduationCap } from "lucide-react";
+import { ChevronDown, Hammer, GraduationCap, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useState } from "react";
 import { Chess } from "chess.js";
 
@@ -21,6 +29,7 @@ interface LineTreeProps {
   root: LineNode;
   onBuild: (nodeId: string) => void;
   onLearn: (nodeId: string) => void;
+  onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (moves: string[], startingFen: string) => void; // Callback with moves and starting position
 }
 
@@ -28,6 +37,7 @@ export function LineTree({
   root,
   onBuild,
   onLearn,
+  onDelete,
   onLineClick,
 }: LineTreeProps) {
   // Helper function to extract all moves from a node's moveSequence and convert to SAN
@@ -113,6 +123,7 @@ export function LineTree({
         depth={0}
         onBuild={onBuild}
         onLearn={onLearn}
+        onDelete={onDelete}
         onLineClick={onLineClick}
         extractMovesForNode={extractMovesForNode}
       />
@@ -125,6 +136,7 @@ interface LineNodeComponentProps {
   depth: number;
   onBuild: (nodeId: string) => void;
   onLearn: (nodeId: string) => void;
+  onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (moves: string[], startingFen: string) => void;
   extractMovesForNode: (node: LineNode) => string[];
 }
@@ -134,10 +146,13 @@ function LineNodeComponent({
   depth,
   onBuild,
   onLearn,
+  onDelete,
   onLineClick,
   extractMovesForNode,
 }: LineNodeComponentProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const hasChildren = node.children.length > 0;
 
   // Display the full move sequence
@@ -148,6 +163,19 @@ function LineNodeComponent({
     if (onLineClick) {
       const moves = extractMovesForNode(node);
       onLineClick(moves, node.fen);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(node.id);
+      setShowDeleteDialog(false);
+    } catch (error) {
+      console.error("Failed to delete:", error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -185,16 +213,81 @@ function LineNodeComponent({
             title="Build">
             <Hammer size={12} />
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            onClick={() => onLearn(node.id)}
-            title="Learn">
-            <GraduationCap size={12} />
-          </Button>
+          {/* Don't show Learn button for first position (opening choice) */}
+          {depth > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={() => onLearn(node.id)}
+              title="Learn">
+              <GraduationCap size={12} />
+            </Button>
+          )}
+          {/* Show Delete button for all nodes except the root (Initial Position) */}
+          {node.expectedMove && onDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
+              onClick={() => setShowDeleteDialog(true)}
+              title="Delete">
+              <Trash2 size={12} />
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <Trash2 className="h-5 w-5 text-red-400" />
+              Delete Line
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Are you sure you want to delete this line from your repertoire?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-surface-2 rounded-lg p-4 border border-border/50">
+            <p className="text-xs text-muted-foreground mb-1">
+              Line to delete:
+            </p>
+            <p className="font-mono text-sm text-foreground">{displayText}</p>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            This will remove the position and its expected move from your
+            training schedule.
+            {hasChildren && (
+              <span className="text-orange-400 block mt-2">
+                ⚠️ This line has {node.children.length} continuation
+                {node.children.length !== 1 ? "s" : ""} that will also be
+                affected.
+              </span>
+            )}
+          </p>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={isDeleting}
+              className="text-muted-foreground hover:text-foreground">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30">
+              {isDeleting ? "Deleting..." : "Delete Line"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Render children */}
       {hasChildren && isExpanded && (
@@ -206,6 +299,7 @@ function LineNodeComponent({
               depth={depth + 1}
               onBuild={onBuild}
               onLearn={onLearn}
+              onDelete={onDelete}
               onLineClick={onLineClick}
               extractMovesForNode={extractMovesForNode}
             />

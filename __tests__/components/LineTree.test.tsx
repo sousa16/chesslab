@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { LineTree } from "@/components/repertoire/LineTree";
 
 // Mock chess.js for unit testing
@@ -41,6 +41,7 @@ jest.mock("chess.js", () => {
 describe("LineTree Component", () => {
   const mockOnBuild = jest.fn();
   const mockOnLearn = jest.fn();
+  const mockOnDelete = jest.fn();
   const mockOnLineClick = jest.fn();
 
   const mockRoot: any = {
@@ -279,6 +280,193 @@ describe("LineTree Component", () => {
 
       // Should call with empty moves array
       expect(mockOnLineClick).toHaveBeenCalledWith([], expect.any(String));
+    });
+  });
+
+  describe("Delete Button", () => {
+    it("does not show delete button on Initial Position (root with no expectedMove)", () => {
+      const { container } = render(
+        <LineTree
+          root={mockRoot}
+          onBuild={mockOnBuild}
+          onLearn={mockOnLearn}
+          onDelete={mockOnDelete}
+          onLineClick={mockOnLineClick}
+        />,
+      );
+
+      // Get all delete buttons
+      const deleteButtons = container.querySelectorAll(
+        "button[title='Delete']",
+      );
+      // Should have delete buttons for all nodes with expectedMove (4 nodes: e4, c5, Nf3, and the first child)
+      // Root (Initial Position) has no expectedMove so no delete button
+      expect(deleteButtons.length).toBe(3); // e4-node, e4-c5-node, e4-c5-nf3-node
+    });
+
+    it("shows delete button on first move line (depth 1)", () => {
+      const { container } = render(
+        <LineTree
+          root={mockRoot}
+          onBuild={mockOnBuild}
+          onLearn={mockOnLearn}
+          onDelete={mockOnDelete}
+          onLineClick={mockOnLineClick}
+        />,
+      );
+
+      // Find the first move line (1.e2e4)
+      const e4Line = screen.getByText("1.e2e4");
+      const e4Row = e4Line.closest(".flex.items-center");
+      const deleteBtn = e4Row?.querySelector("button[title='Delete']");
+      expect(deleteBtn).toBeInTheDocument();
+    });
+
+    it("shows delete button on child nodes when onDelete is provided", () => {
+      const { container } = render(
+        <LineTree
+          root={mockRoot}
+          onBuild={mockOnBuild}
+          onLearn={mockOnLearn}
+          onDelete={mockOnDelete}
+          onLineClick={mockOnLineClick}
+        />,
+      );
+
+      // Should have delete buttons for non-root nodes
+      const deleteButtons = container.querySelectorAll(
+        "button[title='Delete']",
+      );
+      expect(deleteButtons.length).toBeGreaterThan(0);
+    });
+
+    it("does not show delete button when onDelete is not provided", () => {
+      const { container } = render(
+        <LineTree
+          root={mockRoot}
+          onBuild={mockOnBuild}
+          onLearn={mockOnLearn}
+          onLineClick={mockOnLineClick}
+        />,
+      );
+
+      // Should have no delete buttons
+      const deleteButtons = container.querySelectorAll(
+        "button[title='Delete']",
+      );
+      expect(deleteButtons.length).toBe(0);
+    });
+
+    it("opens confirmation dialog when delete button is clicked", async () => {
+      const { container } = render(
+        <LineTree
+          root={mockRoot}
+          onBuild={mockOnBuild}
+          onLearn={mockOnLearn}
+          onDelete={mockOnDelete}
+          onLineClick={mockOnLineClick}
+        />,
+      );
+
+      const deleteButtons = container.querySelectorAll(
+        "button[title='Delete']",
+      );
+      expect(deleteButtons.length).toBeGreaterThan(0);
+
+      fireEvent.click(deleteButtons[0]);
+
+      // Dialog should appear with confirmation text
+      await waitFor(() => {
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        expect(
+          screen.getByText(/Are you sure you want to delete this line/),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it("closes dialog when Cancel is clicked", async () => {
+      const { container } = render(
+        <LineTree
+          root={mockRoot}
+          onBuild={mockOnBuild}
+          onLearn={mockOnLearn}
+          onDelete={mockOnDelete}
+          onLineClick={mockOnLineClick}
+        />,
+      );
+
+      const deleteButtons = container.querySelectorAll(
+        "button[title='Delete']",
+      );
+      fireEvent.click(deleteButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+      });
+
+      const cancelButton = screen.getByRole("button", { name: "Cancel" });
+      fireEvent.click(cancelButton);
+
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+    });
+
+    it("calls onDelete when Delete Line button is clicked", async () => {
+      mockOnDelete.mockResolvedValue(undefined);
+
+      const { container } = render(
+        <LineTree
+          root={mockRoot}
+          onBuild={mockOnBuild}
+          onLearn={mockOnLearn}
+          onDelete={mockOnDelete}
+          onLineClick={mockOnLineClick}
+        />,
+      );
+
+      const deleteButtons = container.querySelectorAll(
+        "button[title='Delete']",
+      );
+      fireEvent.click(deleteButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+      });
+
+      // Find the confirm button by its distinctive styling
+      const confirmButton = screen.getByRole("button", {
+        name: /Delete Line/i,
+      });
+      fireEvent.click(confirmButton);
+
+      await waitFor(() => {
+        expect(mockOnDelete).toHaveBeenCalled();
+      });
+    });
+
+    it("shows warning for nodes with children", async () => {
+      const { container } = render(
+        <LineTree
+          root={mockRoot}
+          onBuild={mockOnBuild}
+          onLearn={mockOnLearn}
+          onDelete={mockOnDelete}
+          onLineClick={mockOnLineClick}
+        />,
+      );
+
+      // Find the first delete button (e4 node which has children)
+      const deleteButtons = container.querySelectorAll(
+        "button[title='Delete']",
+      );
+      fireEvent.click(deleteButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        // Should show warning about continuations
+        expect(screen.getByText(/continuation/i)).toBeInTheDocument();
+      });
     });
   });
 });

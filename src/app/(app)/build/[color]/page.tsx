@@ -6,6 +6,7 @@ import { Logo } from "@/components/Logo";
 import { Board, BoardHandle } from "@/components/Board";
 import { BuildPanel } from "@/components/BuildPanel";
 import { convertSanToUci } from "@/lib/repertoire";
+import { useToast } from "@/components/ui/toast";
 
 interface Move {
   number: number;
@@ -31,6 +32,7 @@ export default function BuildPage({
 
   const [moves, setMoves] = useState<Move[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
+  const { showToast } = useToast();
 
   const moveParam = searchParams.get("move");
   const initialMoves = useMemo(
@@ -59,7 +61,7 @@ export default function BuildPage({
 
   const handleAddMove = async () => {
     if (moves.length === 0) {
-      alert("No moves to save");
+      showToast("No moves to save", "warning");
       return;
     }
 
@@ -76,7 +78,7 @@ export default function BuildPage({
       try {
         movesInUci = convertSanToUci(movesInSan);
       } catch (error) {
-        alert(`Invalid move: ${(error as Error).message}`);
+        showToast(`Invalid move: ${(error as Error).message}`, "error");
         return;
       }
 
@@ -99,21 +101,22 @@ export default function BuildPage({
           response.status,
           response.statusText,
         );
-        alert(
-          `Error: Server returned ${response.status} ${response.statusText}`,
+        showToast(
+          `Server returned ${response.status} ${response.statusText}`,
+          "error",
         );
         return;
       }
 
       if (!response.ok) {
-        alert(`Error saving line: ${data.error || "Unknown error"}`);
+        showToast(data.error || "Failed to save line", "error");
         return;
       }
 
-      alert(`✓ Line saved! ${data.entriesCreated} positions added.`);
-      handleBack();
+      showToast("Line saved!", "success");
+      router.replace(`/home?view=repertoire&color=${color}`);
     } catch (error) {
-      alert(`Error: ${(error as Error).message}`);
+      showToast((error as Error).message, "error");
     }
   };
 

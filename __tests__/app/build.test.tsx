@@ -66,6 +66,12 @@ jest.mock("@/lib/repertoire", () => ({
   convertSanToUci: jest.fn((moves) => moves.map((m) => m.toLowerCase())),
 }));
 
+// Mock toast hook
+const mockShowToast = jest.fn();
+jest.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}));
+
 const mockUseRouter = useRouter as jest.MockedFunction<typeof useRouter>;
 const mockUseSearchParams = useSearchParams as jest.MockedFunction<
   typeof useSearchParams
@@ -79,6 +85,7 @@ describe("Build Page", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockBoardReset.mockClear();
+    mockShowToast.mockClear();
 
     mockUseRouter.mockReturnValue({
       push: mockPush,

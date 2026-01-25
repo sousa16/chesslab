@@ -17,9 +17,14 @@ export default function Home() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
-  const [view, setView] = useState<View>("home");
+  
+  // Initialize state directly from URL params to avoid flash
+  const initialView = searchParams.get("view") === "repertoire" ? "repertoire" : "home";
+  const initialColor = searchParams.get("color") === "black" ? "black" : "white";
+  
+  const [view, setView] = useState<View>(initialView);
   const [selectedColor, setSelectedColor] = useState<"white" | "black">(
-    "white",
+    initialColor,
   );
   const [initialMoves, setInitialMoves] = useState<string[]>([]);
   const [initialFen, setInitialFen] = useState<string>("");
@@ -33,10 +38,16 @@ export default function Home() {
   }, [status, router]);
 
   useEffect(() => {
-    // Read color from query params and set it
+    // Sync state with URL params when they change
     const colorParam = searchParams.get("color");
     if (colorParam === "white" || colorParam === "black") {
       setSelectedColor(colorParam);
+    }
+    const viewParam = searchParams.get("view");
+    if (viewParam === "repertoire") {
+      setView("repertoire");
+    } else if (!viewParam) {
+      setView("home");
     }
   }, [searchParams]);
 

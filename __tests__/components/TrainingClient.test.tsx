@@ -19,6 +19,15 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mockPush,
   }),
+  usePathname: jest.fn(() => "/training"),
+}));
+
+// Mock next-auth
+jest.mock("next-auth/react", () => ({
+  useSession: jest.fn(() => ({
+    data: { user: { id: "user-1" } },
+    status: "authenticated",
+  })),
 }));
 
 // Mock react-chessboard

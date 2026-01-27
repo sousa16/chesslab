@@ -26,6 +26,7 @@ export default function BuildPage({
   const routeParams = useParams();
   const color = (routeParams.color as "white" | "black") || "white";
   const boardRef = useRef<BoardHandle>(null);
+  const toast = useToast();
 
   const openingId = searchParams.get("opening");
   const lineId = searchParams.get("line");
@@ -61,7 +62,7 @@ export default function BuildPage({
 
   const handleAddMove = async () => {
     if (moves.length === 0) {
-      showToast("No moves to save", "warning");
+      toast.warning("Make some moves on the board first");
       return;
     }
 
@@ -78,7 +79,7 @@ export default function BuildPage({
       try {
         movesInUci = convertSanToUci(movesInSan);
       } catch (error) {
-        showToast(`Invalid move: ${(error as Error).message}`, "error");
+        toast.error("One of the moves is invalid. Please try again.");
         return;
       }
 
@@ -101,22 +102,31 @@ export default function BuildPage({
           response.status,
           response.statusText,
         );
-        showToast(
-          `Server returned ${response.status} ${response.statusText}`,
-          "error",
-        );
+        toast.error("Something went wrong. Please try again.");
         return;
       }
 
       if (!response.ok) {
-        showToast(data.error || "Failed to save line", "error");
+        // User-friendly error messages based on common issues
+        const errorMsg = data.error?.toLowerCase() || "";
+        
+        if (errorMsg.includes("end with a white move") || errorMsg.includes("end with a black move") || errorMsg.includes("must end with")) {
+          toast.error(`Your line should end with your move (${color}), not your opponent's.`);
+        } else if (errorMsg.includes("unauthorized") || errorMsg.includes("sign in")) {
+          toast.error("Please sign in to save your repertoire.");
+        } else {
+          // Show the actual error message for debugging
+          toast.error(data.error || "Couldn't save the line. Please try again.");
+        }
         return;
       }
 
-      showToast("Line saved!", "success");
-      router.replace(`/home?view=repertoire&color=${color}`);
+      toast.success(`Line saved! ${data.entriesCreated} positions added.`);
+      
+      // Navigate back to the repertoire view for this color instead of going back
+      router.push(`/home?panel=repertoire&color=${color}`);
     } catch (error) {
-      showToast((error as Error).message, "error");
+      toast.error("Connection error. Please check your internet.");
     }
   };
 
@@ -163,32 +173,51 @@ export default function BuildPage({
             initialMoves={initialMoves}
           />
 
-          {/* Hint */}
-          <div className="text-center h-14 flex items-center">
-            <p className="text-base text-muted-foreground">
-              {(() => {
-                // Determine whose turn it is based on the moves array
-                // If the last move is complete (has both white and black), it's the player's turn
-                // If the last move is incomplete (only white, no black), it's the opponent's turn
-                const lastMove = moves[moves.length - 1];
-                const isOpponentTurn = lastMove && !lastMove.black;
+          {/* Hint - Enhanced with better styling */}
+          <div className="text-center h-14 flex items-center justify-center w-full">
+            {(() => {
+              // Determine whose turn it is based on the moves array
+              const lastMove = moves[moves.length - 1];
+              const isOpponentTurn = lastMove && !lastMove.black;
+              
+              let message = "";
+              let isUserTurn = false;
 
-                if (color === "white") {
-                  if (isOpponentTurn) {
-                    return "Black's turn. Click a square to add response.";
-                  } else {
-                    return "White's turn. Click a square to add move.";
-                  }
+              if (color === "white") {
+                if (isOpponentTurn) {
+                  message = "Black's turn. Click a square to add response.";
+                  isUserTurn = false;
                 } else {
-                  // Black repertoire
-                  if (isOpponentTurn) {
-                    return "Black's turn. Click a square to add response.";
-                  } else {
-                    return "White's turn. Click a square to add move.";
-                  }
+                  message = "White's turn. Click a piece to make your move.";
+                  isUserTurn = true;
                 }
-              })()}
-            </p>
+              } else {
+                if (isOpponentTurn) {
+                  message = "Black's turn. Click a piece to make your move.";
+                  isUserTurn = true;
+                } else {
+                  message = "White's turn. Click a square to add response.";
+                  isUserTurn = false;
+                }
+              }
+
+              return (
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${
+                  isUserTurn 
+                    ? "bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30" 
+                    : "bg-surface-2/50 border border-border/30"
+                }`}>
+                  {isUserTurn && (
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  )}
+                  <p className={`text-sm font-medium ${
+                    isUserTurn ? "text-foreground" : "text-muted-foreground"
+                  }`}>
+                    {message}
+                  </p>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Invisible placeholder for board controls alignment */}

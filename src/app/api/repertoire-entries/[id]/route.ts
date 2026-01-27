@@ -1,127 +1,90 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Chess } from "chess.js";
+import type { Prisma } from "@prisma/client";
 
 /**
- * Find all descendant entry IDs by rebuilding the tree structure
- * and traversing from the given entry
+ * PATCH /api/repertoire-entries/[id]
+ * Update a repertoire entry (name, notes)
  */
-function findDescendantEntryIds(
-  entryId: string,
-  allEntries: Array<{
-    id: string;
-    positionId: string;
-    expectedMove: string;
-    position: { fen: string };
-  }>,
-): string[] {
-  // Build tree structure same as repertoires API
-  const nodesByFen = new Map<string, typeof allEntries>();
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
 
-  for (const entry of allEntries) {
-    if (!nodesByFen.has(entry.position.fen)) {
-      nodesByFen.set(entry.position.fen, []);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    nodesByFen.get(entry.position.fen)!.push(entry);
-  }
 
-  // Build parent -> children map
-  const childrenMap = new Map<string, string[]>();
+    const { id } = await params;
+    const body = await request.json();
+    const { name, notes } = body;
 
-  for (const entries of nodesByFen.values()) {
-    for (const parentEntry of entries) {
-      // Make user's move
-      const game = new Chess(parentEntry.position.fen);
-      let moveResult = null;
+    // Find the entry and verify ownership
+    const entry = await prisma.repertoireEntry.findUnique({
+      where: { id },
+      include: {
+        repertoire: true,
+      },
+    });
 
-      try {
-        moveResult = game.move(parentEntry.expectedMove, { strict: false });
-      } catch {
-        continue;
-      }
-
-      if (!moveResult) continue;
-
-      // After user's move, it's opponent's turn
-      const posAfterUserMove = game.fen();
-
-      // Find saved positions reachable by opponent moves
-      const testGameForMoves = new Chess(posAfterUserMove);
-      const opponentMoves = testGameForMoves.moves({ verbose: true });
-
-      const children: string[] = [];
-
-      for (const moveObj of opponentMoves) {
-        const testGame = new Chess(posAfterUserMove);
-        testGame.move(moveObj.san);
-        const fenAfterOpponentMove = testGame.fen();
-
-        // Check if this FEN has any saved positions
-        const childEntries = nodesByFen.get(fenAfterOpponentMove);
-        if (childEntries) {
-          for (const childEntry of childEntries) {
-            if (!children.includes(childEntry.id)) {
-              children.push(childEntry.id);
-            }
-          }
-        }
-      }
-
-      childrenMap.set(parentEntry.id, children);
+    if (!entry) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     }
-  }
 
-  // Now traverse from entryId to find all descendants
-  const descendants: string[] = [];
-  const visited = new Set<string>();
-
-  function collectDescendants(id: string) {
-    if (visited.has(id)) return;
-    visited.add(id);
-
-    const children = childrenMap.get(id) || [];
-    for (const childId of children) {
-      descendants.push(childId);
-      collectDescendants(childId);
+    if (entry.repertoire.userId !== session.user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
+
+    // Update the entry
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (notes !== undefined) updateData.notes = notes;
+    
+    const updatedEntry = await prisma.repertoireEntry.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return NextResponse.json({ entry: updatedEntry });
+  } catch (error) {
+    console.error("Error updating repertoire entry:", error);
+    return NextResponse.json(
+      { error: "Failed to update entry" },
+      { status: 500 }
+    );
   }
-
-  collectDescendants(entryId);
-
-  return descendants;
 }
 
 /**
  * DELETE /api/repertoire-entries/[id]
- * Delete a repertoire entry and all its children (positions that follow from it)
+ * Delete a repertoire entry and optionally its children
  */
 export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
-    const { id } = await params;
 
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get the user
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: {
-        repertoires: true,
-      },
     });
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Get the entry to delete
+    const { id } = await params;
+
+    // Find the entry and verify ownership
     const entry = await prisma.repertoireEntry.findUnique({
       where: { id },
       include: {
@@ -134,30 +97,77 @@ export async function DELETE(
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     }
 
-    // Verify the entry belongs to the user
     if (entry.repertoire.userId !== user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // Get all entries in this repertoire to find descendants
+    // Get all entries for this repertoire to build the tree
     const allEntries = await prisma.repertoireEntry.findMany({
-      where: { repertoireId: entry.repertoireId },
-      include: { position: true },
-    });
-
-    // Find all descendant entries that should also be deleted
-    const descendantIds = findDescendantEntryIds(id, allEntries);
-
-    // Delete the entry and all its descendants
-    const idsToDelete = [id, ...descendantIds];
-
-    await prisma.repertoireEntry.deleteMany({
       where: {
-        id: { in: idsToDelete },
+        repertoireId: entry.repertoireId,
+      },
+      include: {
+        position: true,
       },
     });
 
-    // Clean up orphaned positions (positions with no more entries)
+    // Build a map of FEN -> entries at that position
+    const fenToEntries = new Map<string, typeof allEntries>();
+    allEntries.forEach((e) => {
+      const entries = fenToEntries.get(e.position.fen) || [];
+      entries.push(e);
+      fenToEntries.set(e.position.fen, entries);
+    });
+
+    // Build the descendant tree using Chess.js
+    const entriesToDelete = new Set<string>([id]);
+    const queue = [entry];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const currentFen = current.position.fen;
+
+      // Use chess.js to find the next position
+      const { Chess } = await import("chess.js");
+      const game = new Chess(currentFen);
+
+      // Try to make the expected move
+      try {
+        game.move(current.expectedMove);
+        
+        // Get all possible opponent responses
+        const opponentMoves = game.moves({ verbose: true });
+        
+        // For each opponent response, check if we have entries at that position
+        for (const opponentMove of opponentMoves) {
+          const afterOpponentMove = new Chess(game.fen());
+          afterOpponentMove.move(opponentMove);
+          const afterOpponentFen = afterOpponentMove.fen();
+          
+          // Find all entries at this position (after user move + opponent response)
+          const childEntries = fenToEntries.get(afterOpponentFen) || [];
+          for (const child of childEntries) {
+            if (!entriesToDelete.has(child.id)) {
+              entriesToDelete.add(child.id);
+              queue.push(child);
+            }
+          }
+        }
+      } catch {
+        // Invalid move, no children
+      }
+    }
+
+    // Delete all entries in the tree
+    const result = await prisma.repertoireEntry.deleteMany({
+      where: {
+        id: {
+          in: Array.from(entriesToDelete),
+        },
+      },
+    });
+
+    // Clean up orphaned positions
     const orphanedPositions = await prisma.position.findMany({
       where: {
         repertoireEntries: {
@@ -176,16 +186,12 @@ export async function DELETE(
       });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Deleted ${idsToDelete.length} entry(s) successfully`,
-      deletedCount: idsToDelete.length,
-    });
+    return NextResponse.json({ success: true, deletedCount: result.count });
   } catch (error) {
     console.error("Error deleting repertoire entry:", error);
     return NextResponse.json(
       { error: "Failed to delete entry" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

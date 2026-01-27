@@ -19,6 +19,7 @@ jest.mock("@/lib/prisma", () => ({
       deleteMany: jest.fn(),
     },
     position: {
+      findUnique: jest.fn(),
       findMany: jest.fn(),
       deleteMany: jest.fn(),
     },

@@ -3,7 +3,7 @@
  * Shows positions and expected moves with proper algebraic notation
  */
 
-import { ChevronDown, Hammer, GraduationCap, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Hammer, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +30,8 @@ interface LineTreeProps {
   onBuild: (nodeId: string) => void;
   onLearn: (nodeId: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
-  onLineClick?: (moves: string[], startingFen: string) => void; // Callback with moves and starting position
+  onLineClick?: (moves: string[], startingFen: string) => void;
+  onRefresh?: () => void;
 }
 
 export function LineTree({
@@ -48,73 +49,62 @@ export function LineTree({
       return [];
     }
 
-    // Parse the moveSequence string (e.g., "1.e2e4 c7c5 2.f2f4" or "1.g1f3 ...")
-    // Extract UCI moves by removing move numbers and "..."
     const parts = moveSequence.split(" ");
     const uciMoves: string[] = [];
 
     for (const part of parts) {
-      // Skip invalid parts
-      if (
-        !part ||
-        part === "..." ||
-        part === "[object Object]" ||
-        part.includes("[object Object]")
-      ) {
+      if (!part || part === "..." || part === "[object Object]" || part.includes("[object Object]")) {
         continue;
       }
 
       if (part.includes(".")) {
-        // Format: "1.e2e4" - extract the move part after the dot
         const movePart = part.split(".")[1];
-        // Validate it's a string and looks like a valid UCI move
-        if (
-          movePart &&
-          typeof movePart === "string" &&
-          movePart.length >= 4 &&
-          /^[a-h][1-8][a-h][1-8]/.test(movePart)
-        ) {
+        if (movePart && typeof movePart === "string" && movePart.length >= 4 && /^[a-h][1-8][a-h][1-8]/.test(movePart)) {
           uciMoves.push(movePart);
         }
-      } else if (
-        part.length >= 4 &&
-        !part.includes(".") &&
-        typeof part === "string" &&
-        /^[a-h][1-8][a-h][1-8]/.test(part)
-      ) {
-        // Format: "c7c5" - bare move without number (validate square notation)
+      } else if (part.length >= 4 && !part.includes(".") && typeof part === "string" && /^[a-h][1-8][a-h][1-8]/.test(part)) {
         uciMoves.push(part);
       }
     }
 
-    // Convert UCI moves to SAN format, starting from the node's FEN position
-    // Create a completely fresh Chess instance with the starting FEN
     const game = new Chess(targetNode.fen);
     const sanMoves: string[] = [];
 
     for (const uciMove of uciMoves) {
       try {
-        // Parse UCI string (e.g., "e2e4")
         const from = uciMove.substring(0, 2);
         const to = uciMove.substring(2, 4);
         const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
-
-        const move = game.move({
-          from,
-          to,
-          promotion,
-        });
-
-        if (move) {
-          sanMoves.push(move.san);
-        }
+        const move = game.move({ from, to, promotion });
+        if (move) sanMoves.push(move.san);
       } catch (e) {
-        // Silently skip invalid moves
+        // Skip invalid moves
       }
     }
 
     return sanMoves;
   };
+
+  // If root is a virtual "Starting Position" or "Initial Position" node, render its children directly
+  if ((root.moveSequence === "Starting Position" || root.moveSequence === "Initial Position") && root.children.length > 0) {
+    return (
+      <div className="space-y-1">
+        {root.children.map((child) => (
+          <LineNodeComponent
+            key={child.id}
+            node={child}
+            depth={0}
+            onBuild={onBuild}
+            onLearn={onLearn}
+            onDelete={onDelete}
+            onLineClick={onLineClick}
+            extractMovesForNode={extractMovesForNode}
+            isRoot={true}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1">
@@ -126,6 +116,7 @@ export function LineTree({
         onDelete={onDelete}
         onLineClick={onLineClick}
         extractMovesForNode={extractMovesForNode}
+        isRoot={true}
       />
     </div>
   );
@@ -139,6 +130,7 @@ interface LineNodeComponentProps {
   onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (moves: string[], startingFen: string) => void;
   extractMovesForNode: (node: LineNode) => string[];
+  isRoot?: boolean;
 }
 
 function LineNodeComponent({
@@ -149,15 +141,10 @@ function LineNodeComponent({
   onDelete,
   onLineClick,
   extractMovesForNode,
+  isRoot = false,
 }: LineNodeComponentProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const hasChildren = node.children.length > 0;
-
-  // Display the full move sequence
-  // e.g., "1. e4" or "1. e4 c5" or "1. e4 c5 2. Nf3 d6"
-  const displayText = node.moveSequence;
 
   const handleLineClick = () => {
     if (onLineClick) {
@@ -166,132 +153,70 @@ function LineNodeComponent({
     }
   };
 
-  const handleDelete = async () => {
-    if (!onDelete) return;
-    setIsDeleting(true);
-    try {
-      await onDelete(node.id);
-      setShowDeleteDialog(false);
-    } catch (error) {
-      console.error("Failed to delete:", error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  const displayMoves = node.moveSequence;
 
   return (
-    <div style={{ marginLeft: `${depth * 16}px` }}>
-      <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-2 transition-colors text-left">
-        {hasChildren && (
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-0 h-5 w-5 flex items-center justify-center hover:bg-surface-1 rounded transition-colors flex-shrink-0"
-            title={isExpanded ? "Collapse" : "Expand"}>
-            <ChevronDown
-              size={14}
-              className={`text-muted-foreground transition-transform ${
-                isExpanded ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-        )}
-        {!hasChildren && <div className="w-5" />}
+    <div className={`${depth > 0 ? "ml-3 pl-3 border-l border-border/30" : ""}`}>
+      <div className={`
+        relative flex items-start gap-2 p-3 rounded-xl 
+        transition-all duration-200 text-left group
+        ${isRoot ? "glass-card mb-2" : "hover:bg-surface-2/60"}
+      `}>
+        {/* Expand/Collapse Button */}
+        <div className="flex-shrink-0 mt-0.5">
+          {hasChildren ? (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1 h-6 w-6 flex items-center justify-center hover:bg-surface-3 rounded-lg transition-colors"
+              title={isExpanded ? "Collapse" : "Expand"}>
+              {isExpanded ? (
+                <ChevronDown size={14} className="text-muted-foreground" />
+              ) : (
+                <ChevronRight size={14} className="text-muted-foreground" />
+              )}
+            </button>
+          ) : (
+            <div className="w-6 h-6 flex items-center justify-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+            </div>
+          )}
+        </div>
 
-        <span
-          onClick={handleLineClick}
-          className="font-mono text-sm text-foreground flex-1 cursor-pointer hover:text-accent transition-colors"
-          title="Click to display on board">
-          {displayText}
-        </span>
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          {/* Move sequence */}
+          <div
+            onClick={handleLineClick}
+            className="font-mono text-sm cursor-pointer transition-colors truncate text-foreground hover:text-primary"
+            title="Click to display on board">
+            {displayMoves}
+          </div>
+        </div>
 
-        <div className="flex items-center gap-1">
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 p-0"
+            className="h-7 w-7 p-0 rounded-lg hover:bg-primary/15 hover:text-primary"
             onClick={() => onBuild(node.id)}
-            title="Build">
-            <Hammer size={12} />
+            title="Continue building from here">
+            <Hammer size={13} />
           </Button>
-          {/* Don't show Learn button for first position (opening choice) */}
-          {depth > 0 && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={() => onLearn(node.id)}
-              title="Learn">
-              <GraduationCap size={12} />
-            </Button>
-          )}
-          {/* Show Delete button for all nodes except the root (Initial Position) */}
-          {node.expectedMove && onDelete && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
-              onClick={() => setShowDeleteDialog(true)}
-              title="Delete">
-              <Trash2 size={12} />
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 rounded-lg hover:bg-primary/15 hover:text-primary"
+            onClick={() => onLearn(node.id)}
+            title="Practice this line">
+            <GraduationCap size={13} />
+          </Button>
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground">
-              <Trash2 className="h-5 w-5 text-red-400" />
-              Delete Line
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Are you sure you want to delete this line from your repertoire?
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="bg-surface-2 rounded-lg p-4 border border-border/50">
-            <p className="text-xs text-muted-foreground mb-1">
-              Line to delete:
-            </p>
-            <p className="font-mono text-sm text-foreground">{displayText}</p>
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            This will remove the position and its expected move from your
-            training schedule.
-            {hasChildren && (
-              <span className="text-orange-400 block mt-2">
-                ⚠️ This line has {node.children.length} continuation
-                {node.children.length !== 1 ? "s" : ""} that will also be
-                affected.
-              </span>
-            )}
-          </p>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="ghost"
-              onClick={() => setShowDeleteDialog(false)}
-              disabled={isDeleting}
-              className="text-muted-foreground hover:text-foreground">
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30">
-              {isDeleting ? "Deleting..." : "Delete Line"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Render children */}
+      {/* Children */}
       {hasChildren && isExpanded && (
-        <div className="space-y-1">
+        <div className="space-y-1 mt-1">
           {node.children.map((child) => (
             <LineNodeComponent
               key={child.id}

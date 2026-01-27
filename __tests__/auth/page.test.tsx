@@ -7,6 +7,10 @@ import { signIn } from "next-auth/react";
 // Mock next-auth
 jest.mock("next-auth/react", () => ({
   signIn: jest.fn(),
+  useSession: jest.fn(() => ({
+    data: null,
+    status: "unauthenticated",
+  })),
 }));
 
 // Mock next/navigation with useSearchParams returning a proper URLSearchParams
@@ -16,6 +20,7 @@ jest.mock("next/navigation", () => ({
     push: jest.fn(),
     replace: jest.fn(),
   }),
+  usePathname: jest.fn(() => "/auth"),
 }));
 
 const mockSignIn = signIn as jest.MockedFunction<typeof signIn>;
@@ -140,7 +145,7 @@ describe("AuthPage Component", () => {
       await user.click(googleButton);
 
       expect(mockSignIn).toHaveBeenCalledWith("google", {
-        callbackUrl: "/home",
+        callbackUrl: "/build/color",
       });
     });
 
@@ -225,7 +230,7 @@ describe("AuthPage Component", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("An unexpected error occurred")
+          screen.getByText("Something went wrong. Please try again.")
         ).toBeInTheDocument();
       });
     });
@@ -306,7 +311,7 @@ describe("AuthPage Component", () => {
 
       await waitFor(() => {
         const errorMessage = screen.getByText("Invalid email or password");
-        expect(errorMessage).toHaveClass("text-red-400");
+        expect(errorMessage).toHaveClass("text-red-300");
       });
     });
   });

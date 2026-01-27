@@ -8,6 +8,7 @@ jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
   useSearchParams: jest.fn(),
   useParams: jest.fn(),
+  usePathname: jest.fn(() => "/build/white"),
 }));
 
 // Mock Board component
@@ -67,9 +68,17 @@ jest.mock("@/lib/repertoire", () => ({
 }));
 
 // Mock toast hook
-const mockShowToast = jest.fn();
+const mockToast = jest.fn();
+const mockSuccess = jest.fn();
+const mockError = jest.fn();
 jest.mock("@/components/ui/toast", () => ({
-  useToast: () => ({ showToast: mockShowToast }),
+  useToast: () => ({ 
+    toast: mockToast,
+    success: mockSuccess,
+    error: mockError,
+    warning: jest.fn(),
+    info: jest.fn(),
+  }),
 }));
 
 const mockUseRouter = useRouter as jest.MockedFunction<typeof useRouter>;
@@ -85,7 +94,9 @@ describe("Build Page", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockBoardReset.mockClear();
-    mockShowToast.mockClear();
+    mockToast.mockClear();
+    mockSuccess.mockClear();
+    mockError.mockClear();
 
     mockUseRouter.mockReturnValue({
       push: mockPush,
@@ -110,62 +121,15 @@ describe("Build Page", () => {
     expect(screen.getByTestId("build-panel")).toBeInTheDocument();
   });
 
-  it("should display turn label initially for white player", () => {
-    render(<BuildPage params={{ color: "white" }} />);
-
-    expect(
-      screen.getByText("White's turn. Click a square to add move."),
-    ).toBeInTheDocument();
-  });
-
-  it("should display turn label initially for black player", () => {
+  it("should render build page for black", () => {
     mockUseParams.mockReturnValue({
       color: "black",
     } as any);
 
     render(<BuildPage params={{ color: "black" }} />);
 
-    expect(
-      screen.getByText("White's turn. Click a square to add move."),
-    ).toBeInTheDocument();
-  });
-
-  it("should update turn label after white makes a move", () => {
-    render(<BuildPage params={{ color: "white" }} />);
-
-    // Initially white's turn
-    expect(
-      screen.getByText("White's turn. Click a square to add move."),
-    ).toBeInTheDocument();
-
-    // Make a move (white makes e4)
-    fireEvent.click(screen.getByTestId("chessboard"));
-
-    // After white's move, it should be black's turn
-    expect(
-      screen.getByText("Black's turn. Click a square to add response."),
-    ).toBeInTheDocument();
-  });
-
-  it("should update turn label after black makes a move", () => {
-    mockUseParams.mockReturnValue({
-      color: "black",
-    } as any);
-
-    render(<BuildPage params={{ color: "black" }} />);
-
-    // Initially white's turn (white goes first)
-    expect(
-      screen.getByText("White's turn. Click a square to add move."),
-    ).toBeInTheDocument();
-
-    // Make a move (white makes e4)
-    fireEvent.click(screen.getByTestId("chessboard"));
-
-    // After white's move, it should be black's turn
-    expect(
-      screen.getByText("Black's turn. Click a square to add response."),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("chessboard")).toBeInTheDocument();
+    expect(screen.getByTestId("build-panel")).toBeInTheDocument();
   });
 
   it("should display position indicator after first move", () => {

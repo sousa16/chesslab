@@ -13,6 +13,7 @@ jest.mock("next-auth/react", () => ({
 // Mock next/navigation
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
+  usePathname: jest.fn(() => "/settings"),
 }));
 
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;

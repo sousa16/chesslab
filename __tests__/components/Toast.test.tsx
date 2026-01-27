@@ -4,17 +4,17 @@ import { ToastProvider, useToast } from "@/components/ui/toast";
 
 // Test component that triggers toasts
 function TestComponent() {
-  const { showToast } = useToast();
+  const { success, error, warning } = useToast();
 
   return (
     <div>
-      <button onClick={() => showToast("Success message", "success")}>
+      <button onClick={() => success("Success message")}>
         Show Success
       </button>
-      <button onClick={() => showToast("Error message", "error")}>
+      <button onClick={() => error("Error message")}>
         Show Error
       </button>
-      <button onClick={() => showToast("Warning message", "warning")}>
+      <button onClick={() => warning("Warning message")}>
         Show Warning
       </button>
     </div>
@@ -145,7 +145,7 @@ describe("Toast Component", () => {
     consoleSpy.mockRestore();
   });
 
-  it("should render toast in center of screen", () => {
+  it("should render toast in bottom-right corner", () => {
     const { container } = render(
       <ToastProvider>
         <TestComponent />
@@ -155,10 +155,8 @@ describe("Toast Component", () => {
     fireEvent.click(screen.getByText("Show Success"));
 
     // Check that the toast container has the correct positioning classes
-    const toastContainer = container.querySelector(".fixed.top-1\\/2");
+    const toastContainer = container.querySelector(".fixed.bottom-6");
     expect(toastContainer).toBeInTheDocument();
-    expect(toastContainer).toHaveClass("left-1/2");
-    expect(toastContainer).toHaveClass("-translate-x-1/2");
-    expect(toastContainer).toHaveClass("-translate-y-1/2");
+    expect(toastContainer).toHaveClass("right-6");
   });
 });

@@ -61,10 +61,10 @@ export default function AuthPage() {
           setShowResendButton(true);
         }
       } else if (result?.ok) {
-        window.location.href = "/home";
+        window.location.href = "/build/color";
       }
     } catch (error) {
-      setError("An unexpected error occurred");
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -94,10 +94,10 @@ export default function AuthPage() {
           data.message || "Verification email sent! Check your inbox."
         );
       } else {
-        setError(data.error || "Failed to resend email");
+        setError(data.error || "Couldn't send email. Please try again.");
       }
     } catch (error) {
-      setError("Failed to resend verification email");
+      setError("Connection error. Please check your internet.");
     } finally {
       setResendLoading(false);
     }
@@ -105,7 +105,7 @@ export default function AuthPage() {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    await signIn("google", { callbackUrl: "/home" });
+    await signIn("google", { callbackUrl: "/build/color" });
   };
 
   return (
@@ -116,7 +116,7 @@ export default function AuthPage() {
           {/* Logo */}
           <div className="flex justify-center mb-2">
             <div className="inline-block">
-              <Logo size="lg" />
+              <Logo size="lg" clickable={false} />
             </div>
           </div>
 
@@ -132,17 +132,23 @@ export default function AuthPage() {
 
           {/* Alert Messages */}
           {error && (
-            <div className="flex items-start gap-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-red-400 text-sm">{error}</p>
+            <div className="relative overflow-hidden flex items-start gap-3 p-4 rounded-xl border border-red-500/30 bg-gradient-to-r from-red-500/20 via-red-500/10 to-transparent backdrop-blur-sm">
+              <div className="absolute top-0 left-0 w-24 h-24 bg-red-500/20 rounded-full blur-2xl -ml-12 -mt-12" />
+              <div className="relative w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-4 h-4 text-red-400" />
+              </div>
+              <p className="relative text-red-300 text-sm font-medium pt-1.5">{error}</p>
             </div>
           )}
 
           {success && (
             <div>
-              <div className="flex items-start gap-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                <p className="text-green-400 text-sm">{success}</p>
+              <div className="relative overflow-hidden flex items-start gap-3 p-4 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/20 via-emerald-500/10 to-transparent backdrop-blur-sm">
+                <div className="absolute top-0 left-0 w-24 h-24 bg-emerald-500/20 rounded-full blur-2xl -ml-12 -mt-12" />
+                <div className="relative w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                </div>
+                <p className="relative text-emerald-300 text-sm font-medium pt-1.5">{success}</p>
               </div>
               {showResendButton && (
                 <Button

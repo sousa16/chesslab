@@ -92,6 +92,16 @@ export async function saveRepertoireLine(
     );
   }
 
+  // Create a new opening for each line saved
+  // This ensures each saved line is a separate, independent entry
+  const newOpening = await prisma.opening.create({
+    data: {
+      repertoireId: repertoire.id,
+      name: "Opening Line",
+    },
+  });
+  const openingId = newOpening.id;
+
   const game = new Chess();
   const fensBeforeMoves: string[] = [];
 
@@ -134,6 +144,7 @@ export async function saveRepertoireLine(
       update: {}, // Don't modify if exists (preserve SRS)
       create: {
         repertoireId: repertoire.id,
+        openingId: openingId,
         positionId: position.id,
         expectedMove: uciMove,
         interval: 0,

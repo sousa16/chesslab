@@ -34,7 +34,11 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
+    // Support both session.user.id and session.user.email for auth
+    const userId = session?.user?.id;
+    const userEmail = session?.user?.email;
+
+    if (!userId && !userEmail) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -47,187 +51,177 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get the user's repertoire for this color
+    // If we have user ID, use it directly; otherwise look up by email
+    let actualUserId = userId;
+    if (!actualUserId && userEmail) {
+      const user = await prisma.user.findUnique({
+        where: { email: userEmail },
+        select: { id: true },
+      });
+      if (!user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+      actualUserId = user.id;
+    }
+
+    // Get the user's repertoire for this color with ALL entries
     const repertoire = await prisma.repertoire.findUnique({
       where: {
         userId_color: {
-          userId: session.user.id,
+          userId: actualUserId!,
           color: color === "white" ? "White" : "Black",
         },
       },
       include: {
-        openings: {
-          include: {
-            entries: {
-              include: { position: true },
-              orderBy: { createdAt: "asc" },
-            },
-          },
+        entries: {
+          include: { position: true },
           orderBy: { createdAt: "asc" },
         },
       },
     });
 
-    if (!repertoire || repertoire.openings.length === 0) {
+    if (!repertoire || repertoire.entries.length === 0) {
       return NextResponse.json({ openings: [] }, { status: 200 });
     }
 
-    // Build opening lines as hierarchical trees for each opening
-    const openings: Opening[] = [];
+    // Build a single tree from all entries
+    const entries = repertoire.entries;
 
-    for (const opening of repertoire.openings) {
-      if (opening.entries.length === 0) {
-        openings.push({
-          id: opening.id,
-          name: opening.name,
-          notes: opening.notes || undefined,
-          root: null,
-        });
-        continue;
+    const nodesByEntryId = new Map<string, LineNode>();
+    const nodesByFen = new Map<string, LineNode[]>();
+
+    // First pass: create nodes for each position where user moves
+    for (const entry of entries) {
+      const node: LineNode = {
+        id: entry.id,
+        fen: entry.position.fen,
+        expectedMove: entry.expectedMove,
+        moveNumber: 0,
+        moveSequence: "",
+        children: [],
+      };
+      nodesByEntryId.set(entry.id, node);
+
+      if (!nodesByFen.has(entry.position.fen)) {
+        nodesByFen.set(entry.position.fen, []);
       }
+      nodesByFen.get(entry.position.fen)!.push(node);
+    }
 
-      const nodesByEntryId = new Map<string, LineNode>();
-      const nodesByFen = new Map<string, LineNode[]>();
+    // Second pass: build tree by finding which positions can be reached from user moves
+    for (const nodes of nodesByFen.values()) {
+      for (const parentNode of nodes) {
+        // Make user's move
+        const game = new Chess(parentNode.fen);
+        let moveResult = null;
 
-      // First pass: create nodes for each position where user moves
-      for (const entry of opening.entries) {
-        const node: LineNode = {
-          id: entry.id,
-          fen: entry.position.fen,
-          expectedMove: entry.expectedMove,
-          moveNumber: 0,
-          moveSequence: "",
-          children: [],
-        };
-        nodesByEntryId.set(entry.id, node);
-
-        if (!nodesByFen.has(entry.position.fen)) {
-          nodesByFen.set(entry.position.fen, []);
+        try {
+          moveResult = game.move(parentNode.expectedMove, { strict: false });
+        } catch (e) {
+          console.warn(
+            `Could not play move "${parentNode.expectedMove}" from position`,
+          );
+          continue;
         }
-        nodesByFen.get(entry.position.fen)!.push(node);
-      }
 
-      // Second pass: build tree by finding which positions can be reached from user moves
-      for (const nodes of nodesByFen.values()) {
-        for (const parentNode of nodes) {
-          // Make user's move
-          const game = new Chess(parentNode.fen);
-          let moveResult = null;
+        if (!moveResult) continue;
 
-          try {
-            moveResult = game.move(parentNode.expectedMove, { strict: false });
-          } catch (e) {
-            console.warn(
-              `Could not play move "${parentNode.expectedMove}" from position`,
-            );
-            continue;
-          }
+        // After user's move, it's opponent's turn
+        const posAfterUserMove = game.fen();
+        const foundChildren = new Set<string>();
 
-          if (!moveResult) continue;
+        // Find saved positions reachable by opponent moves
+        const testGameForMoves = new Chess(posAfterUserMove);
+        const opponentMoves = testGameForMoves.moves({ verbose: true });
 
-          // After user's move, it's opponent's turn
-          const posAfterUserMove = game.fen();
-          const foundChildren = new Set<string>();
+        for (const moveObj of opponentMoves) {
+          const testGame = new Chess(posAfterUserMove);
+          testGame.move(moveObj.san);
+          const fensAfterOpponentMove = testGame.fen();
 
-          // Find saved positions reachable by opponent moves
-          const testGameForMoves = new Chess(posAfterUserMove);
-          const opponentMoves = testGameForMoves.moves({ verbose: true });
-
-          for (const moveObj of opponentMoves) {
-            const testGame = new Chess(posAfterUserMove);
-            testGame.move(moveObj.san);
-            const fensAfterOpponentMove = testGame.fen();
-
-            const childNodes = nodesByFen.get(fensAfterOpponentMove);
-            if (childNodes) {
-              for (const childNode of childNodes) {
-                if (!foundChildren.has(childNode.id)) {
-                  childNode.opponentMove = `${moveObj.from}${moveObj.to}${
-                    moveObj.promotion || ""
-                  }`;
-                  parentNode.children.push(childNode);
-                  foundChildren.add(childNode.id);
-                }
+          const childNodes = nodesByFen.get(fensAfterOpponentMove);
+          if (childNodes) {
+            for (const childNode of childNodes) {
+              if (!foundChildren.has(childNode.id)) {
+                childNode.opponentMove = `${moveObj.from}${moveObj.to}${
+                  moveObj.promotion || ""
+                }`;
+                parentNode.children.push(childNode);
+                foundChildren.add(childNode.id);
               }
             }
           }
         }
       }
-
-      // Third pass: identify root nodes
-      const positionsThatAreChildren = new Set<string>();
-      for (const nodes of nodesByFen.values()) {
-        for (const node of nodes) {
-          for (const child of node.children) {
-            positionsThatAreChildren.add(child.fen);
-          }
-        }
-      }
-
-      const rootNodes = Array.from(nodesByFen.values())
-        .flat()
-        .filter((node) => !positionsThatAreChildren.has(node.fen));
-
-
-      // Calculate move sequences
-      const calculateSequences = (
-        node: LineNode,
-        pathMoves: string[],
-        isRoot: boolean,
-      ) => {
-        const nodeMoves = [...pathMoves];
-        if (node.opponentMove) {
-          nodeMoves.push(node.opponentMove);
-        }
-        nodeMoves.push(node.expectedMove);
-
-        // Always show the full move sequence, not just the last moves
-        node.moveSequence = formatMoveSequence(nodeMoves);
-        node.moveNumber = Math.ceil(nodeMoves.length / 2);
-
-        for (const child of node.children) {
-          calculateSequences(child, nodeMoves, false);
-        }
-      };
-
-      for (const rootNode of rootNodes) {
-        rootNode.moveSequence = formatMoveSequence([rootNode.expectedMove]);
-        rootNode.moveNumber = 1;
-
-        for (const child of rootNode.children) {
-          calculateSequences(child, [rootNode.expectedMove], false);
-        }
-      }
-
-      // If there are multiple root nodes, create a mega-root that contains them all
-      let finalRoot: LineNode | null = null;
-      if (rootNodes.length === 1) {
-        finalRoot = rootNodes[0];
-      } else if (rootNodes.length > 1) {
-        // Create a virtual root node that contains all root variations
-        finalRoot = {
-          id: "virtual-root-" + opening.id,
-          fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", // Starting position
-          expectedMove: "",
-          moveNumber: 0,
-          moveSequence: "Starting Position",
-          children: rootNodes,
-        };
-      }
-
-      // Add this opening with its tree
-      openings.push({
-        id: opening.id,
-        name: opening.name,
-        notes: opening.notes || undefined,
-        root: finalRoot,
-      });
     }
 
-    return NextResponse.json({ openings }, { status: 200 });
+    // Third pass: identify root nodes
+    const positionsThatAreChildren = new Set<string>();
+    for (const nodes of nodesByFen.values()) {
+      for (const node of nodes) {
+        for (const child of node.children) {
+          positionsThatAreChildren.add(child.fen);
+        }
+      }
+    }
+
+    const rootNodes = Array.from(nodesByFen.values())
+      .flat()
+      .filter((node) => !positionsThatAreChildren.has(node.fen));
+
+    // Calculate move sequences
+    const calculateSequences = (
+      node: LineNode,
+      pathMoves: string[],
+      isRoot: boolean,
+    ) => {
+      const nodeMoves = [...pathMoves];
+      if (node.opponentMove) {
+        nodeMoves.push(node.opponentMove);
+      }
+      nodeMoves.push(node.expectedMove);
+
+      // Always show the full move sequence, not just the last moves
+      node.moveSequence = formatMoveSequence(nodeMoves);
+      node.moveNumber = Math.ceil(nodeMoves.length / 2);
+
+      for (const child of node.children) {
+        calculateSequences(child, nodeMoves, false);
+      }
+    };
+
+    for (const rootNode of rootNodes) {
+      rootNode.moveSequence = formatMoveSequence([rootNode.expectedMove]);
+      rootNode.moveNumber = 1;
+
+      for (const child of rootNode.children) {
+        calculateSequences(child, [rootNode.expectedMove], false);
+      }
+    }
+
+    // If there are multiple root nodes, create a mega-root that contains them all
+    let finalRoot: LineNode | null = null;
+    if (rootNodes.length === 1) {
+      finalRoot = rootNodes[0];
+    } else if (rootNodes.length > 1) {
+      // Create a virtual root node that contains all root variations
+      finalRoot = {
+        id: "virtual-root-" + repertoire.id,
+        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", // Starting position
+        expectedMove: "",
+        moveNumber: 0,
+        moveSequence: "Starting Position",
+        children: rootNodes,
+      };
+    }
+
+    // Return the tree directly - the root nodes are the openings
+    return NextResponse.json({ root: finalRoot }, { status: 200 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : "";
     console.error("Error fetching repertoires:", errorMessage);
+    console.error("Stack trace:", errorStack);
 
     return NextResponse.json(
       { error: `Failed to fetch repertoires: ${errorMessage}` },

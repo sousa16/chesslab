@@ -28,6 +28,7 @@ interface BoardProps {
   initialMoves?: string[];
   initialFen?: string;
   trainingMode?: boolean;
+  showingAnswer?: boolean;
   onTrainingMove?: (move: { from: string; to: string; san: string }) => boolean; // returns true if correct
   highlightSquare?: { square: string; color: "correct" | "incorrect" } | null;
 }
@@ -61,6 +62,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       initialMoves = [],
       initialFen,
       trainingMode = false,
+      showingAnswer = false,
       onTrainingMove,
       highlightSquare,
     },
@@ -148,6 +150,11 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     }, [moves, onMovesUpdated]);
 
     const handleSquareClick = (square: string) => {
+      // Disable square selection outside of training or build mode
+      if (!trainingMode && !buildMode) {
+        return;
+      }
+
       // If no square is selected, select this square if it has a piece
       if (!selectedSquare) {
         const piece = gameRef.current.get(square as any);
@@ -193,6 +200,11 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       targetSquare: string | null;
       piece: { isSparePiece: boolean; position: string; pieceType: string };
     }): boolean => {
+      // Prevent dragging outside of allowed modes
+      if (!buildMode && (!trainingMode || !showingAnswer)) {
+        return false;
+      }
+
       if (!targetSquare) {
         return false;
       }
@@ -462,9 +474,8 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               lightSquareStyle: { backgroundColor: boardColors.light },
               darkSquareStyle: { backgroundColor: boardColors.dark },
               allowDragging:
-                trainingMode || buildMode
-                  ? true
-                  : currentMoveIndex === moveHistory.length - 1,
+                !trainingMode &&
+                (buildMode || currentMoveIndex === moveHistory.length - 1),
               squareStyles: {
                 ...(selectedSquare
                   ? {

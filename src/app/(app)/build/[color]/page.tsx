@@ -33,7 +33,6 @@ export default function BuildPage({
 
   const [moves, setMoves] = useState<Move[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
-  const { showToast } = useToast();
 
   const moveParam = searchParams.get("move");
   const initialMoves = useMemo(
@@ -109,20 +108,31 @@ export default function BuildPage({
       if (!response.ok) {
         // User-friendly error messages based on common issues
         const errorMsg = data.error?.toLowerCase() || "";
-        
-        if (errorMsg.includes("end with a white move") || errorMsg.includes("end with a black move") || errorMsg.includes("must end with")) {
-          toast.error(`Your line should end with your move (${color}), not your opponent's.`);
-        } else if (errorMsg.includes("unauthorized") || errorMsg.includes("sign in")) {
+
+        if (
+          errorMsg.includes("end with a white move") ||
+          errorMsg.includes("end with a black move") ||
+          errorMsg.includes("must end with")
+        ) {
+          toast.error(
+            `Your line should end with your move (${color}), not your opponent's.`,
+          );
+        } else if (
+          errorMsg.includes("unauthorized") ||
+          errorMsg.includes("sign in")
+        ) {
           toast.error("Please sign in to save your repertoire.");
         } else {
           // Show the actual error message for debugging
-          toast.error(data.error || "Couldn't save the line. Please try again.");
+          toast.error(
+            data.error || "Couldn't save the line. Please try again.",
+          );
         }
         return;
       }
 
       toast.success(`Line saved! ${data.entriesCreated} positions added.`);
-      
+
       // Navigate back to the repertoire view for this color instead of going back
       router.push(`/home?panel=repertoire&color=${color}`);
     } catch (error) {
@@ -179,7 +189,7 @@ export default function BuildPage({
               // Determine whose turn it is based on the moves array
               const lastMove = moves[moves.length - 1];
               const isOpponentTurn = lastMove && !lastMove.black;
-              
+
               let message = "";
               let isUserTurn = false;
 
@@ -202,17 +212,19 @@ export default function BuildPage({
               }
 
               return (
-                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${
-                  isUserTurn 
-                    ? "bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30" 
-                    : "bg-surface-2/50 border border-border/30"
-                }`}>
+                <div
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${
+                    isUserTurn
+                      ? "bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30"
+                      : "bg-surface-2/50 border border-border/30"
+                  }`}>
                   {isUserTurn && (
                     <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                   )}
-                  <p className={`text-sm font-medium ${
-                    isUserTurn ? "text-foreground" : "text-muted-foreground"
-                  }`}>
+                  <p
+                    className={`text-sm font-medium ${
+                      isUserTurn ? "text-foreground" : "text-muted-foreground"
+                    }`}>
                     {message}
                   </p>
                 </div>

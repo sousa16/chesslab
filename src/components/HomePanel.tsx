@@ -1,6 +1,15 @@
 "use client";
 
-import { Play, Settings, ChevronRight, Flame, Target, Clock, BookOpen } from "lucide-react";
+import {
+  Play,
+  Settings,
+  ChevronRight,
+  Target,
+  Clock,
+  BookOpen,
+  Flame,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -18,6 +27,9 @@ interface TrainingStats {
     white: ColorStats;
     black: ColorStats;
   };
+  streak: number;
+  accuracy: number;
+  timeSpentMinutes: number;
 }
 
 interface HomePanelProps {
@@ -32,16 +44,16 @@ interface RepertoireStats {
 }
 
 // Progress Circle Component
-function ProgressCircle({ 
-  value, 
-  max, 
-  size = 56, 
+function ProgressCircle({
+  value,
+  max,
+  size = 56,
   strokeWidth = 4,
-  color = "primary"
-}: { 
-  value: number; 
-  max: number; 
-  size?: number; 
+  color = "primary",
+}: {
+  value: number;
+  max: number;
+  size?: number;
   strokeWidth?: number;
   color?: "primary" | "white" | "black";
 }) {
@@ -53,7 +65,7 @@ function ProgressCircle({
   const colorClasses = {
     primary: "stroke-primary",
     white: "stroke-zinc-400",
-    black: "stroke-zinc-600"
+    black: "stroke-zinc-600",
   };
 
   return (
@@ -82,7 +94,9 @@ function ProgressCircle({
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xs font-semibold text-foreground">{Math.round(percent)}%</span>
+        <span className="text-xs font-semibold text-foreground">
+          {Math.round(percent)}%
+        </span>
       </div>
     </div>
   );
@@ -97,7 +111,10 @@ function getGreeting(): string {
 }
 
 // Get first name from email or name
-function getFirstName(user: { name?: string | null; email?: string | null }): string {
+function getFirstName(user: {
+  name?: string | null;
+  email?: string | null;
+}): string {
   if (user.name) {
     return user.name.split(" ")[0];
   }
@@ -113,59 +130,104 @@ export function HomePanel({
   onStartPractice,
 }: HomePanelProps) {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const greeting = getGreeting();
   const firstName = session?.user ? getFirstName(session.user) : "there";
 
-  const [whiteStats, setWhiteStats] = useState<RepertoireStats>({ lines: 0, positions: 0, percentage: 0 });
-  const [blackStats, setBlackStats] = useState<RepertoireStats>({ lines: 0, positions: 0, percentage: 0 });
+  const [whiteStats, setWhiteStats] = useState<RepertoireStats>({
+    lines: 0,
+    positions: 0,
+    percentage: 0,
+  });
+  const [blackStats, setBlackStats] = useState<RepertoireStats>({
+    lines: 0,
+    positions: 0,
+    percentage: 0,
+  });
+  const [trainingStats, setTrainingStats] = useState<TrainingStats | null>(
+    null,
+  );
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchStats = async () => {
+    try {
+      // Fetch training stats (due cards, total positions, learned count)
+      const trainingRes = await fetch("/api/training-stats");
+      if (trainingRes.ok) {
+        const trainingData = await trainingRes.json();
+        setTrainingStats(trainingData);
+      } else {
+        console.error("Training stats fetch failed:", trainingRes.status);
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    }
+  };
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        // Fetch white repertoire
-        const whiteRes = await fetch("/api/repertoires?color=white");
-        if (whiteRes.ok) {
-          const whiteData = await whiteRes.json();
-          const whiteOpenings = whiteData.openings || [];
-          const whiteLinesCount = whiteOpenings.length;
-          // Count total positions by traversing all nodes
-          const countPositions = (node: any): number => {
-            if (!node) return 0;
-            return 1 + (node.children || []).reduce((sum: number, child: any) => sum + countPositions(child), 0);
-          };
-          const whitePositionsCount = whiteOpenings.reduce((sum: number, opening: any) => sum + countPositions(opening.root), 0);
-          setWhiteStats({
-            lines: whiteLinesCount,
-            positions: whitePositionsCount,
-            percentage: whitePositionsCount > 0 ? Math.round((whitePositionsCount / 200) * 100) : 0, // Assuming 200 is target
-          });
-        }
+    // Wait for session to finish loading
+    if (status === "loading") {
+      return;
+    }
 
-        // Fetch black repertoire
-        const blackRes = await fetch("/api/repertoires?color=black");
-        if (blackRes.ok) {
-          const blackData = await blackRes.json();
-          const blackOpenings = blackData.openings || [];
-          const blackLinesCount = blackOpenings.length;
-          const countPositions = (node: any): number => {
-            if (!node) return 0;
-            return 1 + (node.children || []).reduce((sum: number, child: any) => sum + countPositions(child), 0);
-          };
-          const blackPositionsCount = blackOpenings.reduce((sum: number, opening: any) => sum + countPositions(opening.root), 0);
-          setBlackStats({
-            lines: blackLinesCount,
-            positions: blackPositionsCount,
-            percentage: blackPositionsCount > 0 ? Math.round((blackPositionsCount / 200) * 100) : 0,
-          });
-        }
-      } catch (error) {
-        console.error("Error fetching repertoire stats:", error);
+    // Only fetch when session is available
+    if (!session?.user) {
+      setIsLoading(false);
+      return;
+    }
+
+    const doFetch = async () => {
+      setIsLoading(true);
+      await fetchStats();
+      setIsLoading(false);
+    };
+
+    doFetch();
+  }, [session?.user, status]);
+
+  // Refetch stats when page becomes visible (after returning from practice)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchStats();
       }
     };
 
-    fetchStats();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
+
+  // Calculate percentages based on learned positions from training stats
+  const whitePercentage = trainingStats?.colorStats?.white?.total
+    ? Math.round(
+        (trainingStats.colorStats.white.learned /
+          trainingStats.colorStats.white.total) *
+          100,
+      )
+    : 0;
+  const blackPercentage = trainingStats?.colorStats?.black?.total
+    ? Math.round(
+        (trainingStats.colorStats.black.learned /
+          trainingStats.colorStats.black.total) *
+          100,
+      )
+    : 0;
+
+  // Use training stats for position counts (more reliable than tree traversal)
+  const whitePositionCount =
+    trainingStats?.colorStats?.white?.total ?? whiteStats.positions;
+  const blackPositionCount =
+    trainingStats?.colorStats?.black?.total ?? blackStats.positions;
+
+  // Estimate practice time (roughly 15 seconds per position)
+  const dueCount = trainingStats?.dueCount ?? 0;
+  const estimatedMinutes = Math.max(1, Math.ceil((dueCount * 15) / 60));
+
+  // Calculate total learned positions
+  const totalLearned =
+    (trainingStats?.colorStats?.white?.learned ?? 0) +
+    (trainingStats?.colorStats?.black?.learned ?? 0);
 
   return (
     <div className="h-full flex flex-col">
@@ -181,7 +243,9 @@ export function HomePanel({
             <Settings size={18} />
           </Button>
         </div>
-        <h2 className="text-2xl font-semibold text-foreground tracking-tight">{firstName}</h2>
+        <h2 className="text-2xl font-semibold text-foreground tracking-tight">
+          {firstName}
+        </h2>
       </div>
 
       {/* Content */}
@@ -190,13 +254,17 @@ export function HomePanel({
         <section className="glass-card rounded-xl p-5 hover-lift">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-4xl font-bold text-foreground tracking-tight">32</p>
-              <p className="text-base text-muted-foreground mt-1">moves to practice</p>
+              <p className="text-4xl font-bold text-foreground tracking-tight">
+                {dueCount}
+              </p>
+              <p className="text-base text-muted-foreground mt-1">
+                moves to practice
+              </p>
             </div>
             <div className="text-right">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 text-primary text-sm font-medium">
                 <Clock size={14} />
-                ~8 min
+                {dueCount === 0 ? "0" : `~${estimatedMinutes}`} min
               </div>
             </div>
           </div>
@@ -221,7 +289,7 @@ export function HomePanel({
               className="repertoire-card repertoire-card-white w-full relative overflow-hidden rounded-2xl p-5 transition-all duration-300 group text-left cursor-pointer">
               {/* Gradient border effect */}
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-zinc-400/20 via-white/10 to-zinc-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              
+
               {/* Content */}
               <div className="relative flex items-center gap-4">
                 {/* King icon with glow */}
@@ -231,22 +299,33 @@ export function HomePanel({
                     <span className="text-2xl drop-shadow-sm">♔</span>
                   </div>
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-base font-semibold text-foreground">White Repertoire</p>
-                    <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/20 text-primary uppercase tracking-wide">Build</span>
+                    <p className="text-base font-semibold text-foreground">
+                      White Repertoire
+                    </p>
+                    <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/20 text-primary uppercase tracking-wide">
+                      Build
+                    </span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{whiteStats.lines} lines • {whiteStats.positions} positions</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {whitePositionCount} positions
+                  </p>
                   {/* Progress bar */}
-                  <div className="mt-3 h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-zinc-400 to-white rounded-full transition-all duration-500" style={{ width: `${whiteStats.percentage}%` }} />
+                  <div className="mt-3 h-1.5 bg-zinc-700/50 rounded-full overflow-hidden w-full">
+                    <div
+                      className="h-full bg-gradient-to-r from-zinc-400 to-white rounded-full transition-all duration-500"
+                      style={{ width: `${whitePercentage}%` }}
+                    />
                   </div>
                 </div>
-                
+
                 {/* Percentage and arrow */}
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-2xl font-bold text-foreground">{whiteStats.percentage}%</span>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0 w-14">
+                  <span className="text-2xl font-bold text-foreground whitespace-nowrap">
+                    {whitePercentage}%
+                  </span>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
                     <span>Edit</span>
                     <ChevronRight
@@ -264,32 +343,45 @@ export function HomePanel({
               className="repertoire-card repertoire-card-black w-full relative overflow-hidden rounded-2xl p-5 transition-all duration-300 group text-left cursor-pointer">
               {/* Gradient border effect */}
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-zinc-600/20 via-zinc-800/10 to-zinc-900/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              
+
               {/* Content */}
               <div className="relative flex items-center gap-4">
                 {/* King icon with glow */}
                 <div className="relative">
                   <div className="absolute inset-0 bg-zinc-500/20 rounded-xl blur-lg group-hover:bg-zinc-400/30 transition-all duration-300" />
                   <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 flex items-center justify-center shadow-lg border border-zinc-600/50">
-                    <span className="text-2xl text-zinc-300 drop-shadow-sm">♚</span>
+                    <span className="text-2xl text-zinc-300 drop-shadow-sm">
+                      ♚
+                    </span>
                   </div>
                 </div>
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-base font-semibold text-foreground">Black Repertoire</p>
-                    <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/20 text-primary uppercase tracking-wide">Build</span>
+                    <p className="text-base font-semibold text-foreground">
+                      Black Repertoire
+                    </p>
+                    <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/20 text-primary uppercase tracking-wide">
+                      Build
+                    </span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{blackStats.lines} lines • {blackStats.positions} positions</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {blackPositionCount} positions
+                  </p>
                   {/* Progress bar */}
-                  <div className="mt-3 h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-zinc-600 to-zinc-400 rounded-full transition-all duration-500" style={{ width: `${blackStats.percentage}%` }} />
+                  <div className="mt-3 h-1.5 bg-zinc-700/50 rounded-full overflow-hidden w-full">
+                    <div
+                      className="h-full bg-gradient-to-r from-zinc-600 to-zinc-400 rounded-full transition-all duration-500"
+                      style={{ width: `${blackPercentage}%` }}
+                    />
                   </div>
                 </div>
-                
+
                 {/* Percentage and arrow */}
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-2xl font-bold text-foreground">{blackStats.percentage}%</span>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0 w-14">
+                  <span className="text-2xl font-bold text-foreground whitespace-nowrap">
+                    {blackPercentage}%
+                  </span>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
                     <span>Edit</span>
                     <ChevronRight
@@ -308,7 +400,7 @@ export function HomePanel({
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
             Activity Hub
           </h3>
-          
+
           {/* Stats Grid - Small Tiles */}
           <div className="grid grid-cols-2 gap-2">
             <div className="glass-card rounded-xl p-4 hover-lift border-glow transition-all">
@@ -317,37 +409,50 @@ export function HomePanel({
                   <Flame size={14} className="text-orange-400" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground tracking-tight">12</p>
+              <p className="text-2xl font-bold text-foreground tracking-tight">
+                {trainingStats?.streak ?? 0}
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">day streak</p>
             </div>
-            
+
             <div className="glass-card rounded-xl p-4 hover-lift border-glow transition-all">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
-                  <Target size={14} className="text-emerald-400" />
+                  <Zap size={14} className="text-emerald-400" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground tracking-tight">84%</p>
+              <p className="text-2xl font-bold text-foreground tracking-tight">
+                {trainingStats?.accuracy ?? 0}%
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">accuracy</p>
             </div>
-            
+
             <div className="glass-card rounded-xl p-4 hover-lift border-glow transition-all">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-7 h-7 rounded-lg bg-blue-500/15 flex items-center justify-center">
                   <BookOpen size={14} className="text-blue-400" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground tracking-tight">156</p>
-              <p className="text-xs text-muted-foreground mt-0.5">lines learned</p>
+              <p className="text-2xl font-bold text-foreground tracking-tight">
+                {totalLearned}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                lines learned
+              </p>
             </div>
-            
+
             <div className="glass-card rounded-xl p-4 hover-lift border-glow transition-all">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-7 h-7 rounded-lg bg-purple-500/15 flex items-center justify-center">
                   <Clock size={14} className="text-purple-400" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground tracking-tight">23m</p>
+              <p className="text-2xl font-bold text-foreground tracking-tight">
+                {trainingStats?.dueCount === 0
+                  ? 0
+                  : (trainingStats?.timeSpentMinutes ?? 0)}
+                m
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">today</p>
             </div>
           </div>

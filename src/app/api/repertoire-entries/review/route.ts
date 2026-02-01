@@ -13,6 +13,44 @@ import {
   type ReviewResponse,
 } from "@/lib/sm2";
 
+/**
+ * Record daily activity for tracking streak, accuracy, and time
+ */
+async function recordDailyActivity(
+  userId: string,
+  isCorrect: boolean,
+  timeSpentMs: number = 0,
+) {
+  // Use UTC date to match PostgreSQL DATE type
+  const today = new Date();
+  const todayUTC = new Date(
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+  );
+
+  await prisma.dailyActivity.upsert({
+    where: {
+      userId_date: {
+        userId,
+        date: todayUTC,
+      },
+    },
+    update: {
+      correctCount: isCorrect ? { increment: 1 } : undefined,
+      incorrectCount: !isCorrect ? { increment: 1 } : undefined,
+      timeSpentMs: { increment: timeSpentMs },
+      positionsReviewed: { increment: 1 },
+    },
+    create: {
+      userId,
+      date: todayUTC,
+      correctCount: isCorrect ? 1 : 0,
+      incorrectCount: isCorrect ? 0 : 1,
+      timeSpentMs,
+      positionsReviewed: 1,
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -22,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { entryId, response } = body;
+    const { entryId, response, timeSpentMs = 0 } = body;
 
     if (!entryId || !response) {
       return NextResponse.json(
@@ -91,6 +129,11 @@ export async function POST(request: NextRequest) {
         position: true,
       },
     });
+
+    // Record daily activity for streak/accuracy tracking
+    // "effort" and "easy" are considered correct answers
+    const isCorrect = response === "effort" || response === "easy";
+    await recordDailyActivity(entry.repertoire.user.id, isCorrect, timeSpentMs);
 
     return NextResponse.json({
       success: true,

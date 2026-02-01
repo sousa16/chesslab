@@ -15,9 +15,11 @@ import TrainingClient from "@/components/TrainingClient";
 
 // Mock next/navigation
 const mockPush = jest.fn();
+const mockRefresh = jest.fn();
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mockPush,
+    refresh: mockRefresh,
   }),
   usePathname: jest.fn(() => "/training"),
 }));
@@ -229,6 +231,7 @@ describe("TrainingClient Component", () => {
       fireEvent.click(buttons[0]); // First button is back
 
       expect(mockPush).toHaveBeenCalledWith("/home");
+      expect(mockRefresh).toHaveBeenCalled();
     });
   });
 

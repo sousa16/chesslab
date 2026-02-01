@@ -66,6 +66,17 @@ export default function TrainingClient({
     color: "correct" | "incorrect";
   } | null>(null);
   const [sessionComplete, setSessionComplete] = useState(false);
+  const cardStartTimeRef = useRef<number>(Date.now());
+
+  // Reset timer when card changes
+  const resetCardTimer = useCallback(() => {
+    cardStartTimeRef.current = Date.now();
+  }, []);
+
+  // Get time spent on current card
+  const getTimeSpentMs = useCallback(() => {
+    return Date.now() - cardStartTimeRef.current;
+  }, []);
 
   const isPracticeMode = mode === "practice";
   const repertoires = user.repertoires;
@@ -77,6 +88,7 @@ export default function TrainingClient({
 
   const handleBack = () => {
     router.push("/home");
+    router.refresh();
   };
 
   const currentEntry = currentRepertoire?.entries[currentCardIndex];
@@ -162,18 +174,23 @@ export default function TrainingClient({
     }
     setShowingAnswer(false);
     setFeedbackSquare(null);
+    resetCardTimer();
   }, [
     currentRepertoire,
     currentCardIndex,
     currentRepertoireIndex,
     repertoires.length,
+    resetCardTimer,
   ]);
 
   const handleRecallRating = async (rating: ReviewResponse) => {
-    if (!currentEntry) return;
+    if (!currentEntry) {
+      return;
+    }
 
     setIsReviewing(true);
     setFeedbackSquare(null);
+    const timeSpentMs = getTimeSpentMs();
 
     // In practice mode, skip the API call - just move to next card
     if (isPracticeMode) {
@@ -192,6 +209,7 @@ export default function TrainingClient({
         body: JSON.stringify({
           entryId: currentEntry.id,
           response: rating,
+          timeSpentMs,
         }),
       });
 
@@ -318,7 +336,8 @@ export default function TrainingClient({
             playerColor={repertoireColor}
             initialFen={currentEntry?.position.fen}
             key={`${currentRepertoireIndex}-${currentCardIndex}`}
-            trainingMode={!showingAnswer}
+            trainingMode={true}
+            showingAnswer={showingAnswer}
             onTrainingMove={handleTrainingMove}
             highlightSquare={feedbackSquare}
           />
@@ -476,10 +495,10 @@ export default function TrainingClient({
                   <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-12 -mt-12" />
                   <div className="relative">
                     <p className="text-lg text-foreground font-semibold mb-2">
-                      What&apos;s your move?
+                      Ready to reveal?
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Click on the board to play the move from your repertoire
+                      Click below to see the answer
                     </p>
                   </div>
                 </div>

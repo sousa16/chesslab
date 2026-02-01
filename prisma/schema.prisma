@@ -37,16 +37,17 @@ model Session {
 }
 
 model User {
-  id             String       @id @default(cuid())
+  id             String          @id @default(cuid())
   name           String?
-  email          String?      @unique
+  email          String?         @unique
   emailVerified  DateTime?
   hashedPassword String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
   accounts       Account[]
   repertoires    Repertoire[]
   sessions       Session[]
+  dailyActivity  DailyActivity[]
 }
 
 model VerificationToken {
@@ -122,4 +123,22 @@ model RepertoireEntry {
 enum PieceColor {
   White
   Black
+}
+
+// Track daily practice activity for streaks, accuracy, and time
+model DailyActivity {
+  id              String   @id @default(cuid())
+  userId          String
+  date            DateTime @db.Date // Just the date, no time
+  correctCount    Int      @default(0)
+  incorrectCount  Int      @default(0)
+  timeSpentMs     Int      @default(0) // Milliseconds spent practicing
+  positionsReviewed Int    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
 }

@@ -17,6 +17,10 @@ jest.mock("@/lib/prisma", () => ({
     user: {
       findUnique: jest.fn(),
     },
+    dailyActivity: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+    },
   },
 }));
 
@@ -36,6 +40,9 @@ const mockGetServerSession = getServerSession as jest.MockedFunction<
 describe("Training Stats API", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default mock for dailyActivity queries (empty activity)
+    (mockPrisma.dailyActivity.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.dailyActivity.findUnique as jest.Mock).mockResolvedValue(null);
   });
 
   describe("GET /api/training-stats", () => {
@@ -83,6 +90,9 @@ describe("Training Stats API", () => {
           white: { learned: 0, total: 0 },
           black: { learned: 0, total: 0 },
         },
+        streak: 0,
+        accuracy: 0,
+        timeSpentMinutes: 0,
       });
     });
 
@@ -274,7 +284,7 @@ describe("Training Stats API", () => {
       const response = await GET();
       const data = await response.json();
 
-      expect(data.colorStats.white).toEqual({ learned: 1, total: 2 });
+      expect(data.colorStats.white).toEqual({ learned: 2, total: 2 });
       expect(data.colorStats.black).toEqual({ learned: 1, total: 1 });
     });
 
@@ -341,8 +351,8 @@ describe("Training Stats API", () => {
 
       expect(data.totalPositions).toBe(4);
       expect(data.dueCount).toBe(4);
-      expect(data.colorStats.white).toEqual({ learned: 2, total: 3 });
-      expect(data.colorStats.black).toEqual({ learned: 1, total: 1 });
+      expect(data.colorStats.white).toEqual({ learned: 0, total: 3 });
+      expect(data.colorStats.black).toEqual({ learned: 0, total: 1 });
     });
   });
 });

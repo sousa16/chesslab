@@ -3,7 +3,13 @@
  * Shows positions and expected moves with proper algebraic notation
  */
 
-import { ChevronDown, ChevronRight, Hammer, GraduationCap } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Hammer,
+  GraduationCap,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -53,16 +59,31 @@ export function LineTree({
     const uciMoves: string[] = [];
 
     for (const part of parts) {
-      if (!part || part === "..." || part === "[object Object]" || part.includes("[object Object]")) {
+      if (
+        !part ||
+        part === "..." ||
+        part === "[object Object]" ||
+        part.includes("[object Object]")
+      ) {
         continue;
       }
 
       if (part.includes(".")) {
         const movePart = part.split(".")[1];
-        if (movePart && typeof movePart === "string" && movePart.length >= 4 && /^[a-h][1-8][a-h][1-8]/.test(movePart)) {
+        if (
+          movePart &&
+          typeof movePart === "string" &&
+          movePart.length >= 4 &&
+          /^[a-h][1-8][a-h][1-8]/.test(movePart)
+        ) {
           uciMoves.push(movePart);
         }
-      } else if (part.length >= 4 && !part.includes(".") && typeof part === "string" && /^[a-h][1-8][a-h][1-8]/.test(part)) {
+      } else if (
+        part.length >= 4 &&
+        !part.includes(".") &&
+        typeof part === "string" &&
+        /^[a-h][1-8][a-h][1-8]/.test(part)
+      ) {
         uciMoves.push(part);
       }
     }
@@ -86,7 +107,11 @@ export function LineTree({
   };
 
   // If root is a virtual "Starting Position" or "Initial Position" node, render its children directly
-  if ((root.moveSequence === "Starting Position" || root.moveSequence === "Initial Position") && root.children.length > 0) {
+  if (
+    (root.moveSequence === "Starting Position" ||
+      root.moveSequence === "Initial Position") &&
+    root.children.length > 0
+  ) {
     return (
       <div className="space-y-1">
         {root.children.map((child) => (
@@ -100,6 +125,7 @@ export function LineTree({
             onLineClick={onLineClick}
             extractMovesForNode={extractMovesForNode}
             isRoot={true}
+            parentMoveSequence=""
           />
         ))}
       </div>
@@ -117,6 +143,7 @@ export function LineTree({
         onLineClick={onLineClick}
         extractMovesForNode={extractMovesForNode}
         isRoot={true}
+        parentMoveSequence=""
       />
     </div>
   );
@@ -131,6 +158,7 @@ interface LineNodeComponentProps {
   onLineClick?: (moves: string[], startingFen: string) => void;
   extractMovesForNode: (node: LineNode) => string[];
   isRoot?: boolean;
+  parentMoveSequence: string;
 }
 
 function LineNodeComponent({
@@ -142,8 +170,10 @@ function LineNodeComponent({
   onLineClick,
   extractMovesForNode,
   isRoot = false,
+  parentMoveSequence,
 }: LineNodeComponentProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const hasChildren = node.children.length > 0;
 
   const handleLineClick = () => {
@@ -153,11 +183,63 @@ function LineNodeComponent({
     }
   };
 
-  const displayMoves = node.moveSequence;
+  const handleDelete = async () => {
+    if (onDelete) {
+      await onDelete(node.id);
+      setShowDeleteDialog(false);
+    }
+  };
+
+  // Calculate the differential moves (only show what's new from parent)
+  const getDifferentialMoves = (): string => {
+    const fullSequence = node.moveSequence;
+    if (!parentMoveSequence || parentMoveSequence === "") {
+      return fullSequence;
+    }
+    // Remove parent's move sequence from the start
+    let trimmed = fullSequence.replace(parentMoveSequence, "").trim();
+
+    if (!trimmed) return fullSequence;
+
+    // If the trimmed result starts with a move (not a move number), we need to add the move number
+    // Check if it starts with a letter (like "e7e5") rather than a number (like "2.")
+    if (trimmed && /^[a-h]/.test(trimmed)) {
+      // Count how many moves are in the parent to figure out the next move number
+      const parentParts = parentMoveSequence.split(" ").filter((p) => p);
+      // Each "X." token is a white move, each bare move is a black move
+      let moveCount = 0;
+      for (const part of parentParts) {
+        if (/^\d+\./.test(part)) {
+          moveCount++; // white move
+        } else if (/^[a-h]/.test(part)) {
+          moveCount++; // black move
+        }
+      }
+      // The differential starts at moveCount + 1
+      // If moveCount is odd (after white's move), next is black's move at same move number
+      // If moveCount is even (after black's move), next is white's move at next number
+      const isBlackMove = moveCount % 2 === 1;
+      const moveNumber = Math.floor(moveCount / 2) + 1;
+
+      if (isBlackMove) {
+        // Black's move - prefix with "N..."
+        trimmed = `${moveNumber}...${trimmed}`;
+      } else {
+        // White's move - prefix with "N."
+        trimmed = `${moveNumber}.${trimmed}`;
+      }
+    }
+
+    return trimmed;
+  };
+
+  const displayMoves = getDifferentialMoves();
 
   return (
-    <div className={`${depth > 0 ? "ml-3 pl-3 border-l border-border/30" : ""}`}>
-      <div className={`
+    <div
+      className={`${depth > 0 ? "ml-3 pl-3 border-l border-border/30" : ""}`}>
+      <div
+        className={`
         relative flex items-start gap-2 p-3 rounded-xl 
         transition-all duration-200 text-left group
         ${isRoot ? "glass-card mb-2" : "hover:bg-surface-2/60"}
@@ -211,8 +293,45 @@ function LineNodeComponent({
             title="Practice this line">
             <GraduationCap size={13} />
           </Button>
+          {onDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 rounded-lg hover:bg-red-500/15 hover:text-red-400"
+              onClick={() => setShowDeleteDialog(true)}
+              title="Delete this line">
+              <Trash2 size={13} />
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="glass-card border-glow">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Delete Line</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Are you sure you want to delete this line?{" "}
+              {hasChildren ? "This will also delete all child lines." : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+              className="border-border/50 hover:bg-surface-2">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              className="bg-red-500/20 text-red-400 hover:bg-red-500/30">
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Children */}
       {hasChildren && isExpanded && (
@@ -227,6 +346,7 @@ function LineNodeComponent({
               onDelete={onDelete}
               onLineClick={onLineClick}
               extractMovesForNode={extractMovesForNode}
+              parentMoveSequence={node.moveSequence}
             />
           ))}
         </div>

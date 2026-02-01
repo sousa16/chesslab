@@ -27,6 +27,9 @@ interface BoardProps {
   onBuildMove?: (move: { from: string; to: string }) => void;
   initialMoves?: string[];
   initialFen?: string;
+  trainingMode?: boolean;
+  onTrainingMove?: (move: { from: string; to: string; san: string }) => boolean; // returns true if correct
+  highlightSquare?: { square: string; color: "correct" | "incorrect" } | null;
 }
 
 export interface BoardHandle {
@@ -43,6 +46,7 @@ export interface BoardHandle {
     blackUci?: string;
   }[];
   deleteToMove: (moveIndex: number) => void;
+  makeMove: (from: string, to: string, promotion?: string) => boolean;
 }
 
 export const Board = forwardRef<BoardHandle, BoardProps>(
@@ -56,6 +60,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       onBuildMove,
       initialMoves = [],
       initialFen,
+      trainingMode = false,
+      onTrainingMove,
+      highlightSquare,
     },
     ref,
   ) => {
@@ -188,6 +195,43 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     }): boolean => {
       if (!targetSquare) {
         return false;
+      }
+
+      if (trainingMode && onTrainingMove) {
+        // In training mode, validate the move without executing it permanently
+        try {
+          // Create a temporary game to validate and get SAN notation
+          const tempGame = new Chess(gameRef.current.fen());
+          const move = tempGame.move({
+            from: sourceSquare,
+            to: targetSquare,
+            promotion: "q",
+          });
+          if (!move) {
+            return false;
+          }
+
+          // Call the training callback with move details
+          const isCorrect = onTrainingMove({
+            from: sourceSquare,
+            to: targetSquare,
+            san: move.san,
+          });
+
+          // If correct, execute the move on the actual board
+          if (isCorrect) {
+            gameRef.current.move({
+              from: sourceSquare,
+              to: targetSquare,
+              promotion: "q",
+            });
+            setPosition(gameRef.current.fen());
+          }
+
+          return isCorrect;
+        } catch {
+          return false;
+        }
       }
 
       if (buildMode) {
@@ -337,6 +381,27 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       onMoveHistoryChange?.(newMoves.length);
     };
 
+    const makeMove = (
+      from: string,
+      to: string,
+      promotion?: string,
+    ): boolean => {
+      try {
+        const move = gameRef.current.move({
+          from,
+          to,
+          promotion: promotion || "q",
+        });
+        if (move) {
+          setPosition(gameRef.current.fen());
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    };
+
     useImperativeHandle(ref, () => ({
       goToFirst,
       goToPrevious,
@@ -345,6 +410,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       reset,
       getMoveHistory,
       deleteToMove,
+      makeMove,
     }));
 
     const isViewingHistory = currentMoveIndex !== moveHistory.length - 1;
@@ -352,7 +418,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     // Board theme colors - Midnight theme (muted slate for reduced eye strain)
     const boardColors = {
       light: "#c8c4bc", // soft cream/slate
-      dark: "#5c6370",  // muted slate gray
+      dark: "#5c6370", // muted slate gray
       highlight: "rgba(255, 200, 0, 0.4)",
     };
 
@@ -395,14 +461,29 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               showNotation: true,
               lightSquareStyle: { backgroundColor: boardColors.light },
               darkSquareStyle: { backgroundColor: boardColors.dark },
-              allowDragging: currentMoveIndex === moveHistory.length - 1,
-              squareStyles: selectedSquare
-                ? {
-                    [selectedSquare]: {
-                      backgroundColor: boardColors.highlight,
-                    },
-                  }
-                : {},
+              allowDragging:
+                trainingMode || buildMode
+                  ? true
+                  : currentMoveIndex === moveHistory.length - 1,
+              squareStyles: {
+                ...(selectedSquare
+                  ? {
+                      [selectedSquare]: {
+                        backgroundColor: boardColors.highlight,
+                      },
+                    }
+                  : {}),
+                ...(highlightSquare
+                  ? {
+                      [highlightSquare.square]: {
+                        backgroundColor:
+                          highlightSquare.color === "correct"
+                            ? "rgba(34, 197, 94, 0.5)"
+                            : "rgba(239, 68, 68, 0.5)",
+                      },
+                    }
+                  : {}),
+              },
             }}
           />
         </div>

@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Chessboard } from "react-chessboard";
 import { Chess, Square } from "chess.js";
-import { ChevronLeft, Eye, Flame, Trophy } from "lucide-react";
+import {
+  ChevronLeft,
+  Eye,
+  Flame,
+  Trophy,
+  GraduationCap,
+  Dumbbell,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
+import { Board, BoardHandle } from "@/components/Board";
 import { type ReviewResponse } from "@/lib/sm2";
 
 interface Position {
@@ -47,20 +54,18 @@ export default function TrainingClient({
   mode = "review",
 }: TrainingClientProps) {
   const router = useRouter();
+  const boardRef = useRef<BoardHandle>(null);
   const [currentRepertoireIndex, setCurrentRepertoireIndex] = useState(0);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [gameState, setGameState] = useState<Chess | null>(null);
   const [feedback, setFeedback] = useState<string>("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [streak, setStreak] = useState(0);
   const [feedbackSquare, setFeedbackSquare] = useState<{
     square: string;
-    type: "correct" | "incorrect";
+    color: "correct" | "incorrect";
   } | null>(null);
-  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [sessionComplete, setSessionComplete] = useState(false);
-  const gameRef = useRef<Chess | null>(null);
 
   const isPracticeMode = mode === "practice";
   const repertoires = user.repertoires;
@@ -69,21 +74,6 @@ export default function TrainingClient({
   // Calculate total cards due for review
   const totalCards =
     repertoires.reduce((sum, r) => sum + r.entries.length, 0) || 0;
-
-  // Initialize or update game state
-  useEffect(() => {
-    if (currentRepertoire && currentRepertoire.entries.length > 0) {
-      const entry = currentRepertoire.entries[currentCardIndex];
-      if (entry) {
-        const game = new Chess(entry.position.fen);
-        gameRef.current = game;
-        setGameState(game);
-        setShowingAnswer(false);
-        setFeedbackSquare(null);
-        setSelectedSquare(null);
-      }
-    }
-  }, [currentRepertoire, currentCardIndex]);
 
   const handleBack = () => {
     router.push("/home");
@@ -108,65 +98,37 @@ export default function TrainingClient({
     }
   };
 
-  const handleSquareClick = useCallback(
-    (square: Square) => {
-      if (!gameRef.current || isReviewing || showingAnswer) return;
+  // Handle training move - validate against expected move
+  const handleTrainingMove = useCallback(
+    (move: { from: string; to: string; san: string }): boolean => {
+      if (!currentEntry || isReviewing || showingAnswer) return false;
 
-      const game = gameRef.current;
+      const expectedFrom = currentEntry.expectedMove.slice(0, 2);
+      const expectedTo = currentEntry.expectedMove.slice(2, 4);
+      const isCorrect = move.from === expectedFrom && move.to === expectedTo;
 
-      // If clicking on a piece of the side to move, select it
-      const piece = game.get(square);
-      if (piece && piece.color === game.turn()) {
-        setSelectedSquare(square);
-        return;
+      if (isCorrect) {
+        setFeedbackSquare({ square: move.to, color: "correct" });
+        setStreak((s) => s + 1);
+
+        // Clear feedback and move to next after delay
+        setTimeout(() => {
+          setFeedbackSquare(null);
+          moveToNextCard();
+        }, 1000);
+      } else {
+        setFeedbackSquare({ square: move.to, color: "incorrect" });
+        setStreak(0);
+
+        // Clear feedback after delay
+        setTimeout(() => {
+          setFeedbackSquare(null);
+        }, 1000);
       }
 
-      // If we have a selected square, try to make the move
-      if (selectedSquare) {
-        const from = selectedSquare;
-        const to = square;
-
-        // Check if this is a legal move
-        const legalMoves = game.moves({ square: from, verbose: true });
-        const isLegal = legalMoves.some((m) => m.to === to);
-
-        if (isLegal) {
-          // Check if the move matches the expected move
-          const expectedFrom = currentEntry?.expectedMove.slice(0, 2);
-          const expectedTo = currentEntry?.expectedMove.slice(2, 4);
-          const isCorrect = from === expectedFrom && to === expectedTo;
-
-          if (isCorrect) {
-            // Make the move on the board
-            try {
-              game.move({ from, to });
-              setGameState(new Chess(game.fen()));
-            } catch {}
-
-            setFeedbackSquare({ square: to, type: "correct" });
-            setStreak((s) => s + 1);
-
-            // Clear feedback and move to next after delay
-            setTimeout(() => {
-              setFeedbackSquare(null);
-              moveToNextCard();
-            }, 1000);
-          } else {
-            // Incorrect move
-            setFeedbackSquare({ square: to, type: "incorrect" });
-            setStreak(0);
-
-            // Clear feedback after delay
-            setTimeout(() => {
-              setFeedbackSquare(null);
-            }, 1000);
-          }
-        }
-
-        setSelectedSquare(null);
-      }
+      return isCorrect;
     },
-    [selectedSquare, currentEntry, isReviewing, showingAnswer],
+    [currentEntry, isReviewing, showingAnswer],
   );
 
   const handleShowAnswer = () => {
@@ -174,19 +136,16 @@ export default function TrainingClient({
     setStreak(0);
 
     // Show the correct move on the board
-    if (currentEntry && gameRef.current) {
-      try {
-        const from = currentEntry.expectedMove.slice(0, 2) as Square;
-        const to = currentEntry.expectedMove.slice(2, 4) as Square;
-        const promotion = currentEntry.expectedMove.slice(4) || undefined;
-        gameRef.current.move({ from, to, promotion });
-        setGameState(new Chess(gameRef.current.fen()));
-        setFeedbackSquare({ square: to, type: "correct" });
-      } catch {}
+    if (currentEntry && boardRef.current) {
+      const from = currentEntry.expectedMove.slice(0, 2);
+      const to = currentEntry.expectedMove.slice(2, 4);
+      const promotion = currentEntry.expectedMove.slice(4) || undefined;
+      boardRef.current.makeMove(from, to, promotion);
+      setFeedbackSquare({ square: to, color: "correct" });
     }
   };
 
-  const moveToNextCard = () => {
+  const moveToNextCard = useCallback(() => {
     // Check if there are more cards in current repertoire
     if (
       currentRepertoire &&
@@ -203,8 +162,12 @@ export default function TrainingClient({
     }
     setShowingAnswer(false);
     setFeedbackSquare(null);
-    setSelectedSquare(null);
-  };
+  }, [
+    currentRepertoire,
+    currentCardIndex,
+    currentRepertoireIndex,
+    repertoires.length,
+  ]);
 
   const handleRecallRating = async (rating: ReviewResponse) => {
     if (!currentEntry) return;
@@ -264,7 +227,7 @@ export default function TrainingClient({
         {/* Left Panel - Empty Board */}
         <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
           <div className="absolute top-4 left-4">
-            <Logo size="xl" />
+            <Logo size="xl" clickable={true} onLogoClick={handleBack} />
           </div>
           <div className="text-center space-y-4">
             <Trophy className="w-16 h-16 text-primary mx-auto" />
@@ -275,7 +238,7 @@ export default function TrainingClient({
               No cards to review right now. Add new positions to your repertoire
               or come back later.
             </p>
-            <Button onClick={handleBack} className="mt-4">
+            <Button onClick={handleBack} className="mt-4 btn-primary-gradient">
               Back to Home
             </Button>
           </div>
@@ -290,7 +253,7 @@ export default function TrainingClient({
       <div className="h-screen bg-background flex">
         <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
           <div className="absolute top-4 left-4">
-            <Logo size="xl" />
+            <Logo size="xl" clickable={true} onLogoClick={handleBack} />
           </div>
           <div className="text-center space-y-4">
             <Trophy className="w-16 h-16 text-primary mx-auto" />
@@ -300,7 +263,7 @@ export default function TrainingClient({
             <p className="text-muted-foreground">
               You reviewed {totalCards} position{totalCards !== 1 ? "s" : ""}.
             </p>
-            <Button onClick={handleBack} className="mt-4">
+            <Button onClick={handleBack} className="mt-4 btn-primary-gradient">
               Back to Home
             </Button>
           </div>
@@ -323,106 +286,161 @@ export default function TrainingClient({
       <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
         {/* Logo in corner */}
         <div className="absolute top-4 left-4">
-          <Logo size="xl" />
+          <Logo size="xl" clickable={true} onLogoClick={handleBack} />
         </div>
 
         <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-4">
+          {/* Player Info - Top (Opponent) */}
+          <div className="h-14 flex items-center gap-4 px-1">
+            <div
+              className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                repertoireColor === "black"
+                  ? "bg-zinc-100"
+                  : "bg-zinc-800 border border-zinc-700"
+              }`}>
+              <span
+                className={`text-lg font-medium ${
+                  repertoireColor === "black"
+                    ? "text-zinc-800"
+                    : "text-zinc-300"
+                }`}>
+                {repertoireColor === "black" ? "W" : "B"}
+              </span>
+            </div>
+            <p className="text-base text-muted-foreground">
+              {repertoireColor === "black" ? "White" : "Black"}
+            </p>
+          </div>
+
           {/* Board */}
-          <div
-            className="w-full max-w-[min(calc(100vh-120px),640px)]"
-            onClick={(e) => {
-              const target = e.target as HTMLElement;
-              const square = target.getAttribute("data-square");
-              if (square) {
-                handleSquareClick(square as Square);
-              }
-            }}>
-            <Chessboard
-              options={{
-                position: gameState?.fen() || currentEntry.position.fen,
-                boardOrientation: repertoireColor,
-                showNotation: true,
-                lightSquareStyle: { backgroundColor: "#b8a06d" },
-                darkSquareStyle: { backgroundColor: "#2c5233" },
-                allowDragging: false,
-                squareStyles: {
-                  ...(feedbackSquare
-                    ? {
-                        [feedbackSquare.square]: {
-                          backgroundColor:
-                            feedbackSquare.type === "correct"
-                              ? "rgba(34, 197, 94, 0.5)"
-                              : "rgba(239, 68, 68, 0.5)",
-                        },
-                      }
-                    : {}),
-                  ...(selectedSquare
-                    ? {
-                        [selectedSquare]: {
-                          backgroundColor: "rgba(255, 200, 0, 0.4)",
-                        },
-                      }
-                    : {}),
-                },
-              }}
-            />
+          <Board
+            ref={boardRef}
+            playerColor={repertoireColor}
+            initialFen={currentEntry?.position.fen}
+            key={`${currentRepertoireIndex}-${currentCardIndex}`}
+            trainingMode={!showingAnswer}
+            onTrainingMove={handleTrainingMove}
+            highlightSquare={feedbackSquare}
+          />
+
+          {/* Player Info - Bottom (You) */}
+          <div className="h-14 flex items-center gap-4 px-1">
+            <div
+              className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                repertoireColor === "white"
+                  ? "bg-zinc-100"
+                  : "bg-zinc-800 border border-zinc-700"
+              }`}>
+              <span
+                className={`text-lg font-medium ${
+                  repertoireColor === "white"
+                    ? "text-zinc-800"
+                    : "text-zinc-300"
+                }`}>
+                {repertoireColor === "white" ? "W" : "B"}
+              </span>
+            </div>
+            <p className="text-base text-foreground font-medium">You</p>
+          </div>
+
+          {/* Status indicator */}
+          <div className="flex items-center justify-center h-12">
+            {feedbackSquare && (
+              <div
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${
+                  feedbackSquare.color === "correct"
+                    ? "bg-green-500/20 border border-green-500/30 text-green-400"
+                    : "bg-red-500/20 border border-red-500/30 text-red-400"
+                }`}>
+                <span className="text-sm font-medium">
+                  {feedbackSquare.color === "correct"
+                    ? "Correct!"
+                    : "Try again"}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Right Panel - Training Sidebar */}
-      <aside className="w-80 border-l border-border bg-surface-1 flex-shrink-0 flex flex-col h-screen">
+      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="p-4 border-b border-border flex items-center justify-between bg-surface-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={handleBack}>
-            <ChevronLeft size={20} />
-          </Button>
-          <div className="flex-1 flex flex-col items-center gap-1">
-            <h2 className="text-base font-semibold text-muted-foreground uppercase tracking-wide">
+        <div className="p-5 border-b border-border/50 glass-panel">
+          <div className="flex items-center justify-between mb-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground hover:bg-surface-2 rounded-xl -ml-2"
+              onClick={handleBack}>
+              <ChevronLeft size={20} />
+            </Button>
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium uppercase tracking-wide">
+              {isPracticeMode ? (
+                <GraduationCap size={12} />
+              ) : (
+                <Dumbbell size={12} />
+              )}
               {isPracticeMode ? "Practice" : "Training"}
-            </h2>
+            </div>
+          </div>
+
+          {/* Color Badge - Hero Style */}
+          <div className="flex items-center gap-4">
             {isBothColors ? (
-              <div className="flex items-center gap-2">
-                <div className="flex -space-x-1">
-                  <div className="w-6 h-6 rounded flex items-center justify-center text-sm bg-zinc-100 text-zinc-900 border-2 border-surface-2">
-                    ♔
+              <>
+                <div className="relative flex -space-x-3">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50 z-10">
+                    <span className="text-2xl drop-shadow-sm">♔</span>
                   </div>
-                  <div className="w-6 h-6 rounded flex items-center justify-center text-sm bg-zinc-800 text-zinc-100 border-2 border-surface-2">
-                    ♚
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50">
+                    <span className="text-2xl drop-shadow-sm text-zinc-300">
+                      ♚
+                    </span>
                   </div>
                 </div>
-                <span className="text-lg font-semibold text-foreground">
-                  Both Colors
-                </span>
-              </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Both Colors
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {totalCards} positions to{" "}
+                    {isPracticeMode ? "practice" : "review"}
+                  </p>
+                </div>
+              </>
             ) : (
-              <div className="flex items-center gap-2">
+              <>
                 <div
-                  className={`w-7 h-7 rounded flex items-center justify-center text-base ${
+                  className={`relative w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
                     repertoireColor === "white"
-                      ? "bg-zinc-100 text-zinc-900"
-                      : "bg-zinc-800 text-zinc-100"
+                      ? "bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50"
+                      : "bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50"
                   }`}>
-                  {repertoireColor === "white" ? "♔" : "♚"}
+                  <span
+                    className={`text-2xl drop-shadow-sm ${repertoireColor === "black" ? "text-zinc-300" : ""}`}>
+                    {repertoireColor === "white" ? "♔" : "♚"}
+                  </span>
                 </div>
-                <span className="text-lg font-semibold text-foreground capitalize">
-                  {repertoireColor}
-                </span>
-              </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground capitalize">
+                    {repertoireColor} Repertoire
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {totalCards} positions to{" "}
+                    {isPracticeMode ? "practice" : "review"}
+                  </p>
+                </div>
+              </>
             )}
           </div>
-          <div className="w-10" />
         </div>
 
         {/* Content */}
-        <div className="flex-1 p-4 flex flex-col">
+        <div className="flex-1 p-5 flex flex-col overflow-y-auto">
           {/* Progress */}
-          <div className="space-y-2 mb-6">
-            <div className="flex justify-between text-sm">
+          <div className="glass-card rounded-xl p-4 mb-5">
+            <div className="flex justify-between text-sm mb-2">
               <span className="text-muted-foreground">Progress</span>
               <span className="text-foreground font-medium">
                 {totalReviewed + 1} / {totalCards}
@@ -437,7 +455,7 @@ export default function TrainingClient({
           </div>
 
           {/* Streak */}
-          <div className="bg-surface-2 rounded-lg p-4 border border-border/50 mb-6">
+          <div className="glass-card rounded-xl p-4 mb-5">
             <div className="flex items-center justify-center gap-3">
               <Flame
                 className={`w-6 h-6 ${streak > 0 ? "text-orange-500" : "text-muted-foreground"}`}
@@ -453,19 +471,22 @@ export default function TrainingClient({
           <div className="flex-1 flex flex-col items-center justify-center">
             {!showingAnswer ? (
               /* Prompt to make move or show answer */
-              <div className="text-center space-y-6 w-full">
-                <div className="bg-surface-2 rounded-lg p-6 border border-border/50">
-                  <p className="text-lg text-foreground font-medium mb-2">
-                    What&apos;s your move?
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Click on the board to play the move from your repertoire
-                  </p>
+              <div className="text-center space-y-5 w-full">
+                <div className="relative overflow-hidden rounded-xl p-5 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-12 -mt-12" />
+                  <div className="relative">
+                    <p className="text-lg text-foreground font-semibold mb-2">
+                      What&apos;s your move?
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Click on the board to play the move from your repertoire
+                    </p>
+                  </div>
                 </div>
 
                 <Button
                   variant="outline"
-                  className="w-full h-12 text-base"
+                  className="w-full h-12 text-base rounded-xl border-border/50 hover:bg-surface-2"
                   onClick={handleShowAnswer}>
                   <Eye size={18} className="mr-2" />
                   Show Answer
@@ -473,9 +494,9 @@ export default function TrainingClient({
               </div>
             ) : (
               /* Answer revealed - show move and feedback buttons */
-              <div className="text-center space-y-6 w-full">
+              <div className="text-center space-y-5 w-full">
                 {/* The Move */}
-                <div className="bg-surface-2 rounded-lg p-6 border border-border/50">
+                <div className="glass-card rounded-xl p-6">
                   <p className="text-sm text-muted-foreground mb-2">
                     The move was
                   </p>
@@ -495,7 +516,7 @@ export default function TrainingClient({
                     <Button
                       onClick={() => handleRecallRating("forgot")}
                       disabled={isReviewing}
-                      className="h-14 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5"
+                      className="h-14 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
                       <span className="text-sm font-medium">Forgot</span>
                       <span className="text-xs opacity-70">Again</span>
@@ -503,7 +524,7 @@ export default function TrainingClient({
                     <Button
                       onClick={() => handleRecallRating("partial")}
                       disabled={isReviewing}
-                      className="h-14 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5"
+                      className="h-14 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
                       <span className="text-sm font-medium">Hard</span>
                       <span className="text-xs opacity-70">Struggled</span>
@@ -511,7 +532,7 @@ export default function TrainingClient({
                     <Button
                       onClick={() => handleRecallRating("effort")}
                       disabled={isReviewing}
-                      className="h-14 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5"
+                      className="h-14 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
                       <span className="text-sm font-medium">Good</span>
                       <span className="text-xs opacity-70">With effort</span>
@@ -519,7 +540,7 @@ export default function TrainingClient({
                     <Button
                       onClick={() => handleRecallRating("easy")}
                       disabled={isReviewing}
-                      className="h-14 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5"
+                      className="h-14 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
                       <span className="text-sm font-medium">Easy</span>
                       <span className="text-xs opacity-70">No problem</span>
@@ -533,7 +554,7 @@ export default function TrainingClient({
           {/* Feedback message */}
           {feedback && (
             <div
-              className={`mt-4 p-3 rounded-lg text-sm text-center ${
+              className={`mt-4 p-3 rounded-xl text-sm text-center ${
                 feedback.includes("Error")
                   ? "bg-red-500/20 text-red-400 border border-red-500/30"
                   : "bg-primary/20 text-primary border border-primary/30"
@@ -543,13 +564,13 @@ export default function TrainingClient({
           )}
         </div>
 
-        {/* Footer with session info */}
-        <div className="border-t border-border p-4 bg-surface-2">
+        {/* Footer with current color indicator */}
+        <div className="border-t border-border/50 p-5 glass-panel">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Current</span>
+            <span className="text-muted-foreground">Currently reviewing</span>
             <div className="flex items-center gap-2">
               <div
-                className={`w-5 h-5 rounded flex items-center justify-center text-xs ${
+                className={`w-6 h-6 rounded-lg flex items-center justify-center text-sm ${
                   repertoireColor === "white"
                     ? "bg-zinc-100 text-zinc-900"
                     : "bg-zinc-800 text-zinc-100"

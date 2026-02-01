@@ -92,10 +92,14 @@ export default function Home() {
     router.push("/training?mode=review");
   };
 
-  const handleBuild = (openingId?: string, lineId?: string) => {
+  const handleBuild = (openingId?: string, lineId?: string, fen?: string, moveSequence?: string) => {
     const params = new URLSearchParams();
     if (openingId) params.set("opening", openingId);
     if (lineId) params.set("line", lineId);
+    // Only pass fen if we don't have moves
+    // If we have moves, we'll play them from the starting position
+    if (fen && !moveSequence) params.set("fen", fen);
+    if (moveSequence) params.set("moves", moveSequence);
     const query = params.toString();
     router.push(`/build/${selectedColor}${query ? `?${query}` : ""}`);
   };

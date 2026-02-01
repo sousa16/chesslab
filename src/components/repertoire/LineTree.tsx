@@ -33,7 +33,7 @@ interface LineNode {
 
 interface LineTreeProps {
   root: LineNode;
-  onBuild: (nodeId: string) => void;
+  onBuild: (nodeId: string, fen: string, moveSequence: string) => void;
   onLearn: (nodeId: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (moves: string[], startingFen: string) => void;
@@ -152,7 +152,7 @@ export function LineTree({
 interface LineNodeComponentProps {
   node: LineNode;
   depth: number;
-  onBuild: (nodeId: string) => void;
+  onBuild: (nodeId: string, fen: string, moveSequence: string) => void;
   onLearn: (nodeId: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (moves: string[], startingFen: string) => void;
@@ -281,7 +281,7 @@ function LineNodeComponent({
             size="sm"
             variant="ghost"
             className="h-7 w-7 p-0 rounded-lg hover:bg-primary/15 hover:text-primary"
-            onClick={() => onBuild(node.id)}
+            onClick={() => onBuild(node.id, node.fen, node.moveSequence)}
             title="Continue building from here">
             <Hammer size={13} />
           </Button>

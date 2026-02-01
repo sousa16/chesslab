@@ -30,30 +30,54 @@ export default function BuildPage({
 
   const openingId = searchParams.get("opening");
   const lineId = searchParams.get("line");
+  const fenParam = searchParams.get("fen");
+  const movesParam = searchParams.get("moves");
 
   const [moves, setMoves] = useState<Move[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const moveParam = searchParams.get("move");
-  const initialMoves = useMemo(
-    () => (moveParam ? [moveParam] : []),
-    [moveParam],
+  const initialMoves = useMemo(() => {
+    // If we have moves from the opening line, use those
+    if (movesParam) {
+      // Parse the formatted move sequence like "1.e2e4 c7c5 2.d2d4"
+      // Extract just the moves: ["e2e4", "c7c5", "d2d4"]
+      return movesParam
+        .split(" ")
+        .filter((m) => m.length > 0)
+        .map((part) => {
+          // Remove move number prefix if present (e.g., "1." from "1.e2e4")
+          return part.includes(".") ? part.split(".")[1] : part;
+        })
+        .filter((m) => m && m.length > 0);
+    }
+    // Otherwise, if we have a single move parameter, use that
+    if (moveParam) {
+      return [moveParam];
+    }
+    return [];
+  }, [moveParam, movesParam]);
+
+  const initialFen = useMemo(
+    () => fenParam || undefined,
+    [fenParam],
   );
 
   const handleMovesUpdated = useCallback((updatedMoves: Move[]) => {
     setMoves(updatedMoves);
     setCurrentMoveIndex(updatedMoves.length);
+    setHasInitialized(true);
   }, []);
 
-  // If a move was passed in the URL, we need to replay it on the board
-  // This happens when navigating from the home page
+  // Wait for the board to initialize and call onMovesUpdated with the full move history
   useEffect(() => {
-    const moveParam = searchParams.get("move");
-    if (moveParam && boardRef.current) {
-      // The Board will have already made the move via buildMode and onBuildMove
-      // So we just need to wait for onMovesUpdated to be called
+    if (hasInitialized && initialMoves.length > 0) {
+      // Board has been initialized with moves, ensure they're all marked as complete
+      // by keeping currentMoveIndex at the full length
+      setCurrentMoveIndex(moves.length);
     }
-  }, [searchParams]);
+  }, [hasInitialized, moves.length, initialMoves.length]);
 
   const handleBack = () => {
     router.back();
@@ -181,6 +205,7 @@ export default function BuildPage({
             buildMode={true}
             onMovesUpdated={handleMovesUpdated}
             initialMoves={initialMoves}
+            initialFen={initialFen}
           />
 
           {/* Hint - Enhanced with better styling */}

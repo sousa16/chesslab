@@ -280,10 +280,14 @@ describe("LineTree Component", () => {
       );
 
       // Find Build buttons (hammer icon)
-      const buildButtons = container.querySelectorAll("button[title='Build']");
+      const buildButtons = container.querySelectorAll("button[title='Continue building from here']");
       if (buildButtons.length > 0) {
         fireEvent.click(buildButtons[0]);
-        expect(mockOnBuild).toHaveBeenCalled();
+        expect(mockOnBuild).toHaveBeenCalledWith(
+          "e4-node",
+          "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+          "1.e2e4"
+        );
       }
     });
 
@@ -416,7 +420,7 @@ describe("LineTree Component", () => {
       // Get the button containing the trash icon
       const deleteButton = trashIcons[0].closest("button");
       expect(deleteButton).toBeInTheDocument();
-      
+
       fireEvent.click(deleteButton!);
 
       // Dialog should appear with title
@@ -480,10 +484,12 @@ describe("LineTree Component", () => {
       });
 
       // Click the delete confirmation button
-      const deleteConfirmButton = screen.getAllByRole("button").find(
-        (btn) => btn.textContent?.includes("Delete") && btn !== deleteButton
-      );
-      
+      const deleteConfirmButton = screen
+        .getAllByRole("button")
+        .find(
+          (btn) => btn.textContent?.includes("Delete") && btn !== deleteButton,
+        );
+
       if (deleteConfirmButton) {
         fireEvent.click(deleteConfirmButton);
 
@@ -514,7 +520,9 @@ describe("LineTree Component", () => {
       await waitFor(() => {
         expect(screen.getByText("Delete Line")).toBeInTheDocument();
         // Check for warning text about deleting continuations
-        const dialogText = screen.getByText(/delete.*this.*line/i).parentElement?.textContent || "";
+        const dialogText =
+          screen.getByText(/delete.*this.*line/i).parentElement?.textContent ||
+          "";
         expect(dialogText.length).toBeGreaterThan(0);
       });
     });

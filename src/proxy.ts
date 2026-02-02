@@ -15,20 +15,24 @@ export async function proxy(request: NextRequest) {
   // Check if route is protected
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
 
-  // Only check authentication for protected routes
-  if (isProtectedRoute) {
-    try {
-      const token = await getToken({
-        req: request,
-        secret: process.env.NEXTAUTH_SECRET,
-      });
+  try {
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
 
-      // If no token on protected route, redirect to landing page
-      if (!token) {
-        return NextResponse.redirect(new URL("/", request.url));
-      }
-    } catch {
-      // If token check fails, redirect to landing page as safety measure
+    // If user is logged in and trying to access splash page, redirect to home
+    if (token && pathname === "/") {
+      return NextResponse.redirect(new URL("/home", request.url));
+    }
+
+    // If no token on protected route, redirect to landing page
+    if (isProtectedRoute && !token) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+  } catch {
+    // If token check fails on protected route, redirect to landing page
+    if (isProtectedRoute) {
       return NextResponse.redirect(new URL("/", request.url));
     }
   }

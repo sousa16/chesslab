@@ -24,7 +24,7 @@ describe("Middleware - Route Protection", () => {
       expect(response?.status).toBe(200);
     });
 
-    it("should allow access to / (landing page) when authenticated", async () => {
+    it("should redirect from / to /home when authenticated", async () => {
       mockGetToken.mockResolvedValue({
         sub: "user-123",
         email: "test@example.com",
@@ -33,7 +33,8 @@ describe("Middleware - Route Protection", () => {
 
       const response = await proxy(request);
 
-      expect(response?.status).toBe(200);
+      expect(response?.status).toBe(307);
+      expect(response?.headers.get("location")).toContain("/home");
     });
 
     it("should allow access to /auth when not authenticated", async () => {

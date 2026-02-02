@@ -255,8 +255,8 @@ describe("Home Page", () => {
     // Click the board to trigger onMoveMade (simulating a move)
     fireEvent.click(screen.getByTestId("chessboard"));
 
-    // Verify navigation to build/white with the move
-    expect(mockPush).toHaveBeenCalledWith("/build/white?move=e4");
+    // Verify navigation to build/white (move is stored in sessionStorage)
+    expect(mockPush).toHaveBeenCalledWith("/build/white");
   });
 
   it("should navigate to build black page when a move is made with black", () => {
@@ -274,8 +274,8 @@ describe("Home Page", () => {
     // Click the board to trigger onMoveMade (simulating a move)
     fireEvent.click(screen.getByTestId("chessboard"));
 
-    // Verify navigation to build/black with the move
-    expect(mockPush).toHaveBeenCalledWith("/build/black?move=e4");
+    // Verify navigation to build/black (move is stored in sessionStorage)
+    expect(mockPush).toHaveBeenCalledWith("/build/black");
   });
 
   it("should reset board when home page mounts", () => {

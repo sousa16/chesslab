@@ -40,26 +40,16 @@ export default function Home() {
   }, [status, router]);
 
   useEffect(() => {
-    // Read panel and color from query params
-    const panelParam = searchParams.get("panel");
-    const colorParam = searchParams.get("color");
-
-    if (panelParam === "repertoire") {
-      setView("repertoire");
-    } else {
-      setView("home");
+    // Check sessionStorage for return from build screen
+    if (typeof window !== "undefined") {
+      const returnColor = sessionStorage.getItem("buildReturnColor");
+      if (returnColor === "white" || returnColor === "black") {
+        setSelectedColor(returnColor);
+        setView("repertoire");
+        sessionStorage.removeItem("buildReturnColor");
+      }
     }
-
-    if (colorParam === "white" || colorParam === "black") {
-      setSelectedColor(colorParam);
-    }
-    const viewParam = searchParams.get("view");
-    if (viewParam === "repertoire") {
-      setView("repertoire");
-    } else if (!viewParam) {
-      setView("home");
-    }
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     // Reset board when coming back from build/training pages
@@ -98,15 +88,12 @@ export default function Home() {
     fen?: string,
     moveSequence?: string,
   ) => {
-    const params = new URLSearchParams();
-    if (openingId) params.set("opening", openingId);
-    if (lineId) params.set("line", lineId);
-    // Only pass fen if we don't have moves
-    // If we have moves, we'll play them from the starting position
-    if (fen && !moveSequence) params.set("fen", fen);
-    if (moveSequence) params.set("moves", moveSequence);
-    const query = params.toString();
-    router.push(`/build/${selectedColor}${query ? `?${query}` : ""}`);
+    // Store build data in sessionStorage instead of URL params
+    if (openingId) sessionStorage.setItem("buildOpeningId", openingId);
+    if (lineId) sessionStorage.setItem("buildLineId", lineId);
+    if (fen && !moveSequence) sessionStorage.setItem("buildFen", fen);
+    if (moveSequence) sessionStorage.setItem("buildMoveSequence", moveSequence);
+    router.push(`/build/${selectedColor}`);
   };
 
   const handleLearn = (openingId?: string, lineId?: string) => {
@@ -143,7 +130,9 @@ export default function Home() {
   };
 
   const handleMoveMade = (move: { from: string; to: string; san: string }) => {
-    router.push(`/build/${selectedColor}?move=${move.san}`);
+    // Store the move in sessionStorage instead of URL param
+    sessionStorage.setItem("buildMove", move.san);
+    router.push(`/build/${selectedColor}`);
   };
 
   return (

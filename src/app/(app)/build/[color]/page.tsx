@@ -31,20 +31,25 @@ export default function BuildPage({
 
   const openingId = searchParams.get("opening");
   const lineId = searchParams.get("line");
-  const fenParam = searchParams.get("fen");
-  const movesParam = searchParams.get("moves");
 
   const [moves, setMoves] = useState<Move[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
   const [hasInitialized, setHasInitialized] = useState(false);
 
   const moveParam = searchParams.get("move");
-  const initialMoves = useMemo(() => {
-    // If we have moves from the opening line, use those
-    if (movesParam) {
+  const [initialMoves, setInitialMoves] = useState<string[]>([]);
+  const [initialFen, setInitialFen] = useState<string | undefined>(undefined);
+
+  // Read from sessionStorage on mount
+  useEffect(() => {
+    const fenFromSession = sessionStorage.getItem("buildFen");
+    const moveSequenceFromSession = sessionStorage.getItem("buildMoveSequence");
+    const moveFromSession = sessionStorage.getItem("buildMove");
+
+    if (moveSequenceFromSession) {
       // Parse the formatted move sequence like "1.e2e4 c7c5 2.d2d4"
       // Extract just the moves: ["e2e4", "c7c5", "d2d4"]
-      return movesParam
+      const moves = moveSequenceFromSession
         .split(" ")
         .filter((m) => m.length > 0)
         .map((part) => {
@@ -52,15 +57,24 @@ export default function BuildPage({
           return part.includes(".") ? part.split(".")[1] : part;
         })
         .filter((m) => m && m.length > 0);
+      setInitialMoves(moves);
+    } else if (moveFromSession) {
+      setInitialMoves([moveFromSession]);
+    } else if (moveParam) {
+      setInitialMoves([moveParam]);
     }
-    // Otherwise, if we have a single move parameter, use that
-    if (moveParam) {
-      return [moveParam];
-    }
-    return [];
-  }, [moveParam, movesParam]);
 
-  const initialFen = useMemo(() => fenParam || undefined, [fenParam]);
+    if (fenFromSession && !moveSequenceFromSession) {
+      setInitialFen(fenFromSession);
+    }
+
+    // Clear sessionStorage after reading
+    sessionStorage.removeItem("buildOpeningId");
+    sessionStorage.removeItem("buildLineId");
+    sessionStorage.removeItem("buildFen");
+    sessionStorage.removeItem("buildMoveSequence");
+    sessionStorage.removeItem("buildMove");
+  }, [moveParam]);
 
   const handleMovesUpdated = useCallback((updatedMoves: Move[]) => {
     setMoves(updatedMoves);
@@ -78,6 +92,10 @@ export default function BuildPage({
   }, [hasInitialized, moves.length, initialMoves.length]);
 
   const handleBack = () => {
+    // Store the color in sessionStorage so home page knows to show repertoire view
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("buildReturnColor", color);
+    }
     router.back();
   };
 
@@ -154,8 +172,11 @@ export default function BuildPage({
     performSaveLine,
     (data) => {
       toast.success(`Line saved! ${data.entriesCreated} positions added.`);
-      // Navigate back to the repertoire view for this color instead of going back
-      router.push(`/home?panel=repertoire&color=${color}`);
+      // Store the color in sessionStorage so home page knows to show repertoire view
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("buildReturnColor", color);
+      }
+      router.back();
     },
     (error) => {
       toast.error(error.message);

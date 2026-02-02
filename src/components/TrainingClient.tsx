@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Chess, Square } from "chess.js";
 import {
@@ -67,6 +67,16 @@ export default function TrainingClient({
   } | null>(null);
   const [sessionComplete, setSessionComplete] = useState(false);
   const cardStartTimeRef = useRef<number>(Date.now());
+
+  // Initialize to first non-empty repertoire
+  useEffect(() => {
+    const firstNonEmptyIndex = user.repertoires.findIndex(
+      (r) => r.entries.length > 0,
+    );
+    if (firstNonEmptyIndex >= 0) {
+      setCurrentRepertoireIndex(firstNonEmptyIndex);
+    }
+  }, [user.repertoires]);
 
   // Reset timer when card changes
   const resetCardTimer = useCallback(() => {
@@ -153,7 +163,6 @@ export default function TrainingClient({
       const to = currentEntry.expectedMove.slice(2, 4);
       const promotion = currentEntry.expectedMove.slice(4) || undefined;
       boardRef.current.makeMove(from, to, promotion);
-      setFeedbackSquare({ square: to, color: "correct" });
     }
   };
 

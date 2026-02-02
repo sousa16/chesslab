@@ -312,4 +312,67 @@ describe("TrainingClient Component", () => {
       );
     });
   });
+
+  describe("Repertoire Initialization", () => {
+    it("should initialize to first non-empty repertoire", () => {
+      const userWithEmptyFirst = {
+        id: "user-1",
+        repertoires: [
+          {
+            id: "rep-1",
+            color: "White",
+            entries: [], // Empty first repertoire
+          },
+          {
+            id: "rep-2",
+            color: "Black",
+            entries: [
+              {
+                id: "entry-1",
+                expectedMove: "e7e5",
+                interval: 1,
+                easeFactor: 2.5,
+                repetitions: 1,
+                nextReviewDate: new Date(),
+                phase: "exponential",
+                learningStepIndex: 0,
+                position: {
+                  id: "pos-1",
+                  fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      render(<TrainingClient user={userWithEmptyFirst} />);
+
+      // Should show the card from the second repertoire, not the empty first one
+      expect(screen.getByText("1 / 1")).toBeInTheDocument();
+      expect(screen.queryByText("All caught up!")).not.toBeInTheDocument();
+    });
+
+    it("should show all caught up when all repertoires are empty", () => {
+      const userWithAllEmpty = {
+        id: "user-1",
+        repertoires: [
+          {
+            id: "rep-1",
+            color: "White",
+            entries: [],
+          },
+          {
+            id: "rep-2",
+            color: "Black",
+            entries: [],
+          },
+        ],
+      };
+
+      render(<TrainingClient user={userWithAllEmpty} />);
+
+      expect(screen.getByText("All caught up!")).toBeInTheDocument();
+    });
+  });
 });

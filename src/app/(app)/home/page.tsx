@@ -37,9 +37,7 @@ export default function Home() {
     if (status === "unauthenticated") {
       router.push("/");
     }
-  }, [status, router]);
 
-  useEffect(() => {
     // Check sessionStorage for return from build screen
     if (typeof window !== "undefined") {
       const returnColor = sessionStorage.getItem("buildReturnColor");
@@ -49,13 +47,10 @@ export default function Home() {
         sessionStorage.removeItem("buildReturnColor");
       }
     }
-  }, []);
 
-  useEffect(() => {
     // Reset board when coming back from build/training pages
-    // The board should be reset to initial state when on the home page
     boardRef.current?.reset();
-  }, []);
+  }, [status, router]);
 
   if (status === "loading") {
     return (
@@ -97,12 +92,10 @@ export default function Home() {
   };
 
   const handleLearn = (openingId?: string, lineId?: string) => {
-    const params = new URLSearchParams();
-    params.set("color", selectedColor);
-    params.set("mode", "practice"); // Practice mode - no SRS updates
-    if (openingId) params.set("opening", openingId);
-    if (lineId) params.set("line", lineId);
-    router.push(`/training?${params.toString()}`);
+    // Store practice data in sessionStorage instead of URL params
+    if (openingId) sessionStorage.setItem("practiceOpeningId", openingId);
+    if (lineId) sessionStorage.setItem("practiceLineId", lineId);
+    router.push(`/training?mode=practice&color=${selectedColor}`);
   };
 
   const handleLineClick = (moves: string[], startingFen: string) => {

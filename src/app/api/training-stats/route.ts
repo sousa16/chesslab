@@ -129,9 +129,8 @@ export async function GET() {
         // A position is "learned" if it's not due for review (next review in future)
         if (new Date(entry.nextReviewDate) > now) {
           colorStats[colorKey].learned++;
-        }
-
-        if (new Date(entry.nextReviewDate) <= now) {
+        } else if (new Date(entry.nextReviewDate) <= now) {
+          // Only count non-first-move positions as due
           dueCount++;
         }
       }

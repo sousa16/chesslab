@@ -1,6 +1,6 @@
 /**
  * API route to get training statistics for the current user
- * Returns count of due cards, total positions, streak, accuracy, and time today
+ * Returns count of due cards, total positions, streak, all-time accuracy, and total time spent
  */
 
 import { NextResponse } from "next/server";
@@ -145,29 +145,27 @@ export async function GET() {
     try {
       streak = await calculateStreak(user.id);
 
-      // Get today's activity for accuracy and time
-      // Use UTC date to match PostgreSQL DATE type
-      const today = new Date();
-      const todayUTC = new Date(
-        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
-      );
-
-      const todayActivity = await prisma.dailyActivity.findUnique({
-        where: {
-          userId_date: {
-            userId: user.id,
-            date: todayUTC,
-          },
-        },
+      // Get all-time accuracy (sum of all days)
+      const allActivities = await prisma.dailyActivity.findMany({
+        where: { userId: user.id },
       });
 
-      const todayCorrect = todayActivity?.correctCount ?? 0;
-      const todayIncorrect = todayActivity?.incorrectCount ?? 0;
-      const todayTotal = todayCorrect + todayIncorrect;
+      let totalCorrect = 0;
+      let totalIncorrect = 0;
+      let totalTimeMs = 0;
+
+      for (const activity of allActivities) {
+        totalCorrect += activity.correctCount;
+        totalIncorrect += activity.incorrectCount;
+        totalTimeMs += activity.timeSpentMs;
+      }
+
+      const totalReviews = totalCorrect + totalIncorrect;
       accuracy =
-        todayTotal > 0 ? Math.round((todayCorrect / todayTotal) * 100) : 0;
-      const timeSpentMs = todayActivity?.timeSpentMs ?? 0;
-      timeSpentMinutes = Math.round(timeSpentMs / 60000);
+        totalReviews > 0
+          ? Math.round((totalCorrect / totalReviews) * 100)
+          : 0;
+      timeSpentMinutes = Math.round(totalTimeMs / 60000);
     } catch (activityError) {
       // If daily activity queries fail, continue with default values
       console.error("Error fetching daily activity:", activityError);

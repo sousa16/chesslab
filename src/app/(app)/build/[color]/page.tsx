@@ -7,6 +7,7 @@ import { Board, BoardHandle } from "@/components/Board";
 import { BuildPanel } from "@/components/BuildPanel";
 import { convertSanToUci } from "@/lib/repertoire";
 import { useToast } from "@/components/ui/toast";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 
 interface Move {
   number: number;
@@ -59,10 +60,7 @@ export default function BuildPage({
     return [];
   }, [moveParam, movesParam]);
 
-  const initialFen = useMemo(
-    () => fenParam || undefined,
-    [fenParam],
-  );
+  const initialFen = useMemo(() => fenParam || undefined, [fenParam]);
 
   const handleMovesUpdated = useCallback((updatedMoves: Move[]) => {
     setMoves(updatedMoves);
@@ -83,86 +81,86 @@ export default function BuildPage({
     router.back();
   };
 
-  const handleAddMove = async () => {
+  const performSaveLine = useCallback(async () => {
     if (moves.length === 0) {
-      toast.warning("Make some moves on the board first");
-      return;
+      throw new Error("Make some moves on the board first");
     }
 
+    // Convert Move objects to SAN format
+    const movesInSan = moves.flatMap((move) => {
+      const result = [move.white];
+      if (move.black) result.push(move.black);
+      return result;
+    });
+
+    // Convert SAN to UCI format
+    let movesInUci: string[];
     try {
-      // Convert Move objects to SAN format
-      const movesInSan = moves.flatMap((move) => {
-        const result = [move.white];
-        if (move.black) result.push(move.black);
-        return result;
-      });
+      movesInUci = convertSanToUci(movesInSan);
+    } catch (error) {
+      throw new Error("One of the moves is invalid. Please try again.");
+    }
 
-      // Convert SAN to UCI format
-      let movesInUci: string[];
-      try {
-        movesInUci = convertSanToUci(movesInSan);
-      } catch (error) {
-        toast.error("One of the moves is invalid. Please try again.");
-        return;
-      }
+    const response = await fetch("/api/repertoire-entries/save-line", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        color,
+        movesInSan,
+        movesInUci,
+      }),
+    });
 
-      const response = await fetch("/api/repertoire-entries/save-line", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          color,
-          movesInSan,
-          movesInUci,
-        }),
-      });
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      console.error(
+        "Failed to parse response:",
+        response.status,
+        response.statusText,
+      );
+      throw new Error("Something went wrong. Please try again.");
+    }
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (e) {
-        console.error(
-          "Failed to parse response:",
-          response.status,
-          response.statusText,
+    if (!response.ok) {
+      // User-friendly error messages based on common issues
+      const errorMsg = data.error?.toLowerCase() || "";
+
+      if (
+        errorMsg.includes("end with a white move") ||
+        errorMsg.includes("end with a black move") ||
+        errorMsg.includes("must end with")
+      ) {
+        throw new Error(
+          `Your line should end with your move (${color}), not your opponent's.`,
         );
-        toast.error("Something went wrong. Please try again.");
-        return;
+      } else if (
+        errorMsg.includes("unauthorized") ||
+        errorMsg.includes("sign in")
+      ) {
+        throw new Error("Please sign in to save your repertoire.");
+      } else {
+        throw new Error(
+          data.error || "Couldn't save the line. Please try again.",
+        );
       }
+    }
 
-      if (!response.ok) {
-        // User-friendly error messages based on common issues
-        const errorMsg = data.error?.toLowerCase() || "";
+    return data;
+  }, [moves, color]);
 
-        if (
-          errorMsg.includes("end with a white move") ||
-          errorMsg.includes("end with a black move") ||
-          errorMsg.includes("must end with")
-        ) {
-          toast.error(
-            `Your line should end with your move (${color}), not your opponent's.`,
-          );
-        } else if (
-          errorMsg.includes("unauthorized") ||
-          errorMsg.includes("sign in")
-        ) {
-          toast.error("Please sign in to save your repertoire.");
-        } else {
-          // Show the actual error message for debugging
-          toast.error(
-            data.error || "Couldn't save the line. Please try again.",
-          );
-        }
-        return;
-      }
-
+  const { isLoading: isSavingLine, execute: handleAddMove } = useAsyncAction(
+    performSaveLine,
+    (data) => {
       toast.success(`Line saved! ${data.entriesCreated} positions added.`);
-
       // Navigate back to the repertoire view for this color instead of going back
       router.push(`/home?panel=repertoire&color=${color}`);
-    } catch (error) {
-      toast.error("Connection error. Please check your internet.");
-    }
-  };
+    },
+    (error) => {
+      toast.error(error.message);
+    },
+  );
 
   const handleDeleteMove = (moveIndex: number) => {
     // moveIndex is the index in the moves array (Move objects)

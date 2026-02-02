@@ -280,13 +280,15 @@ describe("LineTree Component", () => {
       );
 
       // Find Build buttons (hammer icon)
-      const buildButtons = container.querySelectorAll("button[title='Continue building from here']");
+      const buildButtons = container.querySelectorAll(
+        "button[title='Continue building from here']",
+      );
       if (buildButtons.length > 0) {
         fireEvent.click(buildButtons[0]);
         expect(mockOnBuild).toHaveBeenCalledWith(
           "e4-node",
           "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
-          "1.e2e4"
+          "1.e2e4",
         );
       }
     });

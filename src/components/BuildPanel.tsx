@@ -2,6 +2,7 @@
 
 import { ChevronLeft, Plus, X, Save, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 interface Move {
   number: number;
@@ -20,6 +21,7 @@ interface BuildPanelProps {
   lineName?: string;
   onAddMove?: (move: string) => void;
   onDeleteMove?: (moveIndex: number) => void;
+  isSavingLine?: boolean;
 }
 
 export function BuildPanel({
@@ -31,7 +33,20 @@ export function BuildPanel({
   lineName,
   onAddMove,
   onDeleteMove,
+  isSavingLine,
 }: BuildPanelProps) {
+  const [deletingMoveIndex, setDeletingMoveIndex] = useState<number | null>(
+    null,
+  );
+
+  const handleDeleteMove = async (moveIndex: number) => {
+    setDeletingMoveIndex(moveIndex);
+    try {
+      await onDeleteMove?.(moveIndex);
+    } finally {
+      setDeletingMoveIndex(null);
+    }
+  };
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -49,15 +64,17 @@ export function BuildPanel({
             Building Mode
           </div>
         </div>
-        
+
         {/* Color Badge - Hero Style */}
         <div className="flex items-center gap-4">
-          <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
-            color === "white"
-              ? "bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50"
-              : "bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50"
-          }`}>
-            <span className={`text-2xl drop-shadow-sm ${color === "black" ? "text-zinc-300" : ""}`}>
+          <div
+            className={`relative w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
+              color === "white"
+                ? "bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50"
+                : "bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50"
+            }`}>
+            <span
+              className={`text-2xl drop-shadow-sm ${color === "black" ? "text-zinc-300" : ""}`}>
               {color === "white" ? "♔" : "♚"}
             </span>
           </div>
@@ -98,17 +115,22 @@ export function BuildPanel({
               </div>
               <div>
                 <p className="text-base text-foreground font-semibold">
-                  {moves.length === 0 ? "Start building your line" : "Add next move"}
+                  {moves.length === 0
+                    ? "Start building your line"
+                    : "Add next move"}
                 </p>
                 <p className="text-xs text-primary font-medium">
-                  {moves.length === 0 ? "Make your first move" : "Continue the sequence"}
+                  {moves.length === 0
+                    ? "Make your first move"
+                    : "Continue the sequence"}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-2 pl-13">
               <div className="w-1 h-1 rounded-full bg-primary mt-2 flex-shrink-0" />
               <p className="text-sm text-muted-foreground">
-                Click any piece on the board, then click where you want to move it.
+                Click any piece on the board, then click where you want to move
+                it.
               </p>
             </div>
           </div>
@@ -126,7 +148,7 @@ export function BuildPanel({
               </span>
             )}
           </div>
-          
+
           <div className="glass-card rounded-xl overflow-hidden">
             {moves.length === 0 ? (
               <div className="p-6 text-center">
@@ -167,7 +189,8 @@ export function BuildPanel({
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
-                        onClick={() => onDeleteMove?.(index)}>
+                        onClick={() => handleDeleteMove(index)}
+                        disabled={deletingMoveIndex === index}>
                         <X size={14} />
                       </Button>
                     )}
@@ -184,9 +207,9 @@ export function BuildPanel({
         <Button
           className="w-full h-12 text-base btn-primary-gradient rounded-xl font-medium gap-2.5"
           onClick={() => onAddMove?.("")}
-          disabled={moves.length === 0}>
+          disabled={moves.length === 0 || isSavingLine}>
           <Save size={18} />
-          Save Line
+          {isSavingLine ? "Saving..." : "Save Line"}
         </Button>
         {moves.length > 0 && (
           <p className="text-xs text-muted-foreground text-center mt-3">

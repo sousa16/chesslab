@@ -219,7 +219,11 @@ describe("HomePanel Component", () => {
     });
 
     fireEvent.click(screen.getByText("Practice Now"));
-    expect(mockOnStartPractice).toHaveBeenCalled();
+
+    // Wait for the async action to complete (100ms delay + callback)
+    await waitFor(() => {
+      expect(mockOnStartPractice).toHaveBeenCalled();
+    });
   });
 
   it("should show practice button", async () => {

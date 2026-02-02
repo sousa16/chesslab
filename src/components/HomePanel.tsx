@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 
 interface ColorStats {
   learned: number;
@@ -127,7 +128,7 @@ function getFirstName(user: {
 
 export function HomePanel({
   onSelectRepertoire,
-  onStartPractice,
+  onStartPractice: onStartPracticeCallback,
 }: HomePanelProps) {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -148,6 +149,21 @@ export function HomePanel({
     null,
   );
   const [isLoading, setIsLoading] = useState(true);
+
+  const { isLoading: isStartingPractice, execute: onStartPractice } =
+    useAsyncAction(
+      async () => {
+        // Simulate brief async operation to prevent accidental double-clicks
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        onStartPracticeCallback();
+      },
+      () => {
+        // Success - callback handles navigation
+      },
+      (error) => {
+        console.error("Error starting practice:", error);
+      },
+    );
 
   const fetchStats = async () => {
     try {
@@ -270,10 +286,11 @@ export function HomePanel({
           </div>
           <Button
             onClick={onStartPractice}
+            disabled={isStartingPractice}
             className="w-full gap-2.5 text-base h-12 btn-primary-gradient rounded-xl font-medium"
             size="lg">
             <Play size={20} fill="currentColor" />
-            Practice Now
+            {isStartingPractice ? "Starting..." : "Practice Now"}
           </Button>
         </section>
 

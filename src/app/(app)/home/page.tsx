@@ -92,7 +92,12 @@ export default function Home() {
     router.push("/training?mode=review");
   };
 
-  const handleBuild = (openingId?: string, lineId?: string, fen?: string, moveSequence?: string) => {
+  const handleBuild = (
+    openingId?: string,
+    lineId?: string,
+    fen?: string,
+    moveSequence?: string,
+  ) => {
     const params = new URLSearchParams();
     if (openingId) params.set("opening", openingId);
     if (lineId) params.set("line", lineId);
@@ -179,6 +184,7 @@ export default function Home() {
           <Board
             ref={boardRef}
             playerColor={selectedColor}
+            buildMode={true}
             onMoveMade={handleMoveMade}
             initialMoves={initialMoves}
             initialFen={initialFen}

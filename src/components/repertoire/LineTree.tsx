@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { useState } from "react";
 import { Chess } from "chess.js";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 
 interface LineNode {
   id: string;
@@ -183,11 +184,24 @@ function LineNodeComponent({
     }
   };
 
-  const handleDelete = async () => {
-    if (onDelete) {
-      await onDelete(node.id);
+  const { isLoading: isDeleting, execute: performDelete } = useAsyncAction(
+    async () => {
+      if (onDelete) {
+        await onDelete(node.id);
+      }
+    },
+    () => {
       setShowDeleteDialog(false);
-    }
+      // The parent component will handle refresh via onRefresh callback
+    },
+    (error) => {
+      console.error("Error deleting entry:", error);
+      // Error toast is shown by parent component if needed
+    },
+  );
+
+  const handleDelete = async () => {
+    await performDelete();
   };
 
   // Calculate the differential moves (only show what's new from parent)
@@ -326,8 +340,9 @@ function LineNodeComponent({
             <Button
               variant="destructive"
               onClick={handleDelete}
+              disabled={isDeleting}
               className="bg-red-500/20 text-red-400 hover:bg-red-500/30">
-              Delete
+              {isDeleting ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

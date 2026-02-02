@@ -264,6 +264,11 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           setCurrentMoveIndex(newHistory.length - 1);
           setPosition(gameRef.current.fen());
           onBuildMove?.({ from: sourceSquare, to: targetSquare });
+          onMoveMade?.({
+            from: sourceSquare,
+            to: targetSquare,
+            san: move.san,
+          });
           return true;
         } catch {
           return false;

@@ -309,16 +309,16 @@ export default function LandingPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <button className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
+                  <button className="w-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer">
                     <span>❌</span>Again
                   </button>
-                  <button className="w-full bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
+                  <button className="w-full bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer">
                     <span>⚠️</span>Hard
                   </button>
-                  <button className="w-full bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-300 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
+                  <button className="w-full bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-300 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer">
                     <span>✅</span>Good
                   </button>
-                  <button className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
+                  <button className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer">
                     <span>⭐</span>Easy
                   </button>
                 </div>

@@ -22,7 +22,7 @@ export function ActionButton({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all duration-200 group text-left ${
+      className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all duration-200 group text-left cursor-pointer ${
         isDefault 
           ? "btn-primary-gradient text-primary-foreground hover-lift"
           : "glass-card hover-lift border-glow"

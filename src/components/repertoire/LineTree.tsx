@@ -263,7 +263,7 @@ function LineNodeComponent({
           {hasChildren ? (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1 h-6 w-6 flex items-center justify-center hover:bg-surface-3 rounded-lg transition-colors"
+              className="p-1 h-6 w-6 flex items-center justify-center hover:bg-surface-3 rounded-lg transition-colors cursor-pointer"
               title={isExpanded ? "Collapse" : "Expand"}>
               {isExpanded ? (
                 <ChevronDown size={14} className="text-muted-foreground" />

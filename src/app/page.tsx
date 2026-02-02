@@ -55,7 +55,9 @@ export default function LandingPage() {
                   </span>
                 </h1>
                 <p className="text-xl text-slate-400 leading-relaxed">
-                  The intelligent training platform that uses the SM-2 Spaced Repetition algorithm to schedule your chess reviews at the perfect moment.
+                  The intelligent training platform that uses the SM-2 Spaced
+                  Repetition algorithm to schedule your chess reviews at the
+                  perfect moment.
                 </p>
               </div>
 
@@ -77,7 +79,9 @@ export default function LandingPage() {
 
               <div className="flex items-center gap-8 pt-4">
                 <div className="space-y-1">
-                  <p className="text-sm text-slate-400">Positions Ready Today</p>
+                  <p className="text-sm text-slate-400">
+                    Positions Ready Today
+                  </p>
                   <p className="text-2xl font-bold text-green-400">0</p>
                 </div>
                 <div className="space-y-1">
@@ -133,7 +137,8 @@ export default function LandingPage() {
           <div className="text-center space-y-4 mb-16">
             <h2 className="text-4xl font-bold">Powerful Features</h2>
             <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-              Everything you need to master chess openings with scientific precision
+              Everything you need to master chess openings with scientific
+              precision
             </p>
           </div>
 
@@ -143,9 +148,12 @@ export default function LandingPage() {
               <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
                 <BookOpen className="w-6 h-6 text-green-400" />
               </div>
-              <h3 className="text-xl font-semibold">Personal Repertoire Builder</h3>
+              <h3 className="text-xl font-semibold">
+                Personal Repertoire Builder
+              </h3>
               <p className="text-slate-400">
-                Create custom lines for any opening. Organize variations by color and prepare for any opponent.
+                Create custom lines for any opening. Organize variations by
+                color and prepare for any opponent.
               </p>
             </div>
 
@@ -154,9 +162,12 @@ export default function LandingPage() {
               <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center">
                 <Brain className="w-6 h-6 text-purple-400" />
               </div>
-              <h3 className="text-xl font-semibold">Spaced Repetition Training</h3>
+              <h3 className="text-xl font-semibold">
+                Spaced Repetition Training
+              </h3>
               <p className="text-slate-400">
-                Active recall for chess positions. Train with the scientifically-proven SM-2 algorithm.
+                Active recall for chess positions. Train with the
+                scientifically-proven SM-2 algorithm.
               </p>
             </div>
 
@@ -167,7 +178,8 @@ export default function LandingPage() {
               </div>
               <h3 className="text-xl font-semibold">Dual-Sided Support</h3>
               <p className="text-slate-400">
-                Dedicated management for both White and Black repertoires with independent tracking.
+                Dedicated management for both White and Black repertoires with
+                independent tracking.
               </p>
             </div>
 
@@ -178,7 +190,8 @@ export default function LandingPage() {
               </div>
               <h3 className="text-xl font-semibold">Smart Scheduling</h3>
               <p className="text-slate-400">
-                Automated dashboard showing what's due for review today with optimal training suggestions.
+                Automated dashboard showing what's due for review today with
+                optimal training suggestions.
               </p>
             </div>
           </div>
@@ -197,7 +210,9 @@ export default function LandingPage() {
 
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700 rounded-xl p-8 mb-12">
             <p className="text-slate-300 text-lg leading-relaxed mb-8">
-              Every chess position in your repertoire is tracked with scientific precision. Our system monitors four critical metrics that optimize your learning:
+              Every chess position in your repertoire is tracked with scientific
+              precision. Our system monitors four critical metrics that optimize
+              your learning:
             </p>
 
             <div className="grid md:grid-cols-4 gap-6">
@@ -222,7 +237,9 @@ export default function LandingPage() {
                 <p className="text-slate-400 text-sm">
                   Difficulty multiplier (1.3 - 2.5)
                 </p>
-                <div className="text-2xl font-bold text-purple-400">1.3-2.5</div>
+                <div className="text-2xl font-bold text-purple-400">
+                  1.3-2.5
+                </div>
               </div>
 
               {/* Metric 3 */}
@@ -253,7 +270,8 @@ export default function LandingPage() {
 
           <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-6">
             <p className="text-slate-300 text-center">
-              ✨ Positions are indexed by due date for efficient daily training—review exactly what you need, when you need it.
+              ✨ Positions are indexed by due date for efficient daily
+              training—review exactly what you need, when you need it.
             </p>
           </div>
         </div>
@@ -273,7 +291,9 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 gap-8 p-8">
               {/* Chessboard */}
               <div className="space-y-4">
-                <p className="text-sm text-slate-400 font-medium">WHITE REPERTOIRE</p>
+                <p className="text-sm text-slate-400 font-medium">
+                  WHITE REPERTOIRE
+                </p>
                 <div className="relative h-80 bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg border border-slate-700 overflow-hidden">
                   <div className="absolute inset-0 grid grid-cols-8 gap-0">
                     {Array.from({ length: 64 }).map((_, i) => (
@@ -292,7 +312,9 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Sicilian Defense - Najdorf</span>
+                  <span className="text-slate-400">
+                    Sicilian Defense - Najdorf
+                  </span>
                   <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-semibold">
                     Due Today
                   </span>
@@ -302,7 +324,9 @@ export default function LandingPage() {
               {/* Feedback Section */}
               <div className="space-y-6 flex flex-col justify-center">
                 <div className="space-y-2">
-                  <p className="text-sm text-slate-400 font-medium">RATE YOUR PERFORMANCE</p>
+                  <p className="text-sm text-slate-400 font-medium">
+                    RATE YOUR PERFORMANCE
+                  </p>
                   <p className="text-slate-300">
                     How well did you recall this position?
                   </p>
@@ -324,7 +348,9 @@ export default function LandingPage() {
                 </div>
 
                 <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-2">
-                  <p className="text-xs text-slate-400 font-medium">NEXT REVIEW ESTIMATE</p>
+                  <p className="text-xs text-slate-400 font-medium">
+                    NEXT REVIEW ESTIMATE
+                  </p>
                   <p className="text-lg font-semibold text-green-400">
                     5 days (Good) / 7 days (Easy)
                   </p>
@@ -343,7 +369,8 @@ export default function LandingPage() {
               Ready to master your openings?
             </h2>
             <p className="text-xl text-slate-400">
-              Join thousands of chess players using ChessLab to train smarter, not harder.
+              Join thousands of chess players using ChessLab to train smarter,
+              not harder.
             </p>
           </div>
 
@@ -371,13 +398,19 @@ export default function LandingPage() {
             © 2026 ChessLab. Master your openings with spaced repetition.
           </p>
           <div className="flex gap-6 mt-4 md:mt-0">
-            <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm">
+            <a
+              href="#"
+              className="text-slate-400 hover:text-white transition-colors text-sm">
               Privacy
             </a>
-            <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm">
+            <a
+              href="#"
+              className="text-slate-400 hover:text-white transition-colors text-sm">
               Terms
             </a>
-            <a href="#" className="text-slate-400 hover:text-white transition-colors text-sm">
+            <a
+              href="#"
+              className="text-slate-400 hover:text-white transition-colors text-sm">
               Contact
             </a>
           </div>

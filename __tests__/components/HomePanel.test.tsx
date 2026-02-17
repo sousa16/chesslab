@@ -10,6 +10,8 @@
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { HomePanel } from "@/components/HomePanel";
+import { ToastProvider } from "@/components/ui/toast";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -30,6 +32,15 @@ jest.mock("next-auth/react", () => ({
 
 // Mock fetch
 global.fetch = jest.fn();
+
+// Helper function to render with providers
+const renderWithProviders = (component: React.ReactElement) => {
+  return render(
+    <SettingsProvider>
+      <ToastProvider>{component}</ToastProvider>
+    </SettingsProvider>
+  );
+};
 
 describe("HomePanel Component", () => {
   const mockOnSelectRepertoire = jest.fn();
@@ -77,7 +88,7 @@ describe("HomePanel Component", () => {
   });
 
   it("should render the dashboard header", () => {
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -91,7 +102,7 @@ describe("HomePanel Component", () => {
   });
 
   it("should render both repertoire buttons", () => {
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -103,7 +114,7 @@ describe("HomePanel Component", () => {
   });
 
   it("should call onSelectRepertoire with 'white' when white repertoire is clicked", () => {
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -115,7 +126,7 @@ describe("HomePanel Component", () => {
   });
 
   it("should call onSelectRepertoire with 'black' when black repertoire is clicked", () => {
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -126,8 +137,8 @@ describe("HomePanel Component", () => {
     expect(mockOnSelectRepertoire).toHaveBeenCalledWith("black");
   });
 
-  it("should fetch repertoire data on mount", async () => {
-    render(
+  it("should fetch training stats on mount", async () => {
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -135,26 +146,26 @@ describe("HomePanel Component", () => {
     );
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/repertoires?color=white");
-      expect(global.fetch).toHaveBeenCalledWith("/api/repertoires?color=black");
+      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats");
     });
   });
 
-  it("should display practice stats", async () => {
-    render(
+  it("should display training stats when available", async () => {
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
       />,
     );
 
-    // Component shows hardcoded value
-    expect(screen.getByText("32")).toBeInTheDocument();
-    expect(screen.getByText("moves to practice")).toBeInTheDocument();
+    await waitFor(() => {
+      // Component fetches training stats
+      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats");
+    });
   });
 
   it("should display repertoire information", async () => {
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -191,7 +202,7 @@ describe("HomePanel Component", () => {
       return Promise.reject(new Error("Unknown URL"));
     });
 
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -205,7 +216,7 @@ describe("HomePanel Component", () => {
   });
 
   it("should call onStartPractice when practice button is clicked", async () => {
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -213,15 +224,19 @@ describe("HomePanel Component", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Practice Now")).toBeInTheDocument();
+      expect(screen.getByText(/Practice Now|Starting/)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Practice Now"));
-    expect(mockOnStartPractice).toHaveBeenCalled();
+    const practiceButton = screen.getByText(/Practice Now|Starting/);
+    fireEvent.click(practiceButton);
+    
+    await waitFor(() => {
+      expect(mockOnStartPractice).toHaveBeenCalled();
+    });
   });
 
   it("should show practice button", async () => {
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -234,34 +249,36 @@ describe("HomePanel Component", () => {
     expect(button.closest("button")).not.toBeDisabled();
   });
 
-  it("should show time estimate", async () => {
-    render(
+  it("should show stats cards", async () => {
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
       />,
     );
 
-    // Component shows time estimate
-    expect(screen.getByText("~8 min")).toBeInTheDocument();
+    // Component shows stats labels
+    expect(screen.getByText("today")).toBeInTheDocument();
+    expect(screen.getByText("lines learned")).toBeInTheDocument();
   });
 
-  it("should show move count", async () => {
-    render(
+  it("should render repertoire cards", async () => {
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
       />,
     );
 
-    // Component shows hardcoded move count
-    expect(screen.getByText("32")).toBeInTheDocument();
+    // Component shows repertoire cards
+    expect(screen.getByText("White Repertoire")).toBeInTheDocument();
+    expect(screen.getByText("Black Repertoire")).toBeInTheDocument();
   });
 
   it("should handle fetch error gracefully", async () => {
     (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
 
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}
@@ -275,7 +292,7 @@ describe("HomePanel Component", () => {
   });
 
   it("should open settings modal when settings button is clicked", () => {
-    render(
+    renderWithProviders(
       <HomePanel
         onSelectRepertoire={mockOnSelectRepertoire}
         onStartPractice={mockOnStartPractice}

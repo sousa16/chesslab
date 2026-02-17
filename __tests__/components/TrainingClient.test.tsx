@@ -12,12 +12,16 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import TrainingClient from "@/components/TrainingClient";
+import { SettingsProvider } from "@/contexts/SettingsContext";
+import { ToastProvider } from "@/components/ui/toast";
 
 // Mock next/navigation
 const mockPush = jest.fn();
+const mockRefresh = jest.fn();
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mockPush,
+    refresh: mockRefresh,
   }),
   usePathname: jest.fn(() => "/training"),
 }));
@@ -55,6 +59,15 @@ jest.mock("chess.js", () => {
 
 // Mock fetch
 global.fetch = jest.fn();
+
+// Helper to render with providers
+const renderWithProviders = (component: React.ReactElement) => {
+  return render(
+    <SettingsProvider>
+      <ToastProvider>{component}</ToastProvider>
+    </SettingsProvider>
+  );
+};
 
 describe("TrainingClient Component", () => {
   const mockUser = {
@@ -118,13 +131,13 @@ describe("TrainingClient Component", () => {
 
   describe("Empty State", () => {
     it('should show "All caught up!" when no cards to review', () => {
-      render(<TrainingClient user={emptyUser} />);
+      renderWithProviders(<TrainingClient user={emptyUser} />);
 
       expect(screen.getByText("All caught up!")).toBeInTheDocument();
     });
 
     it("should show back button in empty state", () => {
-      render(<TrainingClient user={emptyUser} />);
+      renderWithProviders(<TrainingClient user={emptyUser} />);
 
       expect(screen.getByText("Back to Home")).toBeInTheDocument();
     });
@@ -132,25 +145,25 @@ describe("TrainingClient Component", () => {
 
   describe("Review Mode (default)", () => {
     it("should display Training header in review mode", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       expect(screen.getByText("Training")).toBeInTheDocument();
     });
 
     it("should display progress counter", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       expect(screen.getByText("1 / 2")).toBeInTheDocument();
     });
 
     it("should show Show Answer button initially", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       expect(screen.getByText("Show Answer")).toBeInTheDocument();
     });
 
     it("should show feedback buttons after clicking Show Answer", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       fireEvent.click(screen.getByText("Show Answer"));
 
@@ -161,7 +174,7 @@ describe("TrainingClient Component", () => {
     });
 
     it("should call API when feedback is given in review mode", async () => {
-      render(<TrainingClient user={mockUser} mode="review" />);
+      renderWithProviders(<TrainingClient user={mockUser} mode="review" />);
 
       fireEvent.click(screen.getByText("Show Answer"));
       fireEvent.click(screen.getByText("Good"));
@@ -178,7 +191,7 @@ describe("TrainingClient Component", () => {
     });
 
     it("should display streak counter", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       expect(screen.getByText("streak")).toBeInTheDocument();
       expect(screen.getByText("0")).toBeInTheDocument();
@@ -187,13 +200,13 @@ describe("TrainingClient Component", () => {
 
   describe("Practice Mode", () => {
     it("should display Practice header in practice mode", () => {
-      render(<TrainingClient user={mockUser} mode="practice" />);
+      renderWithProviders(<TrainingClient user={mockUser} mode="practice" />);
 
       expect(screen.getByText("Practice")).toBeInTheDocument();
     });
 
     it("should NOT call API when feedback is given in practice mode", async () => {
-      render(<TrainingClient user={mockUser} mode="practice" />);
+      renderWithProviders(<TrainingClient user={mockUser} mode="practice" />);
 
       fireEvent.click(screen.getByText("Show Answer"));
       fireEvent.click(screen.getByText("Good"));
@@ -205,7 +218,7 @@ describe("TrainingClient Component", () => {
     });
 
     it("should still progress to next card in practice mode", async () => {
-      render(<TrainingClient user={mockUser} mode="practice" />);
+      renderWithProviders(<TrainingClient user={mockUser} mode="practice" />);
 
       // Initially showing card 1
       expect(screen.getByText("1 / 2")).toBeInTheDocument();
@@ -222,7 +235,7 @@ describe("TrainingClient Component", () => {
 
   describe("Navigation", () => {
     it("should navigate back to home when back button is clicked", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       // Find the back button (ChevronLeft icon button)
       const buttons = screen.getAllByRole("button");
@@ -245,7 +258,7 @@ describe("TrainingClient Component", () => {
         ],
       };
 
-      render(<TrainingClient user={singleCardUser} mode="practice" />);
+      renderWithProviders(<TrainingClient user={singleCardUser} mode="practice" />);
 
       fireEvent.click(screen.getByText("Show Answer"));
       fireEvent.click(screen.getByText("Good"));
@@ -258,7 +271,7 @@ describe("TrainingClient Component", () => {
 
   describe("Color Display", () => {
     it("should show repertoire color", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       // The component displays lowercase "white" in multiple places
       const whiteElements = screen.getAllByText(/white/i);
@@ -287,7 +300,7 @@ describe("TrainingClient Component", () => {
         ],
       };
 
-      render(<TrainingClient user={multiColorUser} />);
+      renderWithProviders(<TrainingClient user={multiColorUser} />);
 
       expect(screen.getByText("Both Colors")).toBeInTheDocument();
     });
@@ -295,13 +308,13 @@ describe("TrainingClient Component", () => {
 
   describe("Chessboard", () => {
     it("should render chessboard component", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       expect(screen.getByTestId("chessboard")).toBeInTheDocument();
     });
 
     it("should display the correct position", () => {
-      render(<TrainingClient user={mockUser} />);
+      renderWithProviders(<TrainingClient user={mockUser} />);
 
       const board = screen.getByTestId("chessboard");
       expect(board.getAttribute("data-position")).toContain(

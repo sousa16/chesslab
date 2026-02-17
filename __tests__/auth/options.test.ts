@@ -1,3 +1,13 @@
+jest.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {},
+  },
+}));
+
+jest.mock("@/lib/email", () => ({
+  sendVerificationEmail: jest.fn(),
+}));
+
 import { authOptions } from "@/lib/auth";
 
 describe("Auth Options Configuration", () => {

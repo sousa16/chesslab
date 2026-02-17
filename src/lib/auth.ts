@@ -67,7 +67,7 @@ export const authOptions: NextAuthOptions = {
 
           // Don't automatically log them in - they need to verify first
           throw new Error(
-            "Please check your email to verify your account before signing in"
+            "Please check your email to verify your account before signing in",
           );
         } else {
           // Login
@@ -81,7 +81,7 @@ export const authOptions: NextAuthOptions = {
 
           const isPasswordValid = await bcrypt.compare(
             password,
-            user.hashedPassword
+            user.hashedPassword,
           );
 
           if (!isPasswordValid) {
@@ -129,7 +129,7 @@ export const authOptions: NextAuthOptions = {
             await sendVerificationEmail(email, token);
 
             throw new Error(
-              "Please verify your email before signing in. A new verification email has been sent."
+              "Please verify your email before signing in. A new verification email has been sent.",
             );
           }
 
@@ -144,7 +144,8 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   pages: {
-    signIn: "/auth",
+    signIn: "/",
+    signOut: "/",
   },
   session: {
     strategy: "jwt",

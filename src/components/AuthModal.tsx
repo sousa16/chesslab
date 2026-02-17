@@ -19,18 +19,31 @@ import { CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 interface AuthModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialError?: string;
+  initialSuccess?: string;
 }
 
-export function AuthModal({ open, onOpenChange }: AuthModalProps) {
+export function AuthModal({
+  open,
+  onOpenChange,
+  initialError,
+  initialSuccess,
+}: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [error, setError] = useState(initialError || "");
+  const [success, setSuccess] = useState(initialSuccess || "");
   const [showResendButton, setShowResendButton] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Update error/success when props change
+  useEffect(() => {
+    if (initialError) setError(initialError);
+    if (initialSuccess) setSuccess(initialSuccess);
+  }, [initialError, initialSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +101,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
       if (response.ok) {
         setSuccess(
-          data.message || "Verification email sent! Check your inbox."
+          data.message || "Verification email sent! Check your inbox.",
         );
       } else {
         setError(data.error || "Couldn't send email. Please try again.");
@@ -116,7 +129,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             {isLogin ? "Welcome back" : "Create your account"}
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            {isLogin ? "Login to your ChessLab account" : "Join ChessLab to build your repertoire"}
+            {isLogin
+              ? "Login to your ChessLab account"
+              : "Join ChessLab to build your repertoire"}
           </DialogDescription>
         </DialogHeader>
 
@@ -128,7 +143,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
               <div className="relative w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
                 <AlertCircle className="w-4 h-4 text-red-400" />
               </div>
-              <p className="relative text-red-300 text-sm font-medium pt-1.5">{error}</p>
+              <p className="relative text-red-300 text-sm font-medium pt-1.5">
+                {error}
+              </p>
             </div>
           )}
 
@@ -139,7 +156,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 <div className="relative w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-4 h-4 text-emerald-400" />
                 </div>
-                <p className="relative text-emerald-300 text-sm font-medium pt-1.5">{success}</p>
+                <p className="relative text-emerald-300 text-sm font-medium pt-1.5">
+                  {success}
+                </p>
               </div>
               {showResendButton && (
                 <Button
@@ -157,7 +176,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-slate-300">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-slate-300">
                 Email
               </Label>
               <Input
@@ -179,7 +200,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                   className="text-sm font-medium text-slate-300">
                   Password
                 </Label>
-                <a href="#" className="text-xs text-slate-400 hover:text-slate-300 transition-colors">
+                <a
+                  href="#"
+                  className="text-xs text-slate-400 hover:text-slate-300 transition-colors">
                   Forgot password?
                 </a>
               </div>

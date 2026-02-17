@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
 
   if (!token) {
     return NextResponse.redirect(
-      new URL("/auth?error=Invalid verification link", request.url)
+      new URL("/?error=Invalid verification link", request.url),
     );
   }
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     if (!verificationToken) {
       return NextResponse.redirect(
-        new URL("/auth?error=Invalid or expired verification link", request.url)
+        new URL("/?error=Invalid or expired verification link", request.url),
       );
     }
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         where: { token },
       });
       return NextResponse.redirect(
-        new URL("/auth?error=Verification link has expired", request.url)
+        new URL("/?error=Verification link has expired", request.url),
       );
     }
 
@@ -44,12 +44,12 @@ export async function GET(request: NextRequest) {
       where: { token },
     });
 
-    // Redirect to auth page with success message
-    return NextResponse.redirect(new URL("/auth?verified=true", request.url));
+    // Redirect to landing page with success message
+    return NextResponse.redirect(new URL("/?verified=true", request.url));
   } catch (error) {
     console.error("Verification error:", error);
     return NextResponse.redirect(
-      new URL("/auth?error=Verification failed", request.url)
+      new URL("/?error=Verification failed", request.url),
     );
   }
 }

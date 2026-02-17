@@ -57,7 +57,7 @@ describe("Settings Page", () => {
       expect(screen.getByText("Loading...")).toBeInTheDocument();
     });
 
-    it("should redirect to auth when user is not authenticated", async () => {
+    it("should redirect to home when user is not authenticated", async () => {
       mockUseSession.mockReturnValue({
         data: null,
         status: "unauthenticated",
@@ -67,7 +67,7 @@ describe("Settings Page", () => {
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/auth");
+        expect(mockPush).toHaveBeenCalledWith("/");
       });
     });
   });
@@ -130,8 +130,10 @@ describe("Settings Page", () => {
       fireEvent.click(signOutButton);
 
       await waitFor(() => {
-        expect(mockSignOut).toHaveBeenCalledWith({ redirect: false });
-        expect(mockPush).toHaveBeenCalledWith("/auth");
+        expect(mockSignOut).toHaveBeenCalledWith({
+          callbackUrl: "/",
+          redirect: true,
+        });
       });
     });
   });
@@ -166,7 +168,7 @@ describe("Settings Page", () => {
     it("should render training section with multiple options", () => {
       render(<SettingsPage />);
       const descriptions = screen.getAllByText(
-        /Get notified|Play sounds|Display board/
+        /Get notified|Play sounds|Display board/,
       );
       expect(descriptions.length).toBe(3);
     });

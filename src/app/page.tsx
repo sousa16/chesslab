@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AuthModal } from "@/components/AuthModal";
@@ -18,7 +19,24 @@ import {
 } from "lucide-react";
 
 export default function LandingPage() {
+  const searchParams = useSearchParams();
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authError, setAuthError] = useState<string | undefined>();
+  const [authSuccess, setAuthSuccess] = useState<string | undefined>();
+
+  useEffect(() => {
+    // Check for verification success or error from URL params
+    const verified = searchParams.get("verified");
+    const error = searchParams.get("error");
+
+    if (verified === "true") {
+      setAuthSuccess("Email verified successfully! You can now sign in.");
+      setAuthModalOpen(true);
+    } else if (error) {
+      setAuthError(error);
+      setAuthModalOpen(true);
+    }
+  }, [searchParams]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white light:from-white light:via-slate-50 light:to-white light:text-slate-900">
@@ -418,7 +436,12 @@ export default function LandingPage() {
       </footer>
 
       {/* Auth Modal */}
-      <AuthModal open={authModalOpen} onOpenChange={setAuthModalOpen} />
+      <AuthModal
+        open={authModalOpen}
+        onOpenChange={setAuthModalOpen}
+        initialError={authError}
+        initialSuccess={authSuccess}
+      />
     </div>
   );
 }

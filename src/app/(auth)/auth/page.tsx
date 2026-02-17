@@ -61,7 +61,7 @@ export default function AuthPage() {
           setShowResendButton(true);
         }
       } else if (result?.ok) {
-        window.location.href = "/build/color";
+        window.location.href = "/home";
       }
     } catch (error) {
       setError("Something went wrong. Please try again.");
@@ -91,7 +91,7 @@ export default function AuthPage() {
 
       if (response.ok) {
         setSuccess(
-          data.message || "Verification email sent! Check your inbox."
+          data.message || "Verification email sent! Check your inbox.",
         );
       } else {
         setError(data.error || "Couldn't send email. Please try again.");
@@ -105,7 +105,7 @@ export default function AuthPage() {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    await signIn("google", { callbackUrl: "/build/color" });
+    await signIn("google", { callbackUrl: "/home" });
   };
 
   return (
@@ -126,7 +126,9 @@ export default function AuthPage() {
               {isLogin ? "Welcome back" : "Create your account"}
             </h1>
             <p className="text-sm text-slate-400">
-              {isLogin ? "Login to your ChessLab account" : "Join ChessLab to build your repertoire"}
+              {isLogin
+                ? "Login to your ChessLab account"
+                : "Join ChessLab to build your repertoire"}
             </p>
           </div>
 
@@ -137,7 +139,9 @@ export default function AuthPage() {
               <div className="relative w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
                 <AlertCircle className="w-4 h-4 text-red-400" />
               </div>
-              <p className="relative text-red-300 text-sm font-medium pt-1.5">{error}</p>
+              <p className="relative text-red-300 text-sm font-medium pt-1.5">
+                {error}
+              </p>
             </div>
           )}
 
@@ -148,7 +152,9 @@ export default function AuthPage() {
                 <div className="relative w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-4 h-4 text-emerald-400" />
                 </div>
-                <p className="relative text-emerald-300 text-sm font-medium pt-1.5">{success}</p>
+                <p className="relative text-emerald-300 text-sm font-medium pt-1.5">
+                  {success}
+                </p>
               </div>
               {showResendButton && (
                 <Button
@@ -166,7 +172,9 @@ export default function AuthPage() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-slate-300">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-slate-300">
                 Email
               </Label>
               <Input
@@ -188,7 +196,9 @@ export default function AuthPage() {
                   className="text-sm font-medium text-slate-300">
                   Password
                 </Label>
-                <a href="#" className="text-xs text-slate-400 hover:text-slate-300 transition-colors">
+                <a
+                  href="#"
+                  className="text-xs text-slate-400 hover:text-slate-300 transition-colors">
                   Forgot password?
                 </a>
               </div>

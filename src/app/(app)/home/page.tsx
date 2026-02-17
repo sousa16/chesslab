@@ -18,11 +18,20 @@ export default function Home() {
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
 
-  // Initialize state directly from URL params to avoid flash
+  // Check sessionStorage for return from build screen (before state initialization)
+  const buildReturnColor =
+    typeof window !== "undefined"
+      ? sessionStorage.getItem("buildReturnColor")
+      : null;
+
+  // Initialize state directly from URL params or sessionStorage to avoid flash
   const initialView =
-    searchParams.get("view") === "repertoire" ? "repertoire" : "home";
+    searchParams.get("view") === "repertoire" || buildReturnColor
+      ? "repertoire"
+      : "home";
   const initialColor =
-    searchParams.get("color") === "black" ? "black" : "white";
+    (buildReturnColor as "white" | "black" | null) ||
+    (searchParams.get("color") === "black" ? "black" : "white");
 
   const [view, setView] = useState<View>(initialView);
   const [selectedColor, setSelectedColor] = useState<"white" | "black">(
@@ -38,14 +47,9 @@ export default function Home() {
       router.push("/");
     }
 
-    // Check sessionStorage for return from build screen
+    // Clear sessionStorage after reading on mount
     if (typeof window !== "undefined") {
-      const returnColor = sessionStorage.getItem("buildReturnColor");
-      if (returnColor === "white" || returnColor === "black") {
-        setSelectedColor(returnColor);
-        setView("repertoire");
-        sessionStorage.removeItem("buildReturnColor");
-      }
+      sessionStorage.removeItem("buildReturnColor");
     }
 
     // Reset board when coming back from build/training pages

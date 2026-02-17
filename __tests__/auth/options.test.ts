@@ -8,22 +8,22 @@ describe("Auth Options Configuration", () => {
   });
 
   describe("Sign In Page", () => {
-    it("should have /auth as custom sign in page", () => {
-      expect(authOptions.pages?.signIn).toBe("/auth");
+    it("should have / as custom sign in page", () => {
+      expect(authOptions.pages?.signIn).toBe("/");
     });
   });
 
   describe("Providers", () => {
     it("should include Google provider", () => {
       const googleProvider = authOptions.providers.find(
-        (p) => p.id === "google"
+        (p) => p.id === "google",
       );
       expect(googleProvider).toBeDefined();
     });
 
     it("should include Credentials provider", () => {
       const credentialsProvider = authOptions.providers.find(
-        (p) => p.id === "credentials"
+        (p) => p.id === "credentials",
       );
       expect(credentialsProvider).toBeDefined();
     });

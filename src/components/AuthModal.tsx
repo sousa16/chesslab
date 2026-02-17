@@ -19,21 +19,34 @@ import { CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 interface AuthModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialError?: string;
+  initialSuccess?: string;
 }
 
-export function AuthModal({ open, onOpenChange }: AuthModalProps) {
+export function AuthModal({
+  open,
+  onOpenChange,
+  initialError,
+  initialSuccess,
+}: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [error, setError] = useState(initialError || "");
+  const [success, setSuccess] = useState(initialSuccess || "");
   const [showResendButton, setShowResendButton] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+
+  // Update error/success when props change
+  useEffect(() => {
+    if (initialError) setError(initialError);
+    if (initialSuccess) setSuccess(initialSuccess);
+  }, [initialError, initialSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +104,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
       if (response.ok) {
         setSuccess(
-          data.message || "Verification email sent! Check your inbox."
+          data.message || "Verification email sent! Check your inbox.",
         );
       } else {
         setError(data.error || "Couldn't send email. Please try again.");
@@ -144,11 +157,13 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
           <div className="flex justify-center mb-2">
             <Logo size="md" />
           </div>
-          <DialogTitle className="text-2xl font-semibold text-white">
+          <DialogTitle className="text-2xl font-semibold text-slate-900 dark:text-white">
             {isLogin ? "Welcome back" : "Create your account"}
           </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            {isLogin ? "Login to your ChessLab account" : "Join ChessLab to build your repertoire"}
+          <DialogDescription className="text-slate-500 dark:text-slate-400">
+            {isLogin
+              ? "Login to your ChessLab account"
+              : "Join ChessLab to build your repertoire"}
           </DialogDescription>
         </DialogHeader>
 
@@ -160,7 +175,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
               <div className="relative w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
                 <AlertCircle className="w-4 h-4 text-red-400" />
               </div>
-              <p className="relative text-red-300 text-sm font-medium pt-1.5">{error}</p>
+              <p className="relative text-red-300 text-sm font-medium pt-1.5">
+                {error}
+              </p>
             </div>
           )}
 
@@ -171,7 +188,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 <div className="relative w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-4 h-4 text-emerald-400" />
                 </div>
-                <p className="relative text-emerald-300 text-sm font-medium pt-1.5">{success}</p>
+                <p className="relative text-emerald-300 text-sm font-medium pt-1.5">
+                  {success}
+                </p>
               </div>
               {showResendButton && (
                 <Button
@@ -189,7 +208,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-slate-300">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Email
               </Label>
               <Input
@@ -198,7 +219,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="bg-slate-800/50 border-slate-600 h-11 text-sm text-white placeholder:text-slate-500 focus:bg-slate-800 focus:border-slate-500"
+                className="bg-slate-100 dark:bg-slate-800/50 border-stone-300 dark:border-slate-600 h-11 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 dark:focus:border-slate-500"
                 required
                 disabled={isLoading}
               />
@@ -208,7 +229,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
               <div className="flex items-center justify-between">
                 <Label
                   htmlFor="password"
-                  className="text-sm font-medium text-slate-300">
+                  className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Password
                 </Label>
                 {isLogin && (
@@ -227,7 +248,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="bg-slate-800/50 border-slate-600 h-11 text-sm text-white placeholder:text-slate-500 pr-10 focus:bg-slate-800 focus:border-slate-500"
+                  className="bg-slate-100 dark:bg-slate-800/50 border-stone-300 dark:border-slate-600 h-11 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 pr-10 focus:bg-white dark:focus:bg-slate-800 focus:border-emerald-400 dark:focus:border-slate-500"
                   required
                   minLength={8}
                   disabled={isLoading}
@@ -235,7 +256,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400 transition-colors"
                   disabled={isLoading}>
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -248,7 +269,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
             <Button
               type="submit"
-              className="w-full h-11 text-sm font-semibold bg-green-500 hover:bg-green-600 text-white transition-colors"
+              className="w-full h-11 text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
               disabled={isLoading}>
               {isLoading ? "Loading..." : isLogin ? "Login" : "Create account"}
             </Button>
@@ -256,8 +277,8 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
           {/* Divider */}
           <div className="relative my-4">
-            <Separator className="bg-slate-700/50" />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900/95 px-2 text-xs text-slate-400 font-medium">
+            <Separator className="bg-stone-300 dark:bg-slate-700/50" />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-900/95 px-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
               OR CONTINUE WITH
             </span>
           </div>
@@ -265,7 +286,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
           {/* Google Sign In */}
           <Button
             variant="outline"
-            className="w-full gap-2 h-11 text-sm font-medium border-slate-600 hover:bg-slate-800/50 transition-colors"
+            className="w-full gap-2 h-11 text-sm font-medium border-stone-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200 transition-colors"
             onClick={handleGoogleSignIn}
             disabled={isLoading}>
             <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -290,12 +311,12 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-sm text-slate-400">
+          <p className="text-center text-sm text-slate-500 dark:text-slate-400">
             {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
               type="button"
               onClick={() => setIsLogin(!isLogin)}
-              className="text-green-400 hover:text-green-300 font-semibold transition-colors cursor-pointer">
+              className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-semibold transition-colors cursor-pointer">
               {isLogin ? "Sign up" : "Sign in"}
             </button>
           </p>

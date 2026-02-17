@@ -36,15 +36,6 @@ describe("Middleware - Route Protection", () => {
       expect(response?.status).toBe(307);
       expect(response?.headers.get("location")).toContain("/home");
     });
-
-    it("should allow access to /auth when not authenticated", async () => {
-      mockGetToken.mockResolvedValue(null);
-      const request = new NextRequest("http://localhost:3000/auth");
-
-      const response = await proxy(request);
-
-      expect(response?.status).toBe(200);
-    });
   });
 
   describe("Protected Routes (No Token)", () => {
@@ -100,7 +91,9 @@ describe("Middleware - Route Protection", () => {
     };
 
     it("should allow access to /home when authenticated", async () => {
-      mockGetToken.mockResolvedValue(mockToken as unknown as Awaited<ReturnType<typeof getToken>>);
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
       const request = new NextRequest("http://localhost:3000/home");
 
       const response = await proxy(request);
@@ -109,7 +102,9 @@ describe("Middleware - Route Protection", () => {
     });
 
     it("should allow access to /repertoire when authenticated", async () => {
-      mockGetToken.mockResolvedValue(mockToken as unknown as Awaited<ReturnType<typeof getToken>>);
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
       const request = new NextRequest("http://localhost:3000/repertoire");
 
       const response = await proxy(request);
@@ -118,7 +113,9 @@ describe("Middleware - Route Protection", () => {
     });
 
     it("should allow access to /training when authenticated", async () => {
-      mockGetToken.mockResolvedValue(mockToken as unknown as Awaited<ReturnType<typeof getToken>>);
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
       const request = new NextRequest("http://localhost:3000/training");
 
       const response = await proxy(request);
@@ -127,8 +124,21 @@ describe("Middleware - Route Protection", () => {
     });
 
     it("should allow access to /build/white when authenticated", async () => {
-      mockGetToken.mockResolvedValue(mockToken as unknown as Awaited<ReturnType<typeof getToken>>);
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
       const request = new NextRequest("http://localhost:3000/build/white");
+
+      const response = await proxy(request);
+
+      expect(response?.status).toBe(200);
+    });
+
+    it("should allow access to /settings when authenticated", async () => {
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
+      const request = new NextRequest("http://localhost:3000/settings");
 
       const response = await proxy(request);
 
@@ -150,7 +160,7 @@ describe("Middleware - Route Protection", () => {
   describe("Static Files", () => {
     it("should skip middleware for _next/static", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/_next/static/chunks/main.js"
+        "http://localhost:3000/_next/static/chunks/main.js",
       );
 
       const response = await proxy(request);

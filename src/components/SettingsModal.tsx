@@ -200,17 +200,26 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               <div className="bg-surface-1 rounded-lg border border-border divide-y divide-border">
                 {/* Profile Picture & Basic Info */}
                 <div className="p-4 flex items-center gap-4">
-                  {session.user?.image ? (
-                    <img
-                      src={session.user.image}
-                      alt="Profile"
-                      className="w-14 h-14 rounded-full border-2 border-primary/20"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center border-2 border-primary/20">
+                  <div className="relative w-14 h-14">
+                    {session.user?.image ? (
+                      <img
+                        src={session.user.image}
+                        alt=""
+                        className="w-14 h-14 rounded-full border-2 border-primary/20 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center border-2 border-primary/20"
+                      style={{ display: session.user?.image ? 'none' : 'flex' }}
+                    >
                       <User size={28} className="text-primary" />
                     </div>
-                  )}
+                  </div>
                   <div className="flex-1">
                     <p className="text-base font-medium text-foreground">
                       {session.user?.name ||

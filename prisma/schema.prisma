@@ -44,7 +44,6 @@ model User {
   image          String?
   hashedPassword String?
   dailyReminder  Boolean         @default(false)
-  image          String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   accounts       Account[]

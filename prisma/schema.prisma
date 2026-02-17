@@ -41,7 +41,9 @@ model User {
   name           String?
   email          String?         @unique
   emailVerified  DateTime?
+  image          String?
   hashedPassword String?
+  dailyReminder  Boolean         @default(false)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   accounts       Account[]

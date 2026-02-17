@@ -138,6 +138,8 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
             name: user.name,
             image: user.image,
+            emailVerified: user.emailVerified,
+            createdAt: user.createdAt,
           };
         }
       },
@@ -154,12 +156,16 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.emailVerified = user.emailVerified;
+        token.createdAt = user.createdAt;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.emailVerified = token.emailVerified as Date | null;
+        session.user.createdAt = token.createdAt as Date;
       }
       return session;
     },

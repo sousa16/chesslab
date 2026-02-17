@@ -90,16 +90,6 @@ describe("Middleware - Route Protection", () => {
       expect(response?.status).toBe(307);
       expect(response?.headers.get("location")).toContain("/");
     });
-
-    it("should redirect from /settings to / when not authenticated", async () => {
-      mockGetToken.mockResolvedValue(null);
-      const request = new NextRequest("http://localhost:3000/settings");
-
-      const response = await proxy(request);
-
-      expect(response?.status).toBe(307);
-      expect(response?.headers.get("location")).toContain("/");
-    });
   });
 
   describe("Protected Routes (With Token)", () => {
@@ -139,15 +129,6 @@ describe("Middleware - Route Protection", () => {
     it("should allow access to /build/white when authenticated", async () => {
       mockGetToken.mockResolvedValue(mockToken as unknown as Awaited<ReturnType<typeof getToken>>);
       const request = new NextRequest("http://localhost:3000/build/white");
-
-      const response = await proxy(request);
-
-      expect(response?.status).toBe(200);
-    });
-
-    it("should allow access to /settings when authenticated", async () => {
-      mockGetToken.mockResolvedValue(mockToken as unknown as Awaited<ReturnType<typeof getToken>>);
-      const request = new NextRequest("http://localhost:3000/settings");
 
       const response = await proxy(request);
 

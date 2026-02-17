@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { SettingsModal } from "@/components/SettingsModal";
 
 interface ColorStats {
   learned: number;
@@ -134,6 +135,7 @@ export function HomePanel({
   const { data: session, status } = useSession();
   const greeting = getGreeting();
   const firstName = session?.user ? getFirstName(session.user) : "there";
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const [whiteStats, setWhiteStats] = useState<RepertoireStats>({
     lines: 0,
@@ -255,7 +257,7 @@ export function HomePanel({
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground -mr-2"
-            onClick={() => router.push("/settings")}>
+            onClick={() => setShowSettingsModal(true)}>
             <Settings size={18} />
           </Button>
         </div>
@@ -475,6 +477,11 @@ export function HomePanel({
           </div>
         </section>
       </div>
+
+      <SettingsModal
+        open={showSettingsModal}
+        onOpenChange={setShowSettingsModal}
+      />
     </div>
   );
 }

@@ -10,31 +10,31 @@
 
 @layer base {
   :root {
-    /* Core backgrounds - deep charcoal, sophisticated */
-    --background: 240 10% 4%; /* #0a0a0c */
-    --foreground: 220 15% 90%;
+    /* Core backgrounds - softer charcoal, easier on the eyes */
+    --background: 230 12% 12%; /* #1a1c21 - softer dark */
+    --foreground: 220 15% 88%;
 
     /* Card/panel surfaces - glass effect base */
-    --card: 240 8% 8%;
-    --card-foreground: 220 15% 90%;
+    --card: 230 10% 16%;
+    --card-foreground: 220 15% 88%;
 
-    --popover: 240 8% 10%;
-    --popover-foreground: 220 15% 90%;
+    --popover: 230 10% 18%;
+    --popover-foreground: 220 15% 88%;
 
     /* Primary - refined emerald green with glow potential */
     --primary: 158 50% 45%;
     --primary-foreground: 240 10% 4%;
 
     /* Secondary - elevated surface */
-    --secondary: 240 8% 12%;
+    --secondary: 230 10% 20%;
     --secondary-foreground: 220 12% 75%;
 
     /* Muted - subdued text and backgrounds */
-    --muted: 240 6% 15%;
-    --muted-foreground: 220 10% 50%;
+    --muted: 230 8% 22%;
+    --muted-foreground: 220 10% 55%;
 
     /* Accent - subtle teal/emerald tint */
-    --accent: 158 30% 22%;
+    --accent: 158 30% 24%;
     --accent-foreground: 158 40% 75%;
 
     /* Destructive - soft coral red */
@@ -42,8 +42,8 @@
     --destructive-foreground: 0 20% 95%;
 
     /* Borders and inputs - glass-like subtle */
-    --border: 240 8% 18%;
-    --input: 240 8% 14%;
+    --border: 230 10% 24%;
+    --input: 230 10% 20%;
     --ring: 158 50% 45%;
 
     --radius: 0.75rem;
@@ -67,23 +67,23 @@
     --board-midnight-dark: 220 20% 28%;
 
     /* Sidebar - glass effect */
-    --sidebar-background: 240 8% 6%;
+    --sidebar-background: 230 12% 10%;
     --sidebar-foreground: 220 12% 75%;
     --sidebar-primary: 158 50% 45%;
-    --sidebar-primary-foreground: 240 10% 4%;
-    --sidebar-accent: 240 8% 14%;
-    --sidebar-accent-foreground: 220 15% 90%;
-    --sidebar-border: 240 8% 16%;
+    --sidebar-primary-foreground: 230 12% 12%;
+    --sidebar-accent: 230 10% 18%;
+    --sidebar-accent-foreground: 220 15% 88%;
+    --sidebar-border: 230 10% 22%;
     --sidebar-ring: 158 50% 45%;
 
     /* Surface layers for glassmorphism depth */
-    --surface-1: 240 8% 7%;
-    --surface-2: 240 8% 10%;
-    --surface-3: 240 8% 13%;
+    --surface-1: 230 10% 14%;
+    --surface-2: 230 10% 17%;
+    --surface-3: 230 10% 20%;
 
     /* Glass effect colors */
-    --glass-bg: 240 8% 10%;
-    --glass-border: 240 10% 22%;
+    --glass-bg: 230 10% 16%;
+    --glass-border: 230 10% 26%;
 
     /* Feedback colors - modern, vibrant but not harsh */
     --success: 158 55% 48%;
@@ -95,25 +95,25 @@
     --gradient-glow: 0 0 20px hsla(158, 50%, 45%, 0.3);
   }
 
-  /* Light mode */
+  /* Light mode - warm, comfortable off-white tones */
   html:not(.dark) {
-    --background: 220 20% 98%;
-    --foreground: 240 10% 10%;
+    --background: 42 18% 94%;
+    --foreground: 230 15% 18%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card: 40 20% 97%;
+    --card-foreground: 230 15% 18%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
+    --popover: 40 20% 97%;
+    --popover-foreground: 230 15% 18%;
 
-    --primary: 158 50% 40%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 158 50% 38%;
+    --primary-foreground: 40 20% 97%;
 
-    --secondary: 220 15% 92%;
-    --secondary-foreground: 220 12% 25%;
+    --secondary: 42 16% 88%;
+    --secondary-foreground: 220 12% 28%;
 
-    --muted: 220 15% 92%;
-    --muted-foreground: 220 10% 45%;
+    --muted: 42 14% 88%;
+    --muted-foreground: 220 10% 42%;
 
     --accent: 158 30% 35%;
     --accent-foreground: 158 30% 95%;
@@ -121,25 +121,25 @@
     --destructive: 0 55% 55%;
     --destructive-foreground: 0 20% 100%;
 
-    --border: 220 15% 88%;
-    --input: 220 15% 88%;
-    --ring: 158 50% 40%;
+    --border: 42 14% 82%;
+    --input: 42 14% 85%;
+    --ring: 158 50% 38%;
 
-    --sidebar-background: 220 15% 96%;
-    --sidebar-foreground: 220 12% 25%;
-    --sidebar-primary: 158 50% 40%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 90%;
-    --sidebar-accent-foreground: 220 12% 15%;
-    --sidebar-border: 220 15% 88%;
-    --sidebar-ring: 158 50% 40%;
+    --sidebar-background: 42 16% 92%;
+    --sidebar-foreground: 220 12% 28%;
+    --sidebar-primary: 158 50% 38%;
+    --sidebar-primary-foreground: 40 20% 97%;
+    --sidebar-accent: 42 16% 86%;
+    --sidebar-accent-foreground: 220 12% 18%;
+    --sidebar-border: 42 14% 82%;
+    --sidebar-ring: 158 50% 38%;
 
-    --surface-1: 220 15% 98%;
-    --surface-2: 220 15% 95%;
-    --surface-3: 220 15% 92%;
+    --surface-1: 42 18% 95%;
+    --surface-2: 42 16% 91%;
+    --surface-3: 42 16% 88%;
 
-    --glass-bg: 0 0% 100%;
-    --glass-border: 220 15% 85%;
+    --glass-bg: 40 20% 97%;
+    --glass-border: 42 14% 80%;
 
     --success: 158 50% 45%;
     --warning: 38 70% 55%;
@@ -211,14 +211,14 @@
   }
 
   .glass-card {
-    background: hsla(var(--glass-bg), 0.7);
+    background: hsla(var(--glass-bg), 0.9);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid hsla(var(--glass-border), 0.2);
+    border: 1px solid hsla(var(--glass-border), 0.4);
     box-shadow: 
-      0 4px 6px -1px hsla(0, 0%, 0%, 0.1),
+      0 4px 6px -1px hsla(0, 0%, 0%, 0.15),
       0 2px 4px -2px hsla(0, 0%, 0%, 0.1),
-      inset 0 1px 0 0 hsla(0, 0%, 100%, 0.05);
+      inset 0 1px 0 0 hsla(0, 0%, 100%, 0.08);
   }
 
   .glass-panel {

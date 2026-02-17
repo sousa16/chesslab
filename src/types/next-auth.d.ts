@@ -7,6 +7,8 @@ declare module "next-auth" {
       email: string;
       name?: string | null;
       image?: string | null;
+      emailVerified?: Date | null;
+      createdAt?: Date;
     };
   }
 
@@ -15,11 +17,15 @@ declare module "next-auth" {
     email: string;
     name?: string | null;
     image?: string | null;
+    emailVerified?: Date | null;
+    createdAt?: Date;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
+    emailVerified?: Date | null;
+    createdAt?: Date;
   }
 }

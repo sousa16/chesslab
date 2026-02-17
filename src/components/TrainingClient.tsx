@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { Board, BoardHandle } from "@/components/Board";
 import { type ReviewResponse } from "@/lib/sm2";
+import { useSettings } from "@/contexts/SettingsContext";
+import { playCorrectSound, playIncorrectSound } from "@/lib/sounds";
 
 interface Position {
   id: string;
@@ -55,6 +57,7 @@ export default function TrainingClient({
 }: TrainingClientProps) {
   const router = useRouter();
   const boardRef = useRef<BoardHandle>(null);
+  const { soundEffects } = useSettings();
   const [currentRepertoireIndex, setCurrentRepertoireIndex] = useState(0);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [feedback, setFeedback] = useState<string>("");
@@ -132,6 +135,11 @@ export default function TrainingClient({
       if (isCorrect) {
         setFeedbackSquare({ square: move.to, color: "correct" });
         setStreak((s) => s + 1);
+        
+        // Play correct sound
+        if (soundEffects) {
+          playCorrectSound();
+        }
 
         // Clear feedback and move to next after delay
         setTimeout(() => {
@@ -141,6 +149,11 @@ export default function TrainingClient({
       } else {
         setFeedbackSquare({ square: move.to, color: "incorrect" });
         setStreak(0);
+        
+        // Play incorrect sound
+        if (soundEffects) {
+          playIncorrectSound();
+        }
 
         // Clear feedback after delay
         setTimeout(() => {

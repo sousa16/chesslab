@@ -31,6 +31,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const [showResendButton, setShowResendButton] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,6 +106,35 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     await signIn("google", { callbackUrl: "/home" });
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotPasswordLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/request-password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(data.message);
+        setShowForgotPassword(false);
+        setForgotPasswordEmail("");
+      } else {
+        setError(data.error || "Failed to send reset email");
+      }
+    } catch (error) {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setForgotPasswordLoading(false);
+    }
   };
 
   return (
@@ -179,9 +211,14 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                   className="text-sm font-medium text-slate-300">
                   Password
                 </Label>
-                <a href="#" className="text-xs text-slate-400 hover:text-slate-300 transition-colors">
-                  Forgot password?
-                </a>
+                {isLogin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-xs text-slate-400 hover:text-slate-300 transition-colors">
+                    Forgot password?
+                  </button>
+                )}
               </div>
               <div className="relative">
                 <Input
@@ -263,6 +300,58 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             </button>
           </p>
         </div>
+
+        {/* Forgot Password Modal */}
+        <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+          <DialogContent className="max-w-md">
+            <DialogHeader className="text-center">
+              <DialogTitle className="text-2xl font-semibold text-white">
+                Reset Password
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Enter your email address and we'll send you a link to reset your password.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleForgotPassword} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgotEmail" className="text-sm font-medium text-slate-300">
+                  Email
+                </Label>
+                <Input
+                  id="forgotEmail"
+                  type="email"
+                  value={forgotPasswordEmail}
+                  onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="bg-slate-800/50 border-slate-600 h-11 text-sm text-white placeholder:text-slate-500 focus:bg-slate-800 focus:border-slate-500"
+                  required
+                  disabled={forgotPasswordLoading}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 h-11 text-sm font-medium border-slate-600 hover:bg-slate-800/50 transition-colors"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setForgotPasswordEmail("");
+                  }}
+                  disabled={forgotPasswordLoading}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 h-11 text-sm font-semibold bg-green-500 hover:bg-green-600 text-white transition-colors"
+                  disabled={forgotPasswordLoading}>
+                  {forgotPasswordLoading ? "Sending..." : "Send Reset Link"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

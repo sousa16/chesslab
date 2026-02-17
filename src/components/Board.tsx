@@ -9,6 +9,8 @@ import {
   useImperativeHandle,
   useEffect,
 } from "react";
+import { useSettings } from "@/contexts/SettingsContext";
+import { playMoveSound, playCaptureSound } from "@/lib/sounds";
 
 interface BoardProps {
   playerColor?: "white" | "black";
@@ -74,6 +76,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     const [moves, setMoves] = useState<string[]>([]);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    const { soundEffects, showCoordinates } = useSettings();
 
     // Initialize board with any initial moves
     useEffect(() => {
@@ -263,6 +266,16 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           setMoveHistory(newHistory);
           setCurrentMoveIndex(newHistory.length - 1);
           setPosition(gameRef.current.fen());
+          
+          // Play sound effect
+          if (soundEffects) {
+            if (move.captured) {
+              playCaptureSound();
+            } else {
+              playMoveSound();
+            }
+          }
+          
           onBuildMove?.({ from: sourceSquare, to: targetSquare });
           onMoveMade?.({
             from: sourceSquare,
@@ -301,6 +314,16 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
         setCurrentMoveIndex(newHistory.length - 1);
         setPosition(gameRef.current.fen());
+        
+        // Play sound effect
+        if (soundEffects) {
+          if (move.captured) {
+            playCaptureSound();
+          } else {
+            playMoveSound();
+          }
+        }
+        
         onMoveHistoryChange?.(newHistory.length);
         onMoveMade?.({
           from: sourceSquare,
@@ -475,7 +498,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               position,
               boardOrientation: playerColor,
               onPieceDrop: handlePieceDrop,
-              showNotation: true,
+              showNotation: showCoordinates,
               lightSquareStyle: { backgroundColor: boardColors.light },
               darkSquareStyle: { backgroundColor: boardColors.dark },
               allowDragging:

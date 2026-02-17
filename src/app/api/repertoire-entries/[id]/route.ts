@@ -108,6 +108,7 @@ export async function DELETE(
       },
       include: {
         position: true,
+        repertoire: true,
       },
     });
 

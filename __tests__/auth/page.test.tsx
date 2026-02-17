@@ -45,7 +45,7 @@ describe("AuthPage Component", () => {
       render(<AuthPage />);
 
       expect(
-        screen.getByPlaceholderText("you@example.com")
+        screen.getByPlaceholderText("you@example.com"),
       ).toBeInTheDocument();
       expect(screen.getByPlaceholderText("••••••••")).toBeInTheDocument();
     });
@@ -98,10 +98,10 @@ describe("AuthPage Component", () => {
       render(<AuthPage />);
 
       const emailInput = screen.getByPlaceholderText(
-        "you@example.com"
+        "you@example.com",
       ) as HTMLInputElement;
       const passwordInput = screen.getByPlaceholderText(
-        "••••••••"
+        "••••••••",
       ) as HTMLInputElement;
 
       await user.type(emailInput, "test@example.com");
@@ -119,7 +119,7 @@ describe("AuthPage Component", () => {
         () =>
           new Promise((resolve) => {
             setTimeout(() => resolve({ ok: true }), 100);
-          })
+          }),
       );
 
       const emailInput = screen.getByPlaceholderText("you@example.com");
@@ -157,7 +157,7 @@ describe("AuthPage Component", () => {
         () =>
           new Promise((resolve) => {
             setTimeout(() => resolve(null), 100);
-          })
+          }),
       );
 
       const googleButton = screen.getByText("Google");
@@ -209,7 +209,7 @@ describe("AuthPage Component", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Invalid email or password")
+          screen.getByText("Invalid email or password"),
         ).toBeInTheDocument();
       });
     });
@@ -230,7 +230,7 @@ describe("AuthPage Component", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Something went wrong. Please try again.")
+          screen.getByText("Something went wrong. Please try again."),
         ).toBeInTheDocument();
       });
     });

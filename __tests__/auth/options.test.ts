@@ -1,3 +1,9 @@
+jest.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {},
+  },
+}));
+
 import { authOptions } from "@/lib/auth";
 
 describe("Auth Options Configuration", () => {

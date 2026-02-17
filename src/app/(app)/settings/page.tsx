@@ -15,13 +15,12 @@ export default function Settings() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/auth");
+      router.push("/");
     }
   }, [status, router]);
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false });
-    router.push("/auth");
+    await signOut({ callbackUrl: "/", redirect: true });
   };
 
   if (status === "loading" || !session) {

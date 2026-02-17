@@ -76,7 +76,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 w-full z-50 border-b border-stone-200/80 dark:border-slate-800/50 bg-stone-50/80 dark:bg-slate-950/80 backdrop-blur-md transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex-shrink-0">
-            <Logo size="md" />
+            <Logo size="md" showIcon={true} />
           </div>
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
             <ThemeToggle />

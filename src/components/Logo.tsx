@@ -8,9 +8,10 @@ interface LogoProps {
   size?: "sm" | "md" | "lg" | "xl";
   clickable?: boolean;
   onLogoClick?: () => void;
+  showIcon?: boolean;
 }
 
-export function Logo({ size = "md", clickable = true, onLogoClick }: LogoProps) {
+export function Logo({ size = "md", clickable = true, onLogoClick, showIcon = false }: LogoProps) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
@@ -37,9 +38,18 @@ export function Logo({ size = "md", clickable = true, onLogoClick }: LogoProps) 
   };
 
   const content = (
-    <div className={`font-semibold tracking-tight ${sizeClasses[size]} ${isClickable ? "hover:opacity-80 transition-opacity cursor-pointer" : "cursor-default"}`}>
-      <span className="text-foreground">Chess</span>
-      <span style={{ color: "hsl(158 35% 38%)" }}>lab</span>
+    <div className={`flex items-center gap-2 font-semibold tracking-tight ${sizeClasses[size]} ${isClickable ? "hover:opacity-80 transition-opacity cursor-pointer" : "cursor-default"}`}>
+      {showIcon && (
+        <img 
+          src="/android-chrome-192x192.png" 
+          alt="Chesslab Logo" 
+          className={`${size === 'sm' ? 'w-6 h-6' : size === 'md' ? 'w-8 h-8' : size === 'lg' ? 'w-10 h-10' : 'w-12 h-12'}`}
+        />
+      )}
+      <div>
+        <span className="text-foreground">Chess</span>
+        <span style={{ color: "hsl(158 35% 38%)" }}>lab</span>
+      </div>
     </div>
   );
 

@@ -93,6 +93,7 @@ describe("Training Stats API", () => {
         streak: 0,
         accuracy: 0,
         timeSpentMinutes: 0,
+        positionsReviewedToday: 0,
       });
     });
 

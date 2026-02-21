@@ -140,6 +140,7 @@ export async function GET() {
     let streak = 0;
     let accuracy = 0;
     let timeSpentMinutes = 0;
+    let positionsReviewedToday = 0;
 
     try {
       streak = await calculateStreak(user.id);
@@ -151,20 +152,41 @@ export async function GET() {
 
       let totalCorrect = 0;
       let totalIncorrect = 0;
-      let totalTimeMs = 0;
+      let totalTimeMsAll = 0;
 
       for (const activity of allActivities) {
         totalCorrect += activity.correctCount;
         totalIncorrect += activity.incorrectCount;
-        totalTimeMs += activity.timeSpentMs;
+        totalTimeMsAll += activity.timeSpentMs;
       }
 
       const totalReviews = totalCorrect + totalIncorrect;
       accuracy =
-        totalReviews > 0
-          ? Math.round((totalCorrect / totalReviews) * 100)
-          : 0;
-      timeSpentMinutes = Math.round(totalTimeMs / 60000);
+        totalReviews > 0 ? Math.round((totalCorrect / totalReviews) * 100) : 0;
+
+      // Calculate time spent today specifically (match UTC date used when recording activity)
+      const today = new Date();
+      const todayUTC = new Date(
+        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+      );
+
+      const todaysActivities = await prisma.dailyActivity.findMany({
+        where: { userId: user.id, date: todayUTC },
+      });
+
+      let totalTimeMsToday = 0;
+      let totalPositionsReviewedToday = 0;
+      for (const activity of todaysActivities) {
+        totalTimeMsToday += activity.timeSpentMs;
+        // positionsReviewed is tracked on DailyActivity
+        totalPositionsReviewedToday += activity.positionsReviewed ?? 0;
+      }
+
+      // API returns minutes for the UI; `timeSpentMinutes` should be "today"
+      timeSpentMinutes = Math.round(totalTimeMsToday / 60000);
+
+      // Assign positions reviewed today to outer-scoped variable
+      positionsReviewedToday = totalPositionsReviewedToday;
     } catch (activityError) {
       // If daily activity queries fail, continue with default values
       console.error("Error fetching daily activity:", activityError);
@@ -177,6 +199,7 @@ export async function GET() {
       streak,
       accuracy,
       timeSpentMinutes,
+      positionsReviewedToday,
     });
   } catch (error) {
     console.error("Error fetching training stats:", error);

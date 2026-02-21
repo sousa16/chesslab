@@ -8,30 +8,38 @@ export async function GET(request: Request) {
   try {
     // Optional: Add authentication via secret token
     const authHeader = request.headers.get("authorization");
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (
+      process.env.CRON_SECRET &&
+      authHeader !== `Bearer ${process.env.CRON_SECRET}`
+    ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // Find users with daily reminders enabled
+    // Find users with daily reminders enabled (filter non-null email/emailVerified in JS
+    // to avoid Prisma TypeScript filter typing issues)
     const usersWithReminders = await prisma.user.findMany({
       where: {
         dailyReminder: true,
-        email: { not: null },
-        emailVerified: { not: null },
       },
       select: {
         id: true,
         email: true,
         name: true,
+        emailVerified: true,
       },
     });
 
+    // Filter out users who don't have an email or haven't verified it
+    const eligibleUsers = usersWithReminders.filter(
+      (u) => u.email && u.emailVerified != null,
+    );
+
     const results = [];
 
-    for (const user of usersWithReminders) {
+    for (const user of eligibleUsers) {
       // Get count of overdue positions for this user
       const overdueCount = await prisma.repertoireEntry.count({
         where: {
@@ -46,7 +54,11 @@ export async function GET(request: Request) {
 
       // Only send email if user has overdue positions
       if (overdueCount > 0 && user.email) {
-        const result = await sendDailyReminderEmail(user.email, overdueCount, user.name || undefined);
+        const result = await sendDailyReminderEmail(
+          user.email,
+          overdueCount,
+          user.name || undefined,
+        );
         results.push({
           email: user.email,
           overdueCount,
@@ -64,7 +76,7 @@ export async function GET(request: Request) {
     console.error("Failed to send daily reminders:", error);
     return NextResponse.json(
       { error: "Failed to send daily reminders" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

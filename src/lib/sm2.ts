@@ -175,8 +175,8 @@ export function processReview(
   currentDate: Date = new Date(),
 ): ReviewResult {
   let newCardState = { ...cardState };
-  let nextReviewDate: Date;
-  let message: string;
+  let nextReviewDate: Date = currentDate;
+  let message: string = "";
 
   if (cardState.phase === "learning") {
     // === LEARNING PHASE ===
@@ -257,10 +257,8 @@ export function processReview(
         newCardState.easeFactor,
       );
 
-      // Apply multipliers based on response
-      if (response === "forgot") {
-        intervalFactor = config.lapseIntervalMultiplier;
-      } else if (response === "easy") {
+      // Apply multipliers based on response ("forgot" is handled above)
+      if (response === "easy") {
         intervalFactor = newCardState.easeFactor * config.easyBonus;
       }
 

@@ -21,6 +21,7 @@ interface LineNode {
   moveSequence: string; // e.g., "1. e2e4" or "1. e2e4 c7c5"
   children: LineNode[];
   opponentMove?: string; // The opponent's move that led to this position from parent
+  practiced?: boolean;
 }
 
 interface Opening {
@@ -99,6 +100,8 @@ export async function GET(request: NextRequest) {
         moveNumber: 0,
         moveSequence: "",
         children: [],
+        // mark whether this entry has been practiced at least once
+        practiced: (entry.repetitions ?? 0) > 0 || !!entry.lastReviewDate,
       };
       nodesByEntryId.set(entry.id, node);
 

@@ -17,6 +17,7 @@ interface LineNode {
   moveNumber: number;
   moveSequence: string;
   children: LineNode[];
+  practiced?: boolean;
 }
 
 interface RepertoirePanelProps {
@@ -84,17 +85,33 @@ export function RepertoirePanel({
 
   const totalPositions = countNodes(rootNode);
 
-  // Count positions in review phase (mastered)
-  const countMasteredPositions = (): number => {
-    // This would need to fetch from API with phase data
-    // For now return 0 as placeholder
-    return 0;
+  // Exclude first moves (moveNumber === 1) from mastery calculation
+  const countNodesMatching = (
+    node: LineNode | null,
+    predicate: (n: LineNode) => boolean,
+  ): number => {
+    if (!node) return 0;
+    let count = predicate(node) ? 1 : 0;
+    for (const child of node.children) {
+      count += countNodesMatching(child, predicate);
+    }
+    return count;
   };
 
-  const masteredPositions = countMasteredPositions();
+  const firstMoveCount = countNodesMatching(
+    rootNode,
+    (n) => n.moveNumber === 1,
+  );
+  const totalPositionsExcludingFirst = totalPositions - firstMoveCount;
+
+  const masteredPositions = countNodesMatching(
+    rootNode,
+    (n) => (n.practiced ?? false) && n.moveNumber !== 1,
+  );
+
   const masteryPercentage =
-    totalPositions > 0
-      ? Math.round((masteredPositions / totalPositions) * 100)
+    totalPositionsExcludingFirst > 0
+      ? Math.round((masteredPositions / totalPositionsExcludingFirst) * 100)
       : 0;
 
   const getMasteryStatus = (percentage: number): string => {
@@ -114,7 +131,7 @@ export function RepertoirePanel({
           <ProgressCard
             label="Mastery Level"
             current={masteredPositions}
-            total={totalPositions}
+            total={totalPositionsExcludingFirst}
           />
         </div>
       </PanelHeader>
@@ -147,14 +164,18 @@ export function RepertoirePanel({
             <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-3 lg:mb-4 animate-pulse">
               <span className="text-xl lg:text-2xl">♟</span>
             </div>
-            <p className="text-xs lg:text-sm text-muted-foreground">Loading repertoire...</p>
+            <p className="text-xs lg:text-sm text-muted-foreground">
+              Loading repertoire...
+            </p>
           </div>
         ) : !rootNode || rootNode.children.length === 0 ? (
           <div className="glass-card rounded-xl p-6 lg:p-8 text-center">
             <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl lg:rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mx-auto mb-3 lg:mb-4">
               <span className="text-2xl lg:text-3xl">♔</span>
             </div>
-            <p className="text-sm lg:text-base text-foreground font-medium mb-1 lg:mb-2">No openings yet</p>
+            <p className="text-sm lg:text-base text-foreground font-medium mb-1 lg:mb-2">
+              No openings yet
+            </p>
             <p className="text-xs lg:text-sm text-muted-foreground mb-3 lg:mb-4">
               Start building your repertoire by adding your first opening line.
             </p>
@@ -163,9 +184,7 @@ export function RepertoirePanel({
           <div className="flex-1 overflow-y-auto pr-1">
             <LineTree
               root={rootNode}
-              onBuild={(nodeId, fen, moveSequence) =>
-                onBuild(undefined, nodeId, fen, moveSequence)
-              }
+              onBuild={(nodeId) => onBuild(undefined, nodeId)}
               onLearn={(nodeId) => onLearn(undefined, nodeId)}
               onDelete={handleDeleteEntry}
               onLineClick={onLineClick}

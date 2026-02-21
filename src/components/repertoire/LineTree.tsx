@@ -53,16 +53,31 @@ export function LineTree({
     const uciMoves: string[] = [];
 
     for (const part of parts) {
-      if (!part || part === "..." || part === "[object Object]" || part.includes("[object Object]")) {
+      if (
+        !part ||
+        part === "..." ||
+        part === "[object Object]" ||
+        part.includes("[object Object]")
+      ) {
         continue;
       }
 
       if (part.includes(".")) {
         const movePart = part.split(".")[1];
-        if (movePart && typeof movePart === "string" && movePart.length >= 4 && /^[a-h][1-8][a-h][1-8]/.test(movePart)) {
+        if (
+          movePart &&
+          typeof movePart === "string" &&
+          movePart.length >= 4 &&
+          /^[a-h][1-8][a-h][1-8]/.test(movePart)
+        ) {
           uciMoves.push(movePart);
         }
-      } else if (part.length >= 4 && !part.includes(".") && typeof part === "string" && /^[a-h][1-8][a-h][1-8]/.test(part)) {
+      } else if (
+        part.length >= 4 &&
+        !part.includes(".") &&
+        typeof part === "string" &&
+        /^[a-h][1-8][a-h][1-8]/.test(part)
+      ) {
         uciMoves.push(part);
       }
     }
@@ -86,7 +101,11 @@ export function LineTree({
   };
 
   // If root is a virtual "Starting Position" or "Initial Position" node, render its children directly
-  if ((root.moveSequence === "Starting Position" || root.moveSequence === "Initial Position") && root.children.length > 0) {
+  if (
+    (root.moveSequence === "Starting Position" ||
+      root.moveSequence === "Initial Position") &&
+    root.children.length > 0
+  ) {
     return (
       <div className="space-y-1">
         {root.children.map((child) => (
@@ -153,17 +172,53 @@ function LineNodeComponent({
     }
   };
 
-  const displayMoves = node.moveSequence;
+  // Display abbreviated branch: hide earlier moves as "..." and show only the
+  // last two moves (opponent + user). Keep full sequence in title.
+  const formatBranchMoveSequence = (parts: string[]): string => {
+    const totalPathLength = parts.length;
+
+    // Helper to strip any leading move number (e.g., "1.e2e4" -> "e2e4")
+    const stripNumber = (part: string) => {
+      if (part.includes(".")) return part.split(".")[1];
+      return part;
+    };
+
+    const lastIndex = totalPathLength - 1;
+    const opponentIndex = Math.max(0, totalPathLength - 2);
+
+    const opponentMove = stripNumber(parts[opponentIndex]);
+    const userMove = stripNumber(parts[lastIndex]);
+
+    // Compute move numbers for display
+    const opponentMoveNumber = Math.ceil((opponentIndex + 1) / 2);
+    const userMoveNumber = Math.ceil((lastIndex + 1) / 2);
+
+    const opponentMoveStr = `${opponentMoveNumber}.${opponentMove}`;
+    const userMoveStr = `${userMoveNumber}.${userMove}`;
+
+    return `${opponentMoveStr} ${userMoveStr}`;
+  };
+
+  let displayMoves = node.moveSequence;
+  if (displayMoves && displayMoves !== "Initial Position") {
+    const parts = displayMoves.split(" ").filter((p) => p && p !== "...");
+    if (parts.length > 2) {
+      // Show only the last two moves (opponent + user) to fit mobile
+      displayMoves = formatBranchMoveSequence(parts);
+    }
+  }
 
   return (
-    <div className={`${depth > 0 ? "ml-3 pl-3 border-l border-border/30" : ""}`}>
-      <div className={`
-        relative flex items-start gap-2 p-3 rounded-xl 
+    <div
+      className={`${depth > 0 ? "ml-3 pl-3 border-l border-border/30" : ""}`}>
+      <div
+        className={`
+        relative flex items-center gap-2 p-3 rounded-xl 
         transition-all duration-200 text-left group
         ${isRoot ? "glass-card mb-2" : "hover:bg-surface-2/60"}
       `}>
         {/* Expand/Collapse Button */}
-        <div className="flex-shrink-0 mt-0.5">
+        <div className="flex-shrink-0">
           {hasChildren ? (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
@@ -187,8 +242,8 @@ function LineNodeComponent({
           {/* Move sequence */}
           <div
             onClick={handleLineClick}
-            className="font-mono text-sm cursor-pointer transition-colors truncate text-foreground hover:text-primary"
-            title="Click to display on board">
+            className="font-mono text-sm cursor-pointer transition-colors truncate whitespace-nowrap overflow-hidden text-foreground hover:text-primary"
+            title={displayMoves}>
             {displayMoves}
           </div>
         </div>

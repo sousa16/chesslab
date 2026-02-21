@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { Board, BoardHandle } from "@/components/Board";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 
 // Mock react-chessboard
 jest.mock("react-chessboard", () => ({
@@ -14,25 +15,30 @@ jest.mock("react-chessboard", () => ({
   ),
 }));
 
+// Helper to render with SettingsProvider
+const renderWithSettings = (component: React.ReactElement) => {
+  return render(<SettingsProvider>{component}</SettingsProvider>);
+};
+
 describe("Board Component", () => {
   it("should render the chessboard", () => {
-    render(<Board />);
+    renderWithSettings(<Board />);
     expect(screen.getByTestId("chessboard")).toBeInTheDocument();
   });
 
   it("should render with default white orientation", () => {
-    render(<Board />);
+    renderWithSettings(<Board />);
     const chessboard = screen.getByTestId("chessboard");
     expect(chessboard).toBeInTheDocument();
   });
 
   it("should render with black orientation when playerColor is black", () => {
-    render(<Board playerColor="black" />);
+    renderWithSettings(<Board playerColor="black" />);
     expect(screen.getByTestId("chessboard")).toBeInTheDocument();
   });
 
   it("should render starting position FEN", () => {
-    render(<Board />);
+    renderWithSettings(<Board />);
     const chessboard = screen.getByTestId("chessboard");
     // Standard chess starting position
     expect(chessboard.getAttribute("data-fen")).toBe(
@@ -41,20 +47,20 @@ describe("Board Component", () => {
   });
 
   it("should have proper styling classes", () => {
-    const { container } = render(<Board />);
+    const { container } = renderWithSettings(<Board />);
     const boardWrapper = container.querySelector('[data-testid="board"]');
     expect(boardWrapper).toHaveClass("w-full", "aspect-square", "max-w-2xl");
   });
 
   it("should allow dragging at initial position", () => {
-    render(<Board />);
+    renderWithSettings(<Board />);
     const chessboard = screen.getByTestId("chessboard");
     expect(chessboard.getAttribute("data-dragging-allowed")).toBe("true");
   });
 
   it("should support move history navigation via ref", () => {
     const ref = React.createRef<BoardHandle>();
-    render(<Board ref={ref} />);
+    renderWithSettings(<Board ref={ref} />);
 
     expect(ref.current).toBeDefined();
     expect(ref.current?.goToFirst).toBeDefined();
@@ -66,7 +72,7 @@ describe("Board Component", () => {
 
   it("should disable dragging when viewing history", () => {
     const ref = React.createRef<BoardHandle>();
-    const { rerender } = render(<Board ref={ref} />);
+    const { rerender } = renderWithSettings(<Board ref={ref} />);
 
     // Navigate back (would disable dragging if we had moves)
     // Since we can't make actual moves in test with mocked chessboard,
@@ -75,14 +81,14 @@ describe("Board Component", () => {
   });
 
   it("should show history indicator when viewing past moves", () => {
-    render(<Board />);
+    renderWithSettings(<Board />);
     // Initially no indicator should show
     expect(screen.queryByText("Viewing move history")).not.toBeInTheDocument();
   });
 
   it("should call onMoveHistoryChange callback when provided", () => {
     const mockOnMoveHistoryChange = jest.fn();
-    render(<Board onMoveHistoryChange={mockOnMoveHistoryChange} />);
+    renderWithSettings(<Board onMoveHistoryChange={mockOnMoveHistoryChange} />);
 
     // The component should exist and be ready for moves
     expect(screen.getByTestId("chessboard")).toBeInTheDocument();

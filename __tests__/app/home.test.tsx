@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SessionProvider } from "next-auth/react";
-import Home from "@/app/(app)/page";
+import Home from "@/app/(app)/home/page";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -21,21 +21,33 @@ jest.mock("next/navigation", () => ({
 }));
 
 // Mock Board component
+const mockBoardReset = jest.fn();
 jest.mock("@/components/Board", () => ({
-  Board: React.forwardRef(({ playerColor, onMoveMade }: any, ref: any) => (
-    <div
-      data-testid="chessboard"
-      data-player-color={playerColor}
-      onClick={() =>
-        onMoveMade?.({
-          from: "e2",
-          to: "e4",
-          san: "e4",
-        })
-      }>
-      Board Component
-    </div>
-  )),
+  Board: React.forwardRef(({ playerColor, onMoveMade }: any, ref: any) => {
+    React.useImperativeHandle(ref, () => ({
+      reset: mockBoardReset,
+      goToFirst: jest.fn(),
+      goToPrevious: jest.fn(),
+      goToNext: jest.fn(),
+      goToLast: jest.fn(),
+      getMoveHistory: jest.fn(() => []),
+      deleteToMove: jest.fn(),
+    }));
+    return (
+      <div
+        data-testid="chessboard"
+        data-player-color={playerColor}
+        onClick={() =>
+          onMoveMade?.({
+            from: "e2",
+            to: "e4",
+            san: "e4",
+          })
+        }>
+        Board Component
+      </div>
+    );
+  }),
   BoardHandle: {},
 }));
 
@@ -101,6 +113,7 @@ describe("Home Page", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockBoardReset.mockClear();
     mockUseRouter.mockReturnValue({
       push: mockPush,
       replace: jest.fn(),
@@ -124,7 +137,7 @@ describe("Home Page", () => {
     expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
 
-  it("should redirect to auth when unauthenticated", () => {
+  it("should redirect to landing page when unauthenticated", () => {
     mockUseSession.mockReturnValue({
       data: null,
       status: "unauthenticated",
@@ -133,7 +146,7 @@ describe("Home Page", () => {
 
     render(<Home />);
 
-    expect(mockPush).toHaveBeenCalledWith("/auth");
+    expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   it("should render home page when user is authenticated", () => {
@@ -242,8 +255,8 @@ describe("Home Page", () => {
     // Click the board to trigger onMoveMade (simulating a move)
     fireEvent.click(screen.getByTestId("chessboard"));
 
-    // Verify navigation to build/white with the move
-    expect(mockPush).toHaveBeenCalledWith("/build/white?move=e4");
+    // Verify navigation to build/white (move is stored in sessionStorage)
+    expect(mockPush).toHaveBeenCalledWith("/build/white");
   });
 
   it("should navigate to build black page when a move is made with black", () => {
@@ -261,7 +274,20 @@ describe("Home Page", () => {
     // Click the board to trigger onMoveMade (simulating a move)
     fireEvent.click(screen.getByTestId("chessboard"));
 
-    // Verify navigation to build/black with the move
-    expect(mockPush).toHaveBeenCalledWith("/build/black?move=e4");
+    // Verify navigation to build/black (move is stored in sessionStorage)
+    expect(mockPush).toHaveBeenCalledWith("/build/black");
+  });
+
+  it("should reset board when home page mounts", () => {
+    mockUseSession.mockReturnValue({
+      data: mockSession,
+      status: "authenticated",
+      update: jest.fn(),
+    } as any);
+
+    render(<Home />);
+
+    // Verify that reset was called when component mounted
+    expect(mockBoardReset).toHaveBeenCalled();
   });
 });

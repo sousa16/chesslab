@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { signIn } from "next-auth/react";
+import { CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function AuthPage() {
   const searchParams = useSearchParams();
@@ -19,6 +20,7 @@ export default function AuthPage() {
   const [success, setSuccess] = useState("");
   const [showResendButton, setShowResendButton] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     // Check for verification success
@@ -59,10 +61,10 @@ export default function AuthPage() {
           setShowResendButton(true);
         }
       } else if (result?.ok) {
-        window.location.href = "/";
+        window.location.href = "/home";
       }
     } catch (error) {
-      setError("An unexpected error occurred");
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -89,13 +91,13 @@ export default function AuthPage() {
 
       if (response.ok) {
         setSuccess(
-          data.message || "Verification email sent! Check your inbox."
+          data.message || "Verification email sent! Check your inbox.",
         );
       } else {
-        setError(data.error || "Failed to resend email");
+        setError(data.error || "Couldn't send email. Please try again.");
       }
     } catch (error) {
-      setError("Failed to resend verification email");
+      setError("Connection error. Please check your internet.");
     } finally {
       setResendLoading(false);
     }
@@ -103,38 +105,62 @@ export default function AuthPage() {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    await signIn("google", { callbackUrl: "/" });
+    await signIn("google", { callbackUrl: "/home" });
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-12">
-          <Logo size="xl" />
-          <p className="text-xl text-muted-foreground mt-4">
-            Master your opening repertoire
-          </p>
-        </div>
+        {/* Card */}
+        <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-8 space-y-6 shadow-2xl">
+          {/* Logo */}
+          <div className="flex justify-center mb-2">
+            <div className="inline-block">
+              <Logo size="lg" clickable={false} />
+            </div>
+          </div>
 
-        {/* Auth Card */}
-        <div className="bg-surface-1 border border-border rounded-xl p-8 space-y-8">
-          <h1 className="text-4xl font-semibold text-foreground text-center">
-            {isLogin ? "Welcome back" : "Create your account"}
-          </h1>
+          {/* Title */}
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl font-semibold text-white">
+              {isLogin ? "Welcome back" : "Create your account"}
+            </h1>
+            <p className="text-sm text-slate-400">
+              {isLogin
+                ? "Login to your ChessLab account"
+                : "Join ChessLab to build your repertoire"}
+            </p>
+          </div>
 
-          {/* Error Message */}
-          {error && <p className="text-red-500 text-lg text-center">{error}</p>}
+          {/* Alert Messages */}
+          {error && (
+            <div className="relative overflow-hidden flex items-start gap-3 p-4 rounded-xl border border-red-500/30 bg-gradient-to-r from-red-500/20 via-red-500/10 to-transparent backdrop-blur-sm">
+              <div className="absolute top-0 left-0 w-24 h-24 bg-red-500/20 rounded-full blur-2xl -ml-12 -mt-12" />
+              <div className="relative w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-4 h-4 text-red-400" />
+              </div>
+              <p className="relative text-red-300 text-sm font-medium pt-1.5">
+                {error}
+              </p>
+            </div>
+          )}
 
-          {/* Success Message */}
           {success && (
-            <div className="space-y-4">
-              <p className="text-green-500 text-lg text-center">{success}</p>
+            <div>
+              <div className="relative overflow-hidden flex items-start gap-3 p-4 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/20 via-emerald-500/10 to-transparent backdrop-blur-sm">
+                <div className="absolute top-0 left-0 w-24 h-24 bg-emerald-500/20 rounded-full blur-2xl -ml-12 -mt-12" />
+                <div className="relative w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                </div>
+                <p className="relative text-emerald-300 text-sm font-medium pt-1.5">
+                  {success}
+                </p>
+              </div>
               {showResendButton && (
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full h-12 text-lg"
+                  className="w-full h-10 text-sm mt-4"
                   onClick={handleResendEmail}
                   disabled={resendLoading}>
                   {resendLoading ? "Sending..." : "Resend Verification Email"}
@@ -143,14 +169,88 @@ export default function AuthPage() {
             </div>
           )}
 
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-slate-300">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="bg-slate-800/50 border-slate-600 h-11 text-sm text-white placeholder:text-slate-500 focus:bg-slate-800 focus:border-slate-500"
+                required
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="password"
+                  className="text-sm font-medium text-slate-300">
+                  Password
+                </Label>
+                <a
+                  href="#"
+                  className="text-xs text-slate-400 hover:text-slate-300 transition-colors">
+                  Forgot password?
+                </a>
+              </div>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="bg-slate-800/50 border-slate-600 h-11 text-sm text-white placeholder:text-slate-500 pr-10 focus:bg-slate-800 focus:border-slate-500"
+                  required
+                  minLength={8}
+                  disabled={isLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400 transition-colors"
+                  disabled={isLoading}>
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full h-11 text-sm font-semibold bg-green-500 hover:bg-green-600 text-white transition-colors mt-6"
+              disabled={isLoading}>
+              {isLoading ? "Loading..." : isLogin ? "Login" : "Create account"}
+            </Button>
+          </form>
+
+          {/* Divider */}
+          <div className="relative my-4">
+            <Separator className="bg-slate-700/50" />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900/50 px-2 text-xs text-slate-400 font-medium">
+              OR CONTINUE WITH
+            </span>
+          </div>
+
           {/* Google Sign In */}
           <Button
             variant="outline"
-            className="w-full gap-2 h-14 text-xl"
+            className="w-full gap-2 h-11 text-sm font-medium border-slate-600 hover:bg-slate-800/50 transition-colors"
             onClick={handleGoogleSignIn}
-            disabled={isLoading}
-            style={{ cursor: isLoading ? "not-allowed" : "pointer" }}>
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
+            disabled={isLoading}>
+            <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
                 fill="currentColor"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -168,72 +268,16 @@ export default function AuthPage() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Continue with Google
+            Google
           </Button>
 
-          <div className="relative my-4">
-            <Separator />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-1 px-2 text-lg text-muted-foreground">
-              or
-            </span>
-          </div>
-
-          {/* Email Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-3">
-              <Label htmlFor="email" className="text-lg text-muted-foreground">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="bg-surface-2 border-border h-14 text-lg"
-                required
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="space-y-3">
-              <Label
-                htmlFor="password"
-                className="text-lg text-muted-foreground">
-                Password
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="bg-surface-2 border-border h-14 text-lg"
-                required
-                minLength={8}
-                disabled={isLoading}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full h-14 text-xl"
-              disabled={isLoading}>
-              {isLoading
-                ? "Loading..."
-                : isLogin
-                ? "Sign in"
-                : "Create account"}
-            </Button>
-          </form>
-
-          {/* Toggle */}
-          <p className="text-center text-lg text-muted-foreground mt-10">
+          {/* Footer */}
+          <p className="text-center text-sm text-slate-400">
             {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
               type="button"
               onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline cursor-pointer text-xl font-semibold">
+              className="text-green-400 hover:text-green-300 font-semibold transition-colors cursor-pointer">
               {isLogin ? "Sign up" : "Sign in"}
             </button>
           </p>

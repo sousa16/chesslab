@@ -67,7 +67,7 @@ export const authOptions: NextAuthOptions = {
 
           // Don't automatically log them in - they need to verify first
           throw new Error(
-            "Please check your email to verify your account before signing in"
+            "Please check your email to verify your account before signing in",
           );
         } else {
           // Login
@@ -81,7 +81,7 @@ export const authOptions: NextAuthOptions = {
 
           const isPasswordValid = await bcrypt.compare(
             password,
-            user.hashedPassword
+            user.hashedPassword,
           );
 
           if (!isPasswordValid) {
@@ -129,7 +129,7 @@ export const authOptions: NextAuthOptions = {
             await sendVerificationEmail(email, token);
 
             throw new Error(
-              "Please verify your email before signing in. A new verification email has been sent."
+              "Please verify your email before signing in. A new verification email has been sent.",
             );
           }
 
@@ -138,28 +138,70 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
             name: user.name,
             image: user.image,
+            emailVerified: user.emailVerified,
+            createdAt: user.createdAt,
           };
         }
       },
     }),
   ],
   pages: {
-    signIn: "/auth",
+    signIn: "/",
+    signOut: "/",
   },
   session: {
     strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24 hours
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, account }) {
+      // On initial sign in, user object is passed
       if (user) {
         token.id = user.id;
+        token.createdAt = user.createdAt;
+        
+        // For OAuth providers, ensure emailVerified is set
+        if (account?.provider && account.provider !== "credentials") {
+          // Fetch current user state
+          const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { emailVerified: true },
+          });
+          
+          // If not verified, set it (OAuth emails are pre-verified)
+          if (dbUser && !dbUser.emailVerified) {
+            const updated = await prisma.user.update({
+              where: { id: user.id },
+              data: { emailVerified: new Date() },
+              select: { emailVerified: true },
+            });
+            token.emailVerified = updated.emailVerified;
+          } else {
+            token.emailVerified = dbUser?.emailVerified || null;
+          }
+        } else {
+          token.emailVerified = user.emailVerified;
+        }
       }
+      
+      // Refresh user data on session update
+      if (trigger === "update" && token.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { emailVerified: true },
+        });
+        if (dbUser) {
+          token.emailVerified = dbUser.emailVerified;
+        }
+      }
+      
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.emailVerified = token.emailVerified as Date | null;
+        session.user.createdAt = token.createdAt as Date;
       }
       return session;
     },

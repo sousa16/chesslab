@@ -34,14 +34,14 @@ export async function POST(request: NextRequest) {
     if (!color || !["white", "black"].includes(color)) {
       return NextResponse.json(
         { error: "Invalid color: must be 'white' or 'black'" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!Array.isArray(movesInSan) || movesInSan.length === 0) {
       return NextResponse.json(
         { error: "movesInSan must be a non-empty array" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       return NextResponse.json(
         { error: `Invalid move sequence: ${(error as Error).message}` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       color,
       [],
       movesInSan,
-      movesInUci
+      movesInUci,
     );
 
     return NextResponse.json(
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         success: true,
         entriesCreated: movesInSan.length,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -84,13 +84,13 @@ export async function POST(request: NextRequest) {
         {
           error: "Repertoire not found. Please create a repertoire first.",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     return NextResponse.json(
       { error: `Failed to save line: ${errorMessage}` },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

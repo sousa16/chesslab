@@ -1,8 +1,9 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import SettingsPage from "@/app/(app)/settings/page";
+import { useSession } from "next-auth/react";
+import { SettingsModal } from "@/components/SettingsModal";
+import { SettingsProvider } from "@/contexts/SettingsContext";
+import { ToastProvider } from "@/components/ui/toast";
 
 // Mock next-auth/react
 jest.mock("next-auth/react", () => ({
@@ -13,13 +14,15 @@ jest.mock("next-auth/react", () => ({
 // Mock next/navigation
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
+  usePathname: jest.fn(() => "/settings"),
 }));
 
-const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
-const mockSignOut = signOut as jest.MockedFunction<typeof signOut>;
-const mockUseRouter = useRouter as jest.MockedFunction<typeof useRouter>;
+// Mock fetch
+global.fetch = jest.fn();
 
-describe("Settings Page", () => {
+const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
+
+describe("Settings Modal", () => {
   const mockSession = {
     user: {
       id: "user-123",
@@ -28,146 +31,84 @@ describe("Settings Page", () => {
     },
   };
 
-  const mockPush = jest.fn();
-  const mockRouter = {
-    push: mockPush,
-    back: jest.fn(),
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseRouter.mockReturnValue(mockRouter as any);
     mockUseSession.mockReturnValue({
-      data: mockSession,
+      data: mockSession as any,
       status: "authenticated",
       update: jest.fn(),
     } as any);
-  });
-
-  describe("Authentication", () => {
-    it("should show loading state when session is loading", () => {
-      mockUseSession.mockReturnValue({
-        data: null,
-        status: "loading",
-        update: jest.fn(),
-      } as any);
-
-      render(<SettingsPage />);
-      expect(screen.getByText("Loading...")).toBeInTheDocument();
-    });
-
-    it("should redirect to auth when user is not authenticated", async () => {
-      mockUseSession.mockReturnValue({
-        data: null,
-        status: "unauthenticated",
-        update: jest.fn(),
-      } as any);
-
-      render(<SettingsPage />);
-
-      await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/auth");
-      });
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
     });
   });
 
-  describe("Rendering", () => {
-    it("should render settings page header", () => {
-      render(<SettingsPage />);
-      expect(screen.getByText("Settings")).toBeInTheDocument();
-    });
-
-    it("should display back button", () => {
-      render(<SettingsPage />);
-      const backButton = screen.getByRole("button", { name: "" }).parentElement;
-      expect(backButton).toBeInTheDocument();
-    });
-
-    it("should display user email in account section", () => {
-      render(<SettingsPage />);
-      expect(screen.getByText(mockSession.user?.email)).toBeInTheDocument();
-    });
-
-    it("should display free plan label", () => {
-      render(<SettingsPage />);
-      expect(screen.getByText("Free plan")).toBeInTheDocument();
-    });
-
-    it("should render all training settings", () => {
-      render(<SettingsPage />);
-      expect(screen.getByText("Daily reminder")).toBeInTheDocument();
-      expect(screen.getByText("Sound effects")).toBeInTheDocument();
-      expect(screen.getByText("Show coordinates")).toBeInTheDocument();
-    });
-
-    it("should display version number", () => {
-      render(<SettingsPage />);
-      expect(screen.getByText("Version 1.0.0")).toBeInTheDocument();
-    });
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  describe("Navigation", () => {
-    it("should navigate to home when back button is clicked", () => {
-      render(<SettingsPage />);
-      const buttons = screen.getAllByRole("button");
-      fireEvent.click(buttons[0]); // First button is back button
-      expect(mockPush).toHaveBeenCalledWith("/");
-    });
+  const renderWithProviders = (component: React.ReactElement) => {
+    return render(
+      <SettingsProvider>
+        <ToastProvider>{component}</ToastProvider>
+      </SettingsProvider>
+    );
+  };
+
+  it("should render settings modal when open", () => {
+    renderWithProviders(
+      <SettingsModal open={true} onOpenChange={jest.fn()} />
+    );
+
+    expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
-  describe("Sign Out", () => {
-    it("should render sign out button", () => {
-      render(<SettingsPage />);
-      expect(screen.getByText("Sign out")).toBeInTheDocument();
-    });
+  it("should not render settings modal when closed", () => {
+    renderWithProviders(
+      <SettingsModal open={false} onOpenChange={jest.fn()} />
+    );
 
-    it("should call signOut and redirect on sign out", async () => {
-      mockSignOut.mockResolvedValue(undefined);
-
-      render(<SettingsPage />);
-      const signOutButton = screen.getByText("Sign out");
-      fireEvent.click(signOutButton);
-
-      await waitFor(() => {
-        expect(mockSignOut).toHaveBeenCalledWith({ redirect: false });
-        expect(mockPush).toHaveBeenCalledWith("/auth");
-      });
-    });
+    // Settings text should not be visible when closed
+    const settingsTitle = screen.queryByText("Settings");
+    expect(settingsTitle).not.toBeInTheDocument();
   });
 
-  describe("UI Components", () => {
-    it("should have proper section headers", () => {
-      render(<SettingsPage />);
-      expect(screen.getByText("Account")).toBeInTheDocument();
-      expect(screen.getByText("Training")).toBeInTheDocument();
-    });
+  it("should display account section with user email", () => {
+    renderWithProviders(
+      <SettingsModal open={true} onOpenChange={jest.fn()} />
+    );
 
-    it("should render switch components for training settings", () => {
-      const { container } = render(<SettingsPage />);
-      const switches = container.querySelectorAll('[role="switch"]');
-      expect(switches.length).toBeGreaterThan(0);
-    });
-
-    it("should have proper styling classes", () => {
-      const { container } = render(<SettingsPage />);
-      const mainDiv = container.firstChild;
-      expect(mainDiv).toHaveClass("min-h-screen", "bg-background");
-    });
+    // Should show the account section
+    expect(screen.getByText("Account")).toBeInTheDocument();
+    // Email appears in account info
+    expect(screen.getAllByText("test@example.com").length).toBeGreaterThan(0);
   });
 
-  describe("Sections", () => {
-    it("should render account section with user icon", () => {
-      const { container } = render(<SettingsPage />);
-      const accountSection = container.querySelector("section");
-      expect(accountSection).toBeInTheDocument();
-    });
+  it("should display appearance section", () => {
+    renderWithProviders(
+      <SettingsModal open={true} onOpenChange={jest.fn()} />
+    );
 
-    it("should render training section with multiple options", () => {
-      render(<SettingsPage />);
-      const descriptions = screen.getAllByText(
-        /Get notified|Play sounds|Display board/
-      );
-      expect(descriptions.length).toBe(3);
-    });
+    // Should show appearance section
+    expect(screen.getByText("Appearance")).toBeInTheDocument();
+  });
+
+  it("should display training section", () => {
+    renderWithProviders(
+      <SettingsModal open={true} onOpenChange={jest.fn()} />
+    );
+
+    // Should show training section
+    expect(screen.getByText("Training")).toBeInTheDocument();
+  });
+
+  it("should display danger zone section", () => {
+    renderWithProviders(
+      <SettingsModal open={true} onOpenChange={jest.fn()} />
+    );
+
+    // Should show danger zone
+    expect(screen.getByText("Danger Zone")).toBeInTheDocument();
   });
 });

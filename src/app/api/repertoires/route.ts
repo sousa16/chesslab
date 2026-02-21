@@ -26,6 +26,7 @@ interface LineNode {
 interface Opening {
   id: string;
   name: string;
+  notes?: string;
   root: LineNode | null;
 }
 
@@ -33,7 +34,11 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
+    // Support both session.user.id and session.user.email for auth
+    const userId = session?.user?.id;
+    const userEmail = session?.user?.email;
+
+    if (!userId && !userEmail) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -46,11 +51,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get the user's repertoire for this color
+    // If we have user ID, use it directly; otherwise look up by email
+    let actualUserId = userId;
+    if (!actualUserId && userEmail) {
+      const user = await prisma.user.findUnique({
+        where: { email: userEmail },
+        select: { id: true },
+      });
+      if (!user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+      actualUserId = user.id;
+    }
+
+    // Get the user's repertoire for this color with ALL entries
     const repertoire = await prisma.repertoire.findUnique({
       where: {
         userId_color: {
-          userId: session.user.id,
+          userId: actualUserId!,
           color: color === "white" ? "White" : "Black",
         },
       },
@@ -66,26 +84,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ openings: [] }, { status: 200 });
     }
 
-    // Build opening lines as hierarchical trees
-    // Each entry represents a position where it's the user's turn to move
-    // The tree shows the user's moves and opponent responses
+    // Build a single tree from all entries
+    const entries = repertoire.entries;
 
-    const nodesByEntryId = new Map<string, LineNode>(); // Map by entry ID to handle multiple moves from same position
-    const nodesByFen = new Map<string, LineNode[]>(); // Multiple nodes can have the same FEN (different expected moves)
+    const nodesByEntryId = new Map<string, LineNode>();
+    const nodesByFen = new Map<string, LineNode[]>();
 
     // First pass: create nodes for each position where user moves
-    for (const entry of repertoire.entries) {
+    for (const entry of entries) {
       const node: LineNode = {
         id: entry.id,
         fen: entry.position.fen,
         expectedMove: entry.expectedMove,
-        moveNumber: 0, // Will be calculated later
-        moveSequence: "", // Will be calculated later
+        moveNumber: 0,
+        moveSequence: "",
         children: [],
       };
       nodesByEntryId.set(entry.id, node);
 
-      // Track all nodes by FEN (can have multiple)
       if (!nodesByFen.has(entry.position.fen)) {
         nodesByFen.set(entry.position.fen, []);
       }
@@ -112,7 +128,7 @@ export async function GET(request: NextRequest) {
 
         // After user's move, it's opponent's turn
         const posAfterUserMove = game.fen();
-        const foundChildren = new Set<string>(); // Track children we've added to avoid duplicates
+        const foundChildren = new Set<string>();
 
         // Find saved positions reachable by opponent moves
         const testGameForMoves = new Chess(posAfterUserMove);
@@ -123,12 +139,10 @@ export async function GET(request: NextRequest) {
           testGame.move(moveObj.san);
           const fensAfterOpponentMove = testGame.fen();
 
-          // Check if this FEN has any saved positions
           const childNodes = nodesByFen.get(fensAfterOpponentMove);
           if (childNodes) {
             for (const childNode of childNodes) {
               if (!foundChildren.has(childNode.id)) {
-                // Store the opponent's move in UCI format, same as expectedMove
                 childNode.opponentMove = `${moveObj.from}${moveObj.to}${
                   moveObj.promotion || ""
                 }`;
@@ -141,7 +155,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Third pass: identify root nodes (positions not reachable from other saved positions)
+    // Third pass: identify root nodes
     const positionsThatAreChildren = new Set<string>();
     for (const nodes of nodesByFen.values()) {
       for (const node of nodes) {
@@ -155,62 +169,59 @@ export async function GET(request: NextRequest) {
       .flat()
       .filter((node) => !positionsThatAreChildren.has(node.fen));
 
-    // Calculate move sequences by reconstructing the path from root to each node
+    // Calculate move sequences
     const calculateSequences = (
       node: LineNode,
       pathMoves: string[],
       isRoot: boolean,
     ) => {
-      // Add opponent's move that led to this position (if any)
       const nodeMoves = [...pathMoves];
       if (node.opponentMove) {
         nodeMoves.push(node.opponentMove);
       }
-      // Add this node's expected move
       nodeMoves.push(node.expectedMove);
 
-      // For non-root nodes, only show the immediate moves (last 2: opponent move + user move)
-      // For root nodes, show the full sequence
-      if (isRoot) {
-        node.moveSequence = formatMoveSequence(nodeMoves);
-      } else {
-        // Show only the last 2 moves: opponent's move and user's move
-        const lastTwoMoves = nodeMoves.slice(-2);
-        node.moveSequence = formatBranchMoveSequence(
-          lastTwoMoves,
-          nodeMoves.length,
-        );
-      }
+      // Always show the full move sequence, not just the last moves
+      node.moveSequence = formatMoveSequence(nodeMoves);
+      node.moveNumber = Math.ceil(nodeMoves.length / 2);
 
-      node.moveNumber = Math.ceil(nodeMoves.length / 2); // Move number is ceil(halfMoves / 2)
-
-      // Recursively process children (not root anymore)
       for (const child of node.children) {
         calculateSequences(child, nodeMoves, false);
       }
     };
 
-    // Start from root nodes with empty move sequence
     for (const rootNode of rootNodes) {
       rootNode.moveSequence = formatMoveSequence([rootNode.expectedMove]);
       rootNode.moveNumber = 1;
 
-      // Process children, passing the user's first move
       for (const child of rootNode.children) {
         calculateSequences(child, [rootNode.expectedMove], false);
       }
     }
 
-    const openings: Opening[] = rootNodes.map((root) => ({
-      id: "opening-" + root.id,
-      name: computeOpeningName(root),
-      root,
-    }));
+    // If there are multiple root nodes, create a mega-root that contains them all
+    let finalRoot: LineNode | null = null;
+    if (rootNodes.length === 1) {
+      finalRoot = rootNodes[0];
+    } else if (rootNodes.length > 1) {
+      // Create a virtual root node that contains all root variations
+      finalRoot = {
+        id: "virtual-root-" + repertoire.id,
+        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", // Starting position
+        expectedMove: "",
+        moveNumber: 0,
+        moveSequence: "Starting Position",
+        children: rootNodes,
+      };
+    }
 
-    return NextResponse.json({ openings }, { status: 200 });
+    // Return the tree directly - the root nodes are the openings
+    return NextResponse.json({ root: finalRoot }, { status: 200 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : "";
     console.error("Error fetching repertoires:", errorMessage);
+    console.error("Stack trace:", errorStack);
 
     return NextResponse.json(
       { error: `Failed to fetch repertoires: ${errorMessage}` },
@@ -278,26 +289,4 @@ function formatBranchMoveSequence(
   const opponentMoveStr = `${opponentMoveNumber}.${opponentMove}`;
 
   return `${opponentMoveStr} ${userMoveNumber}.${userMove}`;
-}
-
-/**
- * Compute an opening name based on the opening moves
- */
-function computeOpeningName(node: LineNode): string {
-  const seq = node.moveSequence.toLowerCase();
-
-  // Check for common openings
-  if (seq.includes("e2e4")) {
-    if (seq.includes("c7c5")) return "Sicilian Defense";
-    if (seq.includes("e7e5")) return "Open Games (1. e4 e5)";
-    return "1. e4 Openings";
-  }
-  if (seq.includes("d2d4")) {
-    if (seq.includes("d7d5")) return "Queen's Gambit";
-    if (seq.includes("g8f6")) return "1. d4 Nf6";
-    return "1. d4 Openings";
-  }
-  if (seq.includes("c2c4")) return "English Opening";
-
-  return "Opening Lines";
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Hammer, GraduationCap } from "lucide-react";
 import {
   PanelHeader,
@@ -19,17 +19,17 @@ interface LineNode {
   children: LineNode[];
 }
 
-interface Opening {
-  id: string;
-  name: string;
-  root: LineNode | null;
-}
-
 interface RepertoirePanelProps {
   color: "white" | "black";
   onBack: () => void;
-  onBuild: (openingId?: string, lineId?: string) => void;
+  onBuild: (
+    openingId?: string,
+    lineId?: string,
+    fen?: string,
+    moveSequence?: string,
+  ) => void;
   onLearn: (openingId?: string, lineId?: string) => void;
+  onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (moves: string[], startingFen: string) => void;
 }
 
@@ -38,40 +38,71 @@ export function RepertoirePanel({
   onBack,
   onBuild,
   onLearn,
+  onDelete,
   onLineClick,
 }: RepertoirePanelProps) {
-  const [openings, setOpenings] = useState<Opening[]>([]);
+  const [rootNode, setRootNode] = useState<LineNode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchRepertoire = async () => {
-      try {
-        const response = await fetch(`/api/repertoires?color=${color}`);
-        if (response.ok) {
-          const data = await response.json();
-          setOpenings(data.openings);
-        }
-      } catch (error) {
-        console.error("Error fetching repertoire:", error);
-        // For now, don't fall back to static data - show empty
-      } finally {
-        setIsLoading(false);
+  const fetchRepertoire = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/repertoires?color=${color}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRootNode(data.root);
       }
-    };
-
-    fetchRepertoire();
+    } catch (error) {
+      console.error("Error fetching repertoire:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }, [color]);
 
-  // Count total positions from openings
+  useEffect(() => {
+    fetchRepertoire();
+  }, [fetchRepertoire]);
+
+  // Delete an entry and refresh
+  const handleDeleteEntry = async (nodeId: string): Promise<void> => {
+    try {
+      const response = await fetch(`/api/repertoire-entries/${nodeId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        fetchRepertoire();
+      }
+    } catch (error) {
+      console.error("Error deleting entry:", error);
+    }
+  };
+
+  // Count total positions from root
   const countNodes = (node: LineNode | null): number => {
     if (!node) return 0;
     return 1 + node.children.reduce((sum, child) => sum + countNodes(child), 0);
   };
 
-  const totalPositions = openings.reduce(
-    (sum, opening) => sum + countNodes(opening.root),
-    0,
-  );
+  const totalPositions = countNodes(rootNode);
+
+  // Count positions in review phase (mastered)
+  const countMasteredPositions = (): number => {
+    // This would need to fetch from API with phase data
+    // For now return 0 as placeholder
+    return 0;
+  };
+
+  const masteredPositions = countMasteredPositions();
+  const masteryPercentage =
+    totalPositions > 0
+      ? Math.round((masteredPositions / totalPositions) * 100)
+      : 0;
+
+  const getMasteryStatus = (percentage: number): string => {
+    if (percentage === 0) return "Not started yet!";
+    if (percentage < 50) return "Keep practicing!";
+    if (percentage < 100) return "Almost there!";
+    return "Complete!";
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -79,17 +110,17 @@ export function RepertoirePanel({
         title={`${color.charAt(0).toUpperCase() + color.slice(1)} Repertoire`}
         onBack={onBack}
         icon={<ColorBadge color={color} />}>
-        <div className="p-4 pt-0">
+        <div className="p-3 lg:p-4 pt-0">
           <ProgressCard
-            label="Positions Added"
-            current={totalPositions}
-            total={Math.max(totalPositions, 1)}
+            label="Mastery Level"
+            current={masteredPositions}
+            total={totalPositions}
           />
         </div>
       </PanelHeader>
 
       {/* Global Actions */}
-      <div className="p-4 space-y-3 border-b border-border">
+      <div className="p-4 lg:p-5 space-y-2 lg:space-y-3 border-b border-border/50">
         <ActionButton
           icon={Hammer}
           title="Build"
@@ -107,40 +138,39 @@ export function RepertoirePanel({
       </div>
 
       {/* Openings Tree */}
-      <div className="flex-1 p-4 overflow-hidden">
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
-          Lines
+      <div className="flex-1 p-4 lg:p-5 overflow-hidden flex flex-col">
+        <h3 className="text-[10px] lg:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 lg:mb-4">
+          Opening Lines
         </h3>
         {isLoading ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Loading repertoire...</p>
+          <div className="text-center py-8 lg:py-12">
+            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-3 lg:mb-4 animate-pulse">
+              <span className="text-xl lg:text-2xl">♟</span>
+            </div>
+            <p className="text-xs lg:text-sm text-muted-foreground">Loading repertoire...</p>
           </div>
-        ) : openings.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground mb-4">No openings yet</p>
-            <p className="text-sm text-muted-foreground">
-              Click "Build" to add your first opening line.
+        ) : !rootNode || rootNode.children.length === 0 ? (
+          <div className="glass-card rounded-xl p-6 lg:p-8 text-center">
+            <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl lg:rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mx-auto mb-3 lg:mb-4">
+              <span className="text-2xl lg:text-3xl">♔</span>
+            </div>
+            <p className="text-sm lg:text-base text-foreground font-medium mb-1 lg:mb-2">No openings yet</p>
+            <p className="text-xs lg:text-sm text-muted-foreground mb-3 lg:mb-4">
+              Start building your repertoire by adding your first opening line.
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {openings.map((opening) => (
-              <div key={opening.id}>
-                <h4 className="text-sm font-semibold text-foreground mb-2">
-                  {opening.name}
-                </h4>
-                {opening.root ? (
-                  <LineTree
-                    root={opening.root}
-                    onBuild={onBuild}
-                    onLearn={onLearn}
-                    onLineClick={onLineClick}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">No lines</p>
-                )}
-              </div>
-            ))}
+          <div className="flex-1 overflow-y-auto pr-1">
+            <LineTree
+              root={rootNode}
+              onBuild={(nodeId, fen, moveSequence) =>
+                onBuild(undefined, nodeId, fen, moveSequence)
+              }
+              onLearn={(nodeId) => onLearn(undefined, nodeId)}
+              onDelete={handleDeleteEntry}
+              onLineClick={onLineClick}
+              onRefresh={fetchRepertoire}
+            />
           </div>
         )}
       </div>

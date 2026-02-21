@@ -26,6 +26,9 @@ jest.mock("@/lib/prisma", () => ({
       create: jest.fn(),
       update: jest.fn(),
     },
+    opening: {
+      create: jest.fn(),
+    },
     repertoireEntry: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -47,6 +50,21 @@ jest.mock("@/lib/prisma", () => ({
 }));
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
+
+beforeEach(() => {
+  // Reset all mocks before each test
+  jest.clearAllMocks();
+  
+  // Set up default mock return value for opening.create
+  mockPrisma.opening.create.mockResolvedValue({
+    id: "opening-1",
+    repertoireId: "rep-1",
+    name: "Opening Line",
+    notes: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any);
+});
 
 describe("Opening Line Save Feature", () => {
   // Mock user ID for testing

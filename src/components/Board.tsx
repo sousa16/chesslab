@@ -9,6 +9,8 @@ import {
   useImperativeHandle,
   useEffect,
 } from "react";
+import { useSettings } from "@/contexts/SettingsContext";
+import { playMoveSound, playCaptureSound } from "@/lib/sounds";
 
 interface BoardProps {
   playerColor?: "white" | "black";
@@ -27,6 +29,10 @@ interface BoardProps {
   onBuildMove?: (move: { from: string; to: string }) => void;
   initialMoves?: string[];
   initialFen?: string;
+  trainingMode?: boolean;
+  showingAnswer?: boolean;
+  onTrainingMove?: (move: { from: string; to: string; san: string }) => boolean; // returns true if correct
+  highlightSquare?: { square: string; color: "correct" | "incorrect" } | null;
 }
 
 export interface BoardHandle {
@@ -43,6 +49,7 @@ export interface BoardHandle {
     blackUci?: string;
   }[];
   deleteToMove: (moveIndex: number) => void;
+  makeMove: (from: string, to: string, promotion?: string) => boolean;
 }
 
 export const Board = forwardRef<BoardHandle, BoardProps>(
@@ -56,6 +63,10 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       onBuildMove,
       initialMoves = [],
       initialFen,
+      trainingMode = false,
+      showingAnswer = false,
+      onTrainingMove,
+      highlightSquare,
     },
     ref,
   ) => {
@@ -64,6 +75,8 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     const [moveHistory, setMoveHistory] = useState<string[]>([]);
     const [moves, setMoves] = useState<string[]>([]);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
+    const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    const { soundEffects, showCoordinates } = useSettings();
 
     // Initialize board with any initial moves
     useEffect(() => {
@@ -139,6 +152,48 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       onMovesUpdated?.(result);
     }, [moves, onMovesUpdated]);
 
+    const handleSquareClick = (square: string) => {
+      // Disable square selection outside of training or build mode
+      if (!trainingMode && !buildMode) {
+        return;
+      }
+
+      // If no square is selected, select this square if it has a piece
+      if (!selectedSquare) {
+        const piece = gameRef.current.get(square as any);
+        if (piece) {
+          setSelectedSquare(square);
+        }
+        return;
+      }
+
+      // If a square is already selected, try to make a move
+      if (selectedSquare === square) {
+        // Deselect if clicking the same square
+        setSelectedSquare(null);
+        return;
+      }
+
+      // Try to make a move from selected square to clicked square
+      const success = handlePieceDrop({
+        sourceSquare: selectedSquare,
+        targetSquare: square,
+        piece: { isSparePiece: false, position: selectedSquare, pieceType: "" },
+      });
+
+      if (success) {
+        setSelectedSquare(null);
+      } else {
+        // If move failed, check if the clicked square has a piece and select it
+        const piece = gameRef.current.get(square as any);
+        if (piece) {
+          setSelectedSquare(square);
+        } else {
+          setSelectedSquare(null);
+        }
+      }
+    };
+
     const handlePieceDrop = ({
       sourceSquare,
       targetSquare,
@@ -148,8 +203,50 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       targetSquare: string | null;
       piece: { isSparePiece: boolean; position: string; pieceType: string };
     }): boolean => {
+      // Prevent dragging outside of allowed modes
+      if (!buildMode && (!trainingMode || !showingAnswer)) {
+        return false;
+      }
+
       if (!targetSquare) {
         return false;
+      }
+
+      if (trainingMode && onTrainingMove) {
+        // In training mode, validate the move without executing it permanently
+        try {
+          // Create a temporary game to validate and get SAN notation
+          const tempGame = new Chess(gameRef.current.fen());
+          const move = tempGame.move({
+            from: sourceSquare,
+            to: targetSquare,
+            promotion: "q",
+          });
+          if (!move) {
+            return false;
+          }
+
+          // Call the training callback with move details
+          const isCorrect = onTrainingMove({
+            from: sourceSquare,
+            to: targetSquare,
+            san: move.san,
+          });
+
+          // If correct, execute the move on the actual board
+          if (isCorrect) {
+            gameRef.current.move({
+              from: sourceSquare,
+              to: targetSquare,
+              promotion: "q",
+            });
+            setPosition(gameRef.current.fen());
+          }
+
+          return isCorrect;
+        } catch {
+          return false;
+        }
       }
 
       if (buildMode) {
@@ -169,7 +266,22 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           setMoveHistory(newHistory);
           setCurrentMoveIndex(newHistory.length - 1);
           setPosition(gameRef.current.fen());
+          
+          // Play sound effect
+          if (soundEffects) {
+            if (move.captured) {
+              playCaptureSound();
+            } else {
+              playMoveSound();
+            }
+          }
+          
           onBuildMove?.({ from: sourceSquare, to: targetSquare });
+          onMoveMade?.({
+            from: sourceSquare,
+            to: targetSquare,
+            san: move.san,
+          });
           return true;
         } catch {
           return false;
@@ -202,6 +314,16 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
         setCurrentMoveIndex(newHistory.length - 1);
         setPosition(gameRef.current.fen());
+        
+        // Play sound effect
+        if (soundEffects) {
+          if (move.captured) {
+            playCaptureSound();
+          } else {
+            playMoveSound();
+          }
+        }
+        
         onMoveHistoryChange?.(newHistory.length);
         onMoveMade?.({
           from: sourceSquare,
@@ -299,6 +421,27 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       onMoveHistoryChange?.(newMoves.length);
     };
 
+    const makeMove = (
+      from: string,
+      to: string,
+      promotion?: string,
+    ): boolean => {
+      try {
+        const move = gameRef.current.move({
+          from,
+          to,
+          promotion: promotion || "q",
+        });
+        if (move) {
+          setPosition(gameRef.current.fen());
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    };
+
     useImperativeHandle(ref, () => ({
       goToFirst,
       goToPrevious,
@@ -307,30 +450,85 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       reset,
       getMoveHistory,
       deleteToMove,
+      makeMove,
     }));
 
     const isViewingHistory = currentMoveIndex !== moveHistory.length - 1;
 
+    // Board theme colors - Midnight theme (muted slate for reduced eye strain)
+    const boardColors = {
+      light: "#c8c4bc", // soft cream/slate
+      dark: "#5c6370", // muted slate gray
+      highlight: "rgba(255, 200, 0, 0.4)",
+    };
+
     return (
       <div className="relative">
         <div
-          className="w-full aspect-square max-w-2xl rounded-lg overflow-hidden shadow-lg"
-          data-testid="board">
+          className="w-full aspect-square max-w-2xl rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
+          data-testid="board"
+          onClick={(e) => {
+            const rect = (
+              e.currentTarget as HTMLElement
+            ).getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const squareSize = rect.width / 8;
+            let file = Math.floor(x / squareSize);
+            let rank = 7 - Math.floor(y / squareSize); // Invert rank (top = 8, bottom = 1)
+
+            // Adjust for board orientation
+            if (playerColor === "black") {
+              file = 7 - file;
+              rank = 7 - rank;
+            }
+
+            const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+            const ranks = ["1", "2", "3", "4", "5", "6", "7", "8"];
+            const squareFile = files[file];
+            const squareRank = ranks[rank];
+
+            if (squareFile && squareRank) {
+              const square = squareFile + squareRank;
+              handleSquareClick(square);
+            }
+          }}>
           <Chessboard
             options={{
               position,
               boardOrientation: playerColor,
               onPieceDrop: handlePieceDrop,
-              showNotation: true,
-              lightSquareStyle: { backgroundColor: "#b8a06d" },
-              darkSquareStyle: { backgroundColor: "#2c5233" },
-              allowDragging: currentMoveIndex === moveHistory.length - 1,
+              showNotation: showCoordinates,
+              lightSquareStyle: { backgroundColor: boardColors.light },
+              darkSquareStyle: { backgroundColor: boardColors.dark },
+              allowDragging:
+                !trainingMode &&
+                (buildMode || currentMoveIndex === moveHistory.length - 1),
+              squareStyles: {
+                ...(selectedSquare
+                  ? {
+                      [selectedSquare]: {
+                        backgroundColor: boardColors.highlight,
+                      },
+                    }
+                  : {}),
+                ...(highlightSquare
+                  ? {
+                      [highlightSquare.square]: {
+                        backgroundColor:
+                          highlightSquare.color === "correct"
+                            ? "rgba(34, 197, 94, 0.5)"
+                            : "rgba(239, 68, 68, 0.5)",
+                      },
+                    }
+                  : {}),
+              },
             }}
           />
         </div>
         {isViewingHistory && (
-          <div className="absolute inset-0 bg-black/30 rounded-lg flex items-center justify-center">
-            <div className="bg-background/90 px-6 py-3 rounded-lg text-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-2xl flex items-center justify-center">
+            <div className="glass-card px-6 py-4 rounded-xl text-center">
               <p className="text-base font-medium text-foreground">
                 Viewing move history
               </p>

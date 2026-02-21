@@ -15,13 +15,12 @@ export default function Settings() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/auth");
+      router.push("/");
     }
   }, [status, router]);
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false });
-    router.push("/auth");
+    await signOut({ callbackUrl: "/", redirect: true });
   };
 
   if (status === "loading" || !session) {
@@ -33,8 +32,8 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto p-6">
+    <div className="fixed inset-0 overflow-y-auto z-50 bg-[#1a1c21]">
+      <div className="max-w-2xl mx-auto p-6 min-h-screen bg-[#1a1c21]">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Button

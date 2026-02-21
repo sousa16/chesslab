@@ -1,5 +1,7 @@
 "use client";
 
+import { CheckCircle2 } from "lucide-react";
+
 interface ProgressCardProps {
   label: string;
   current: number;
@@ -8,23 +10,38 @@ interface ProgressCardProps {
 
 export function ProgressCard({ label, current, total }: ProgressCardProps) {
   const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+  const isComplete = percentage === 100;
 
   return (
-    <div className="bg-surface-2 rounded-lg p-3 border border-border/50">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className="text-sm font-semibold text-foreground">
-          {current}/{total}
-        </p>
+    <div className="glass-card rounded-xl p-3 lg:p-4">
+      <div className="flex items-center justify-between mb-2 lg:mb-3">
+        <p className="text-xs lg:text-sm font-medium text-muted-foreground">{label}</p>
+        <div className="flex items-center gap-1.5 lg:gap-2">
+          {isComplete && (
+            <CheckCircle2 size={12} className="text-primary lg:hidden" />
+          )}
+          {isComplete && (
+            <CheckCircle2 size={14} className="text-primary hidden lg:block" />
+          )}
+          <p className="text-xs lg:text-sm font-semibold text-foreground">
+            {current}/{total}
+          </p>
+        </div>
       </div>
-      <div className="h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+      <div className="h-1 lg:h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
         <div
-          className="h-full bg-primary transition-all"
+          className={`h-full rounded-full transition-all duration-500 ${
+            isComplete 
+              ? "bg-gradient-to-r from-primary to-emerald-400" 
+              : "bg-gradient-to-r from-primary/80 to-primary"
+          }`}
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <p className="text-sm text-muted-foreground mt-2">
-        {percentage}% complete
+      <p className={`text-xs lg:text-sm mt-1.5 lg:mt-2 ${
+        isComplete ? "text-primary font-medium" : "text-muted-foreground"
+      }`}>
+        {isComplete ? "Complete!" : `${percentage}% complete`}
       </p>
     </div>
   );

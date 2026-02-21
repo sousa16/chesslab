@@ -86,9 +86,10 @@ describe("BoardControls Component", () => {
     const controlsWrapper = container.firstChild;
 
     expect(controlsWrapper).toHaveClass(
-      "flex",
-      "items-center",
-      "justify-center"
+      "glass-card",
+      "rounded-xl",
+      "inline-flex",
+      "items-center"
     );
   });
 });

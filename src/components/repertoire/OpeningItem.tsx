@@ -25,10 +25,10 @@ export function OpeningItem({
 
   return (
     <div className="space-y-1">
-      <div className="w-full flex items-center gap-2 p-3 rounded-lg bg-surface-2 hover:bg-surface-3 border border-border/50 transition-colors text-left group">
+      <div className="w-full flex items-center gap-2 p-3 rounded-lg bg-surface-2 hover:bg-surface-3 border border-border/50 transition-colors text-left group cursor-pointer">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="p-0 -m-1 h-6 w-6 flex items-center justify-center hover:bg-surface-1 rounded transition-colors"
+          className="p-0 -m-1 h-6 w-6 flex items-center justify-center hover:bg-surface-1 rounded transition-colors cursor-pointer"
           title={isExpanded ? "Collapse" : "Expand"}>
           <ChevronDown
             size={16}
@@ -75,7 +75,7 @@ export function OpeningItem({
           {lines.map((line) => (
             <div
               key={line.id}
-              className="flex items-center gap-2 p-1 rounded-lg bg-surface-1 border border-border/30 text-left group">
+              className="flex items-center gap-2 p-1 rounded-lg bg-surface-1 border border-border/30 text-left group cursor-pointer">
               <div
                 className={`w-3 h-3 rounded-full flex-shrink-0 ${
                   line.learned ? "bg-primary" : "bg-border"

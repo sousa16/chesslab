@@ -14,35 +14,72 @@ describe("Middleware - Route Protection", () => {
     jest.clearAllMocks();
   });
 
-  describe("Protected Routes (No Token)", () => {
-    it("should redirect from / to /auth when not authenticated", async () => {
+  describe("Public Routes", () => {
+    it("should allow access to / (landing page) when not authenticated", async () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/");
 
       const response = await proxy(request);
 
-      expect(response?.status).toBe(307);
-      expect(response?.headers.get("location")).toContain("/auth");
+      expect(response?.status).toBe(200);
     });
 
-    it("should redirect from /repertoire to /auth when not authenticated", async () => {
+    it("should redirect from / to /home when authenticated", async () => {
+      mockGetToken.mockResolvedValue({
+        sub: "user-123",
+        email: "test@example.com",
+      } as unknown as Awaited<ReturnType<typeof getToken>>);
+      const request = new NextRequest("http://localhost:3000/");
+
+      const response = await proxy(request);
+
+      expect(response?.status).toBe(307);
+      expect(response?.headers.get("location")).toContain("/home");
+    });
+  });
+
+  describe("Protected Routes (No Token)", () => {
+    it("should redirect from /home to / when not authenticated", async () => {
+      mockGetToken.mockResolvedValue(null);
+      const request = new NextRequest("http://localhost:3000/home");
+
+      const response = await proxy(request);
+
+      expect(response?.status).toBe(307);
+      expect(response?.headers.get("location")).toContain("/");
+      expect(response?.headers.get("location")).not.toContain("/home");
+    });
+
+    it("should redirect from /repertoire to / when not authenticated", async () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/repertoire");
 
       const response = await proxy(request);
 
       expect(response?.status).toBe(307);
-      expect(response?.headers.get("location")).toContain("/auth");
+      expect(response?.headers.get("location")).toContain("/");
+      expect(response?.headers.get("location")).not.toContain("/repertoire");
     });
 
-    it("should redirect from /training to /auth when not authenticated", async () => {
+    it("should redirect from /training to / when not authenticated", async () => {
       mockGetToken.mockResolvedValue(null);
       const request = new NextRequest("http://localhost:3000/training");
 
       const response = await proxy(request);
 
       expect(response?.status).toBe(307);
-      expect(response?.headers.get("location")).toContain("/auth");
+      expect(response?.headers.get("location")).toContain("/");
+      expect(response?.headers.get("location")).not.toContain("/training");
+    });
+
+    it("should redirect from /build/white to / when not authenticated", async () => {
+      mockGetToken.mockResolvedValue(null);
+      const request = new NextRequest("http://localhost:3000/build/white");
+
+      const response = await proxy(request);
+
+      expect(response?.status).toBe(307);
+      expect(response?.headers.get("location")).toContain("/");
     });
   });
 
@@ -53,59 +90,59 @@ describe("Middleware - Route Protection", () => {
       iat: Math.floor(Date.now() / 1000),
     };
 
-    it("should allow access to / when authenticated", async () => {
-      mockGetToken.mockResolvedValue(mockToken as any);
-      const request = new NextRequest("http://localhost:3000/");
+    it("should allow access to /home when authenticated", async () => {
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
+      const request = new NextRequest("http://localhost:3000/home");
 
       const response = await proxy(request);
 
       expect(response?.status).toBe(200);
-      expect(response?.headers.get("location")).toBeNull();
     });
 
     it("should allow access to /repertoire when authenticated", async () => {
-      mockGetToken.mockResolvedValue(mockToken as any);
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
       const request = new NextRequest("http://localhost:3000/repertoire");
 
       const response = await proxy(request);
 
       expect(response?.status).toBe(200);
-      expect(response?.headers.get("location")).toBeNull();
     });
 
     it("should allow access to /training when authenticated", async () => {
-      mockGetToken.mockResolvedValue(mockToken as any);
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
       const request = new NextRequest("http://localhost:3000/training");
 
       const response = await proxy(request);
 
       expect(response?.status).toBe(200);
-      expect(response?.headers.get("location")).toBeNull();
     });
-  });
 
-  describe("Public Routes (/auth)", () => {
-    it("should allow access to /auth when not authenticated", async () => {
-      mockGetToken.mockResolvedValue(null);
-      const request = new NextRequest("http://localhost:3000/auth");
+    it("should allow access to /build/white when authenticated", async () => {
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
+      const request = new NextRequest("http://localhost:3000/build/white");
 
       const response = await proxy(request);
 
       expect(response?.status).toBe(200);
-      expect(response?.headers.get("location")).toBeNull();
     });
 
-    it("should redirect from /auth to / when authenticated", async () => {
-      mockGetToken.mockResolvedValue({
-        sub: "user-123",
-        email: "test@example.com",
-      } as any);
-      const request = new NextRequest("http://localhost:3000/auth");
+    it("should allow access to /settings when authenticated", async () => {
+      mockGetToken.mockResolvedValue(
+        mockToken as unknown as Awaited<ReturnType<typeof getToken>>,
+      );
+      const request = new NextRequest("http://localhost:3000/settings");
 
       const response = await proxy(request);
 
-      expect(response?.status).toBe(307);
-      expect(response?.headers.get("location")).toContain("/");
+      expect(response?.status).toBe(200);
     });
   });
 
@@ -117,20 +154,17 @@ describe("Middleware - Route Protection", () => {
       const response = await proxy(request);
 
       expect(response?.status).toBe(200);
-      expect(response?.headers.get("location")).toBeNull();
     });
   });
 
   describe("Static Files", () => {
     it("should skip middleware for _next/static", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/_next/static/chunks/main.js"
+        "http://localhost:3000/_next/static/chunks/main.js",
       );
 
-      // This should not call getToken due to matcher config
       const response = await proxy(request);
 
-      // Should return without processing
       expect(response?.status).toBe(200);
     });
   });

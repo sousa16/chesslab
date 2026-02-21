@@ -30,12 +30,12 @@ describe("Verify Email API", () => {
 
       expect(response.status).toBe(307); // Redirect status
       const location = response.headers.get("location") || "";
-      expect(location).toMatch(/auth\?error=Invalid.*verification.*link/);
+      expect(location).toMatch(/\/\?error=Invalid.*verification.*link/);
     });
 
     it("should redirect with error when token is invalid", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/verify-email?token=invalid-token"
+        "http://localhost:3000/api/verify-email?token=invalid-token",
       );
 
       mockPrisma.verificationToken.findUnique.mockResolvedValue(null);
@@ -47,14 +47,14 @@ describe("Verify Email API", () => {
       });
       const location = response.headers.get("location") || "";
       expect(location).toMatch(
-        /auth\?error=Invalid.*expired.*verification.*link/
+        /\/\?error=Invalid.*expired.*verification.*link/,
       );
     });
 
     it("should redirect with error when token is expired", async () => {
       const expiredDate = new Date(Date.now() - 1000); // 1 second ago
       const request = new NextRequest(
-        "http://localhost:3000/api/verify-email?token=expired-token"
+        "http://localhost:3000/api/verify-email?token=expired-token",
       );
 
       mockPrisma.verificationToken.findUnique.mockResolvedValue({
@@ -69,13 +69,13 @@ describe("Verify Email API", () => {
         where: { token: "expired-token" },
       });
       const location = response.headers.get("location") || "";
-      expect(location).toMatch(/auth\?error=Verification.*link.*expired/);
+      expect(location).toMatch(/\/\?error=Verification.*link.*expired/);
     });
 
     it("should verify email successfully with valid token", async () => {
       const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
       const request = new NextRequest(
-        "http://localhost:3000/api/verify-email?token=valid-token"
+        "http://localhost:3000/api/verify-email?token=valid-token",
       );
 
       mockPrisma.verificationToken.findUnique.mockResolvedValue({
@@ -105,22 +105,22 @@ describe("Verify Email API", () => {
         where: { token: "valid-token" },
       });
       const location = response.headers.get("location") || "";
-      expect(location).toMatch(/auth\?verified=true/);
+      expect(location).toMatch(/\/\?verified=true/);
     });
 
     it("should handle database errors gracefully", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/verify-email?token=test-token"
+        "http://localhost:3000/api/verify-email?token=test-token",
       );
 
       mockPrisma.verificationToken.findUnique.mockRejectedValue(
-        new Error("Database error")
+        new Error("Database error"),
       );
 
       const response = await GET(request);
 
       const location = response.headers.get("location") || "";
-      expect(location).toMatch(/auth\?error=Verification.*failed/);
+      expect(location).toMatch(/\/\?error=Verification.*failed/);
     });
   });
 });

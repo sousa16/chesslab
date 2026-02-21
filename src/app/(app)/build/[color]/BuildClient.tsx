@@ -114,15 +114,19 @@ export default function BuildClient({
       throw new Error("One of the moves is invalid. Please try again.");
     }
 
-    const response = await fetch("/api/repertoire-entries/save-line", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        color,
-        movesInSan,
-        movesInUci,
-      }),
-    });
+    const baseUrl = window.location.origin; // gets current site origin
+    const response = await fetch(
+      `${baseUrl}/api/repertoire-entries/save-line`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          color,
+          movesInSan,
+          movesInUci,
+        }),
+      },
+    );
 
     let data;
     try {

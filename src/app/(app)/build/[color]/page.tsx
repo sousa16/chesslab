@@ -1,9 +1,7 @@
 import React, { Suspense } from "react";
 import BuildClient from "./BuildClient";
 
-export async function generateStaticParams() {
-  return [{ color: "white" }, { color: "black" }];
-}
+export const dynamic = "force-dynamic";
 
 export default function BuildPage({
   params,

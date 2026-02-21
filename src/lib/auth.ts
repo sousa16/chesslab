@@ -159,7 +159,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.createdAt = user.createdAt;
-        
+
         // For OAuth providers, ensure emailVerified is set
         if (account?.provider && account.provider !== "credentials") {
           // Fetch current user state
@@ -167,7 +167,7 @@ export const authOptions: NextAuthOptions = {
             where: { id: user.id },
             select: { emailVerified: true },
           });
-          
+
           // If not verified, set it (OAuth emails are pre-verified)
           if (dbUser && !dbUser.emailVerified) {
             const updated = await prisma.user.update({
@@ -183,7 +183,7 @@ export const authOptions: NextAuthOptions = {
           token.emailVerified = user.emailVerified;
         }
       }
-      
+
       // Refresh user data on session update
       if (trigger === "update" && token.id) {
         const dbUser = await prisma.user.findUnique({
@@ -194,7 +194,7 @@ export const authOptions: NextAuthOptions = {
           token.emailVerified = dbUser.emailVerified;
         }
       }
-      
+
       return token;
     },
     async session({ session, token }) {

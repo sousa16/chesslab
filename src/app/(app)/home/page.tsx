@@ -146,7 +146,7 @@ export default function Home() {
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+          className="lg:hidden fixed inset-0 z-30 bg-black/50"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -208,7 +208,9 @@ export default function Home() {
                 {selectedColor === "white" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-sm lg:text-base text-foreground font-medium">You</p>
+            <p className="text-sm lg:text-base text-foreground font-medium">
+              You
+            </p>
           </div>
 
           {/* Board Controls */}
@@ -243,7 +245,7 @@ export default function Home() {
 
       {/* Right Panel - Sidebar */}
       <aside
-        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-background flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${
+        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
         }`}>
         {view === "home" ? (

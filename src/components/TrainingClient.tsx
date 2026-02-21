@@ -137,7 +137,7 @@ export default function TrainingClient({
       if (isCorrect) {
         setFeedbackSquare({ square: move.to, color: "correct" });
         setStreak((s) => s + 1);
-        
+
         // Play correct sound
         if (soundEffects) {
           playCorrectSound();
@@ -151,7 +151,7 @@ export default function TrainingClient({
       } else {
         setFeedbackSquare({ square: move.to, color: "incorrect" });
         setStreak(0);
-        
+
         // Play incorrect sound
         if (soundEffects) {
           playIncorrectSound();
@@ -334,7 +334,7 @@ export default function TrainingClient({
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+          className="lg:hidden fixed inset-0 z-30 bg-black/50"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -398,7 +398,9 @@ export default function TrainingClient({
                 {repertoireColor === "white" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-sm lg:text-base text-foreground font-medium">You</p>
+            <p className="text-sm lg:text-base text-foreground font-medium">
+              You
+            </p>
           </div>
 
           {/* Status indicator */}
@@ -423,7 +425,7 @@ export default function TrainingClient({
 
       {/* Right Panel - Training Sidebar */}
       <aside
-        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-background flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${
+        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
         }`}>
         {/* Header */}
@@ -452,7 +454,9 @@ export default function TrainingClient({
               <>
                 <div className="relative flex -space-x-3">
                   <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50 z-10">
-                    <span className="text-xl lg:text-2xl drop-shadow-sm">♔</span>
+                    <span className="text-xl lg:text-2xl drop-shadow-sm">
+                      ♔
+                    </span>
                   </div>
                   <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50">
                     <span className="text-xl lg:text-2xl drop-shadow-sm text-zinc-300">
@@ -524,7 +528,9 @@ export default function TrainingClient({
               <span className="text-xl lg:text-2xl font-bold text-foreground">
                 {streak}
               </span>
-              <span className="text-xs lg:text-sm text-muted-foreground">streak</span>
+              <span className="text-xs lg:text-sm text-muted-foreground">
+                streak
+              </span>
             </div>
           </div>
 
@@ -580,32 +586,48 @@ export default function TrainingClient({
                       disabled={isReviewing}
                       className="h-12 lg:h-14 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
-                      <span className="text-xs lg:text-sm font-medium">Forgot</span>
-                      <span className="text-[10px] lg:text-xs opacity-70">Again</span>
+                      <span className="text-xs lg:text-sm font-medium">
+                        Forgot
+                      </span>
+                      <span className="text-[10px] lg:text-xs opacity-70">
+                        Again
+                      </span>
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("partial")}
                       disabled={isReviewing}
                       className="h-12 lg:h-14 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
-                      <span className="text-xs lg:text-sm font-medium">Hard</span>
-                      <span className="text-[10px] lg:text-xs opacity-70">Struggled</span>
+                      <span className="text-xs lg:text-sm font-medium">
+                        Hard
+                      </span>
+                      <span className="text-[10px] lg:text-xs opacity-70">
+                        Struggled
+                      </span>
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("effort")}
                       disabled={isReviewing}
                       className="h-12 lg:h-14 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
-                      <span className="text-xs lg:text-sm font-medium">Good</span>
-                      <span className="text-[10px] lg:text-xs opacity-70">With effort</span>
+                      <span className="text-xs lg:text-sm font-medium">
+                        Good
+                      </span>
+                      <span className="text-[10px] lg:text-xs opacity-70">
+                        With effort
+                      </span>
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("easy")}
                       disabled={isReviewing}
                       className="h-12 lg:h-14 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
-                      <span className="text-xs lg:text-sm font-medium">Easy</span>
-                      <span className="text-[10px] lg:text-xs opacity-70">No problem</span>
+                      <span className="text-xs lg:text-sm font-medium">
+                        Easy
+                      </span>
+                      <span className="text-[10px] lg:text-xs opacity-70">
+                        No problem
+                      </span>
                     </Button>
                   </div>
                 </div>

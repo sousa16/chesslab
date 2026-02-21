@@ -176,270 +176,277 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogPortal>
-          <DialogOverlay className="!backdrop-blur-none bg-black" />
-          <DialogPrimitive.Content
-            className="fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] sm:w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background opacity-100 p-4 sm:p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-lg max-h-[90vh] overflow-y-auto"
-          >
+          <DialogOverlay className="!backdrop-blur-none bg-black/50" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] sm:w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-solid opacity-100 p-4 sm:p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-lg max-h-[90vh] overflow-y-auto">
             <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none text-foreground z-10">
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
-            
+
             {/* Header */}
             <DialogHeader>
-              <DialogTitle className="text-xl sm:text-2xl font-semibold">Settings</DialogTitle>
+              <DialogTitle className="text-xl sm:text-2xl font-semibold">
+                Settings
+              </DialogTitle>
             </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            {/* Account Section */}
-            <section>
-              <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-                Account
-              </h2>
-              <div className="bg-background rounded-lg border border-border divide-y divide-border">
-                {/* Profile Picture & Basic Info */}
-                <div className="p-4 flex items-center gap-4">
-                  <div className="relative w-14 h-14">
-                    {session.user?.image ? (
-                      <img
-                        src={session.user.image}
-                        alt=""
-                        className="w-14 h-14 rounded-full border-2 border-primary/20 object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                          if (fallback) fallback.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
-                    <div 
-                      className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center border-2 border-primary/20"
-                      style={{ display: session.user?.image ? 'none' : 'flex' }}
-                    >
-                      <User size={28} className="text-primary" />
+            <div className="space-y-6 py-4">
+              {/* Account Section */}
+              <section>
+                <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                  Account
+                </h2>
+                <div className="bg-background rounded-lg border border-border divide-y divide-border">
+                  {/* Profile Picture & Basic Info */}
+                  <div className="p-4 flex items-center gap-4">
+                    <div className="relative w-14 h-14">
+                      {session.user?.image ? (
+                        <img
+                          src={session.user.image}
+                          alt=""
+                          className="w-14 h-14 rounded-full border-2 border-primary/20 object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            const fallback = e.currentTarget
+                              .nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center border-2 border-primary/20"
+                        style={{
+                          display: session.user?.image ? "none" : "flex",
+                        }}>
+                        <User size={28} className="text-primary" />
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-base font-medium text-foreground">
-                      {session.user?.name ||
-                        session.user?.email?.split("@")[0] ||
-                        "User"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {session.user?.email}
-                    </p>
-                    {session.user?.emailVerified ? (
-                      <div className="flex items-center gap-1 mt-1">
-                        <CheckCircle2 size={14} className="text-green-500" />
-                        <span className="text-xs text-green-500">Verified</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 mt-1">
-                        <AlertCircle size={14} className="text-yellow-500" />
-                        <span className="text-xs text-yellow-500">
-                          Not verified
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowNameDialog(true)}>
-                    Edit
-                  </Button>
-                </div>
-
-                {/* Email */}
-                <div
-                  className="p-3 sm:p-4 flex items-center justify-between cursor-not-allowed opacity-60"
-                  title="Email changes coming soon">
-                  <div className="flex items-center gap-3">
-                    <Mail size={20} className="text-muted-foreground" />
-                    <div>
+                    <div className="flex-1">
                       <p className="text-base font-medium text-foreground">
-                        Email
+                        {session.user?.name ||
+                          session.user?.email?.split("@")[0] ||
+                          "User"}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {session.user?.email}
                       </p>
+                      {session.user?.emailVerified ? (
+                        <div className="flex items-center gap-1 mt-1">
+                          <CheckCircle2 size={14} className="text-green-500" />
+                          <span className="text-xs text-green-500">
+                            Verified
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 mt-1">
+                          <AlertCircle size={14} className="text-yellow-500" />
+                          <span className="text-xs text-yellow-500">
+                            Not verified
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowNameDialog(true)}>
+                      Edit
+                    </Button>
+                  </div>
+
+                  {/* Email */}
+                  <div
+                    className="p-3 sm:p-4 flex items-center justify-between cursor-not-allowed opacity-60"
+                    title="Email changes coming soon">
+                    <div className="flex items-center gap-3">
+                      <Mail size={20} className="text-muted-foreground" />
+                      <div>
+                        <p className="text-base font-medium text-foreground">
+                          Email
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {session.user?.email}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Password Change */}
+                  {hasPassword && (
+                    <div
+                      className="p-3 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-surface-2 transition-colors"
+                      onClick={() => setShowPasswordDialog(true)}>
+                      <div className="flex items-center gap-3">
+                        <Key size={20} className="text-muted-foreground" />
+                        <div>
+                          <p className="text-base font-medium text-foreground">
+                            Change password
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Update your password
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight
+                        size={20}
+                        className="text-muted-foreground"
+                      />
+                    </div>
+                  )}
+
+                  {/* Account Created */}
+                  <div className="p-3 sm:p-4 flex items-center gap-3">
+                    <Calendar size={20} className="text-muted-foreground" />
+                    <div>
+                      <p className="text-base font-medium text-foreground">
+                        Member since
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {session.user?.createdAt
+                          ? new Date(session.user.createdAt).toLocaleDateString(
+                              "en-US",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              },
+                            )
+                          : "Recently"}
+                      </p>
                     </div>
                   </div>
                 </div>
+              </section>
 
-                {/* Password Change */}
-                {hasPassword && (
-                  <div
-                    className="p-3 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-surface-2 transition-colors"
-                    onClick={() => setShowPasswordDialog(true)}>
+              {/* Appearance */}
+              <section>
+                <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                  Appearance
+                </h2>
+                <div className="bg-background rounded-lg border border-border">
+                  <div className="p-3 sm:p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Key size={20} className="text-muted-foreground" />
+                      <Palette size={20} className="text-muted-foreground" />
                       <div>
                         <p className="text-base font-medium text-foreground">
-                          Change password
+                          Theme
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Update your password
+                          Toggle dark/light mode
+                        </p>
+                      </div>
+                    </div>
+                    <ThemeToggle />
+                  </div>
+                </div>
+              </section>
+
+              {/* Training Preferences */}
+              <section>
+                <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                  Training
+                </h2>
+                <div className="bg-background rounded-lg border border-border divide-y divide-border">
+                  <div className="p-3 sm:p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Bell size={20} className="text-muted-foreground" />
+                      <div>
+                        <p className="text-sm sm:text-base font-medium text-foreground">
+                          Daily reminder
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          Get notified to practice
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={dailyReminder}
+                      onCheckedChange={setDailyReminder}
+                    />
+                  </div>
+                  <div className="p-3 sm:p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Volume2 size={20} className="text-muted-foreground" />
+                      <div>
+                        <p className="text-sm sm:text-base font-medium text-foreground">
+                          Sound effects
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          Play sounds for moves
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={soundEffects}
+                      onCheckedChange={setSoundEffects}
+                    />
+                  </div>
+                  <div className="p-3 sm:p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Grid3x3 size={20} className="text-muted-foreground" />
+                      <div>
+                        <p className="text-sm sm:text-base font-medium text-foreground">
+                          Show coordinates
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          Display board coordinates
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={showCoordinates}
+                      onCheckedChange={setShowCoordinates}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <Separator />
+
+              {/* Danger Zone */}
+              <section>
+                <h2 className="text-xs sm:text-sm font-medium text-destructive uppercase tracking-wider mb-3">
+                  Danger Zone
+                </h2>
+                <div className="bg-background rounded-lg border border-border">
+                  <div
+                    className="p-3 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-destructive/5 transition-colors"
+                    onClick={() => setShowDeleteDialog(true)}>
+                    <div className="flex items-center gap-3">
+                      <Trash2 size={20} className="text-destructive" />
+                      <div>
+                        <p className="text-base font-medium text-destructive">
+                          Delete account
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Permanently delete your account and all data
                         </p>
                       </div>
                     </div>
                     <ChevronRight size={20} className="text-muted-foreground" />
                   </div>
-                )}
-
-                {/* Account Created */}
-                <div className="p-3 sm:p-4 flex items-center gap-3">
-                  <Calendar size={20} className="text-muted-foreground" />
-                  <div>
-                    <p className="text-base font-medium text-foreground">
-                      Member since
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {session.user?.createdAt
-                        ? new Date(session.user.createdAt).toLocaleDateString(
-                            "en-US",
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )
-                        : "Recently"}
-                    </p>
-                  </div>
                 </div>
+              </section>
+
+              <Separator />
+
+              {/* Sign Out */}
+              <Button
+                variant="outline"
+                className="w-full gap-2 text-base"
+                onClick={handleSignOut}>
+                <LogOut size={18} />
+                Sign out
+              </Button>
+
+              {/* Footer */}
+              <div className="text-center pt-2">
+                <Logo size="lg" />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Version 1.0.0
+                </p>
               </div>
-            </section>
-
-            {/* Appearance */}
-            <section>
-              <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-                Appearance
-              </h2>
-              <div className="bg-background rounded-lg border border-border">
-                <div className="p-3 sm:p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Palette size={20} className="text-muted-foreground" />
-                    <div>
-                      <p className="text-base font-medium text-foreground">
-                        Theme
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Toggle dark/light mode
-                      </p>
-                    </div>
-                  </div>
-                  <ThemeToggle />
-                </div>
-              </div>
-            </section>
-
-            {/* Training Preferences */}
-            <section>
-              <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-                Training
-              </h2>
-              <div className="bg-background rounded-lg border border-border divide-y divide-border">
-                <div className="p-3 sm:p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Bell size={20} className="text-muted-foreground" />
-                    <div>
-                      <p className="text-sm sm:text-base font-medium text-foreground">
-                        Daily reminder
-                      </p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
-                        Get notified to practice
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={dailyReminder}
-                    onCheckedChange={setDailyReminder}
-                  />
-                </div>
-                <div className="p-3 sm:p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Volume2 size={20} className="text-muted-foreground" />
-                    <div>
-                      <p className="text-sm sm:text-base font-medium text-foreground">
-                        Sound effects
-                      </p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
-                        Play sounds for moves
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={soundEffects}
-                    onCheckedChange={setSoundEffects}
-                  />
-                </div>
-                <div className="p-3 sm:p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Grid3x3 size={20} className="text-muted-foreground" />
-                    <div>
-                      <p className="text-sm sm:text-base font-medium text-foreground">
-                        Show coordinates
-                      </p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
-                        Display board coordinates
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={showCoordinates}
-                    onCheckedChange={setShowCoordinates}
-                  />
-                </div>
-              </div>
-            </section>
-
-            <Separator />
-
-            {/* Danger Zone */}
-            <section>
-              <h2 className="text-xs sm:text-sm font-medium text-destructive uppercase tracking-wider mb-3">
-                Danger Zone
-              </h2>
-              <div className="bg-background rounded-lg border border-border">
-                <div
-                  className="p-3 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-destructive/5 transition-colors"
-                  onClick={() => setShowDeleteDialog(true)}>
-                  <div className="flex items-center gap-3">
-                    <Trash2 size={20} className="text-destructive" />
-                    <div>
-                      <p className="text-base font-medium text-destructive">
-                        Delete account
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Permanently delete your account and all data
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight size={20} className="text-muted-foreground" />
-                </div>
-              </div>
-            </section>
-
-            <Separator />
-
-            {/* Sign Out */}
-            <Button
-              variant="outline"
-              className="w-full gap-2 text-base"
-              onClick={handleSignOut}>
-              <LogOut size={18} />
-              Sign out
-            </Button>
-
-            {/* Footer */}
-            <div className="text-center pt-2">
-              <Logo size="lg" />
-              <p className="text-xs text-muted-foreground mt-2">
-                Version 1.0.0
-              </p>
             </div>
-          </div>
           </DialogPrimitive.Content>
         </DialogPortal>
       </Dialog>

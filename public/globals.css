@@ -167,6 +167,12 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
+  /* Force solid backgrounds for mobile elements */
+  .bg-solid {
+    background-color: hsl(var(--background)) !important;
+    opacity: 1 !important;
+  }
+
   /* Scrollbar */
   ::-webkit-scrollbar {
     width: 5px;
@@ -190,6 +196,11 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Solid background utilities for mobile sidebars and modals */
+  .bg-solid {
+    background-color: hsl(var(--background)) !important;
   }
 
   .surface-1 {

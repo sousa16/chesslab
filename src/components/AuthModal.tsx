@@ -152,7 +152,7 @@ export function AuthModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md bg-solid">
         <DialogHeader className="text-center">
           <div className="flex justify-center mb-2">
             <Logo size="md" />
@@ -278,7 +278,7 @@ export function AuthModal({
           {/* Divider */}
           <div className="relative my-4">
             <Separator className="bg-stone-300 dark:bg-slate-700/50" />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-900/95 px-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
               OR CONTINUE WITH
             </span>
           </div>
@@ -324,19 +324,22 @@ export function AuthModal({
 
         {/* Forgot Password Modal */}
         <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md bg-solid">
             <DialogHeader className="text-center">
               <DialogTitle className="text-2xl font-semibold text-white">
                 Reset Password
               </DialogTitle>
               <DialogDescription className="text-slate-400">
-                Enter your email address and we'll send you a link to reset your password.
+                Enter your email address and we'll send you a link to reset your
+                password.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleForgotPassword} className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label htmlFor="forgotEmail" className="text-sm font-medium text-slate-300">
+                <Label
+                  htmlFor="forgotEmail"
+                  className="text-sm font-medium text-slate-300">
                   Email
                 </Label>
                 <Input

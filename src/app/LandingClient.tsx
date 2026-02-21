@@ -70,13 +70,18 @@ export default function LandingClient() {
       <nav className="fixed top-0 w-full z-50 border-b border-stone-200/80 dark:border-slate-800/50 bg-stone-50/80 dark:bg-slate-950/80 backdrop-blur-md transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex-shrink-0">
-            <Logo size="md" showIcon={true} />
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              aria-label="Scroll to top"
+              className="p-0 m-0 bg-transparent border-0 cursor-pointer">
+              <Logo size="md" showIcon={true} forcePointer={true} />
+            </button>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
             <ThemeToggle />
             <button
               onClick={() => setAuthModalOpen(true)}
-              className="hidden sm:block text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors text-sm md:text-base">
+              className="hidden sm:block text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors text-sm md:text-base cursor-pointer">
               Sign In
             </button>
             <Button

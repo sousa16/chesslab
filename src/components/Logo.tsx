@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 interface LogoProps {
   size?: "sm" | "md" | "lg" | "xl";
   clickable?: boolean;
+  forcePointer?: boolean;
   onLogoClick?: () => void;
   showIcon?: boolean;
 }
@@ -14,6 +15,7 @@ interface LogoProps {
 export function Logo({
   size = "md",
   clickable = true,
+  forcePointer = false,
   onLogoClick,
   showIcon = false,
 }: LogoProps) {
@@ -29,6 +31,10 @@ export function Logo({
   };
 
   const isClickable = clickable && session;
+  const cursorClass =
+    isClickable || forcePointer
+      ? "hover:opacity-80 transition-opacity cursor-pointer"
+      : "cursor-default";
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -44,7 +50,7 @@ export function Logo({
 
   const content = (
     <div
-      className={`flex items-center gap-2 font-semibold tracking-tight ${sizeClasses[size]} ${isClickable ? "hover:opacity-80 transition-opacity cursor-pointer" : "cursor-default"}`}>
+      className={`flex items-center gap-2 font-semibold tracking-tight ${sizeClasses[size]} ${cursorClass}`}>
       {showIcon && (
         <img
           src="/android-chrome-192x192.png"

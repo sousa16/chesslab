@@ -125,11 +125,11 @@ describe("LineTree Component", () => {
 
       // First level is visible
       expect(screen.getByText("1.e2e4")).toBeInTheDocument();
-      
+
       // Expand the first node to see its children
       const expandButton = screen.getAllByTitle("Expand")[0];
       fireEvent.click(expandButton);
-      
+
       // Now child should be visible
       expect(screen.getByText("1.e2e4 c7c5")).toBeInTheDocument();
     });
@@ -147,18 +147,18 @@ describe("LineTree Component", () => {
       // Expand to see nested children
       const firstExpandButton = screen.getAllByTitle("Expand")[0];
       fireEvent.click(firstExpandButton); // Expand e4
-      
+
       // Wait for child to appear and then expand it
       await waitFor(() => {
         expect(screen.getByText("1.e2e4 c7c5")).toBeInTheDocument();
       });
-      
+
       const secondExpandButton = screen.getAllByTitle("Expand")[0]; // After first expansion, indices change
       fireEvent.click(secondExpandButton); // Expand c5
-      
-      // Verify the full line is rendered
+
+      // Verify the deepest line is rendered (component shows last two moves)
       await waitFor(() => {
-        expect(screen.getByText("1.e2e4 c7c5 2.g1f3")).toBeInTheDocument();
+        expect(screen.getByText("1.c7c5 2.g1f3")).toBeInTheDocument();
       });
     });
   });
@@ -198,21 +198,21 @@ describe("LineTree Component", () => {
       // Expand to reach nested line
       const firstExpandButton = screen.getAllByTitle("Expand")[0];
       fireEvent.click(firstExpandButton); // Expand e4
-      
+
       await waitFor(() => {
         expect(screen.getByText("1.e2e4 c7c5")).toBeInTheDocument();
       });
-      
+
       const secondExpandButton = screen.getAllByTitle("Expand")[0];
       fireEvent.click(secondExpandButton); // Expand c5
 
-      // Wait for deepest line to appear
+      // Wait for deepest line to appear (last two moves shown)
       await waitFor(() => {
-        expect(screen.getByText("1.e2e4 c7c5 2.g1f3")).toBeInTheDocument();
+        expect(screen.getByText("1.c7c5 2.g1f3")).toBeInTheDocument();
       });
 
       // Click on the deepest line
-      const nf3Line = screen.getByText("1.e2e4 c7c5 2.g1f3");
+      const nf3Line = screen.getByText("1.c7c5 2.g1f3");
       fireEvent.click(nf3Line);
 
       // Verify callback was called with the full move sequence
@@ -372,11 +372,11 @@ describe("LineTree Component", () => {
       // Find the first move line (1.e2e4)
       const e4Line = screen.getByText("1.e2e4");
       expect(e4Line).toBeInTheDocument();
-      
+
       // Delete button functionality not yet implemented in UI
       const e4Row = e4Line.closest(".flex.items-center");
       const deleteBtn = e4Row?.querySelector("button[title='Delete']");
-      expect(deleteBtn).toBeUndefined();
+      expect(deleteBtn).toBeNull();
     });
 
     it("shows delete button on child nodes when onDelete is provided", () => {

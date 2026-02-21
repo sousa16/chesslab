@@ -38,7 +38,7 @@ const renderWithProviders = (component: React.ReactElement) => {
   return render(
     <SettingsProvider>
       <ToastProvider>{component}</ToastProvider>
-    </SettingsProvider>
+    </SettingsProvider>,
   );
 };
 
@@ -77,9 +77,7 @@ describe("HomePanel Component", () => {
         return Promise.resolve({
           ok: true,
           json: async () => ({
-            openings: [
-              { id: "3", root: { children: [] } },
-            ],
+            openings: [{ id: "3", root: { children: [] } }],
           }),
         });
       }
@@ -97,7 +95,7 @@ describe("HomePanel Component", () => {
 
     // Component shows greeting based on time of day
     expect(
-      screen.getByText(/Good (morning|afternoon|evening)/i)
+      screen.getByText(/Good (morning|afternoon|evening)/i),
     ).toBeInTheDocument();
   });
 
@@ -229,7 +227,7 @@ describe("HomePanel Component", () => {
 
     const practiceButton = screen.getByText(/Practice Now|Starting/);
     fireEvent.click(practiceButton);
-    
+
     await waitFor(() => {
       expect(mockOnStartPractice).toHaveBeenCalled();
     });
@@ -257,8 +255,8 @@ describe("HomePanel Component", () => {
       />,
     );
 
-    // Component shows stats labels
-    expect(screen.getByText("today")).toBeInTheDocument();
+    // Component shows stats labels (reviews replaced time today)
+    expect(screen.getByText("reviews today")).toBeInTheDocument();
     expect(screen.getByText("lines learned")).toBeInTheDocument();
   });
 
@@ -287,7 +285,7 @@ describe("HomePanel Component", () => {
 
     // Should still render without crashing
     expect(
-      screen.getByText(/Good (morning|afternoon|evening)/i)
+      screen.getByText(/Good (morning|afternoon|evening)/i),
     ).toBeInTheDocument();
   });
 

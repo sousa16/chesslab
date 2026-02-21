@@ -240,6 +240,16 @@ export default function TrainingClient({
       const data = await result.json();
 
       if (data.success) {
+        // Notify other UI parts (Home tile) that training stats changed
+        try {
+          window.dispatchEvent(
+            new CustomEvent("training-stats-updated", {
+              detail: { timeSpentMs, positionsReviewed: 1 },
+            }),
+          );
+        } catch (e) {
+          // ignore for server-side or older browsers
+        }
         // Move to next card
         setTimeout(() => {
           moveToNextCard();

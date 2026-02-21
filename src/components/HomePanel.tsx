@@ -32,6 +32,7 @@ interface TrainingStats {
   streak: number;
   accuracy: number;
   timeSpentMinutes: number;
+  positionsReviewedToday?: number;
 }
 
 interface HomePanelProps {
@@ -150,6 +151,8 @@ export function HomePanel({
   const [trainingStats, setTrainingStats] = useState<TrainingStats | null>(
     null,
   );
+  const [positionsReviewedToday, setPositionsReviewedToday] =
+    useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const { isLoading: isStartingPractice, execute: onStartPractice } =
@@ -174,6 +177,8 @@ export function HomePanel({
       if (trainingRes.ok) {
         const trainingData = await trainingRes.json();
         setTrainingStats(trainingData);
+        // Initialize positions reviewed counter from API
+        setPositionsReviewedToday(trainingData.positionsReviewedToday ?? 0);
       } else {
         console.error("Training stats fetch failed:", trainingRes.status);
       }
@@ -202,6 +207,65 @@ export function HomePanel({
 
     doFetch();
   }, [session?.user, status]);
+
+  // Listen for training updates from other parts of the app (e.g., TrainingClient)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<{
+        timeSpentMs?: number;
+        positionsReviewed?: number;
+      }>;
+      if (
+        custom &&
+        custom.detail &&
+        typeof custom.detail.positionsReviewed === "number"
+      ) {
+        // Optimistically update local positions reviewed counter
+        setPositionsReviewedToday(
+          (prev) => prev + custom.detail.positionsReviewed!,
+        );
+      } else {
+        // Fallback: refetch full stats
+        fetchStats();
+      }
+    };
+
+    window.addEventListener("training-stats-updated", handler as EventListener);
+    return () =>
+      window.removeEventListener(
+        "training-stats-updated",
+        handler as EventListener,
+      );
+  }, []);
+
+  // Periodically poll while the user is signed in and page is visible
+  useEffect(() => {
+    if (!session?.user) return;
+
+    let intervalId: number | undefined;
+
+    const startPolling = () => {
+      // Poll every 10 seconds to keep time updated during active sessions
+      intervalId = window.setInterval(() => {
+        if (document.visibilityState === "visible") {
+          fetchStats();
+        }
+      }, 10_000);
+    };
+
+    startPolling();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchStats();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      if (intervalId) window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [session?.user]);
 
   // Refetch stats when page becomes visible (after returning from practice)
   useEffect(() => {
@@ -247,12 +311,20 @@ export function HomePanel({
     (trainingStats?.colorStats?.white?.learned ?? 0) +
     (trainingStats?.colorStats?.black?.learned ?? 0);
 
+  // Display positions reviewed today (no overlap with "lines learned")
+  const displayedPositions = (() => {
+    const count = positionsReviewedToday;
+    return count;
+  })();
+
   return (
     <div className="h-full flex flex-col">
       {/* Header with Greeting */}
       <div className="p-4 lg:p-5 pb-3 lg:pb-4 border-b border-border/50">
         <div className="flex items-center justify-between mb-1">
-          <p className="text-xs lg:text-sm text-muted-foreground">{greeting},</p>
+          <p className="text-xs lg:text-sm text-muted-foreground">
+            {greeting},
+          </p>
           <Button
             variant="ghost"
             size="icon"
@@ -317,7 +389,9 @@ export function HomePanel({
                 <div className="relative">
                   <div className="absolute inset-0 bg-white/30 rounded-lg lg:rounded-xl blur-lg group-hover:bg-white/40 transition-all duration-300" />
                   <div className="relative w-12 h-12 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl bg-gradient-to-br from-white via-zinc-100 to-zinc-300 flex items-center justify-center shadow-lg border border-white/50">
-                    <span className="text-xl lg:text-2xl drop-shadow-sm">♔</span>
+                    <span className="text-xl lg:text-2xl drop-shadow-sm">
+                      ♔
+                    </span>
                   </div>
                 </div>
 
@@ -428,13 +502,18 @@ export function HomePanel({
               <div className="flex items-center gap-2 mb-1.5 lg:mb-2">
                 <div className="w-6 h-6 lg:w-7 lg:h-7 rounded-lg bg-orange-500/15 flex items-center justify-center">
                   <Flame size={12} className="text-orange-400 lg:hidden" />
-                  <Flame size={14} className="text-orange-400 hidden lg:block" />
+                  <Flame
+                    size={14}
+                    className="text-orange-400 hidden lg:block"
+                  />
                 </div>
               </div>
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
                 {trainingStats?.streak ?? 0}
               </p>
-              <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">day streak</p>
+              <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">
+                day streak
+              </p>
             </div>
 
             <div className="glass-card rounded-xl p-3 lg:p-4 hover-lift border-glow transition-all">
@@ -447,14 +526,19 @@ export function HomePanel({
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
                 {trainingStats?.accuracy ?? 0}%
               </p>
-              <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">accuracy</p>
+              <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">
+                accuracy
+              </p>
             </div>
 
             <div className="glass-card rounded-xl p-3 lg:p-4 hover-lift border-glow transition-all">
               <div className="flex items-center gap-2 mb-1.5 lg:mb-2">
                 <div className="w-6 h-6 lg:w-7 lg:h-7 rounded-lg bg-blue-500/15 flex items-center justify-center">
                   <BookOpen size={12} className="text-blue-400 lg:hidden" />
-                  <BookOpen size={14} className="text-blue-400 hidden lg:block" />
+                  <BookOpen
+                    size={14}
+                    className="text-blue-400 hidden lg:block"
+                  />
                 </div>
               </div>
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
@@ -469,16 +553,18 @@ export function HomePanel({
               <div className="flex items-center gap-2 mb-1.5 lg:mb-2">
                 <div className="w-6 h-6 lg:w-7 lg:h-7 rounded-lg bg-purple-500/15 flex items-center justify-center">
                   <Clock size={12} className="text-purple-400 lg:hidden" />
-                  <Clock size={14} className="text-purple-400 hidden lg:block" />
+                  <Clock
+                    size={14}
+                    className="text-purple-400 hidden lg:block"
+                  />
                 </div>
               </div>
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
-                {trainingStats?.dueCount === 0
-                  ? 0
-                  : (trainingStats?.timeSpentMinutes ?? 0)}
-                m
+                {displayedPositions}
               </p>
-              <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">today</p>
+              <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">
+                reviews today
+              </p>
             </div>
           </div>
         </section>

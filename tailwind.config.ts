@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  darkMode: ["class"],
+  darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -99,9 +99,12 @@ const config: Config = {
       boxShadow: {
         glow: "0 0 20px hsla(158, 50%, 45%, 0.25)",
         "glow-lg": "0 0 30px hsla(158, 50%, 45%, 0.35)",
-        elevated: "0 10px 40px -10px hsla(0, 0%, 0%, 0.3), 0 4px 6px -2px hsla(0, 0%, 0%, 0.1)",
-        "elevated-sm": "0 4px 20px -4px hsla(0, 0%, 0%, 0.25), 0 2px 4px -1px hsla(0, 0%, 0%, 0.08)",
-        glass: "0 4px 6px -1px hsla(0, 0%, 0%, 0.1), 0 2px 4px -2px hsla(0, 0%, 0%, 0.1), inset 0 1px 0 0 hsla(0, 0%, 100%, 0.05)",
+        elevated:
+          "0 10px 40px -10px hsla(0, 0%, 0%, 0.3), 0 4px 6px -2px hsla(0, 0%, 0%, 0.1)",
+        "elevated-sm":
+          "0 4px 20px -4px hsla(0, 0%, 0%, 0.25), 0 2px 4px -1px hsla(0, 0%, 0%, 0.08)",
+        glass:
+          "0 4px 6px -1px hsla(0, 0%, 0%, 0.1), 0 2px 4px -2px hsla(0, 0%, 0%, 0.1), inset 0 1px 0 0 hsla(0, 0%, 100%, 0.05)",
       },
       keyframes: {
         "accordion-down": {

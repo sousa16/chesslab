@@ -184,7 +184,9 @@ export function RepertoirePanel({
           <div className="flex-1 overflow-y-auto pr-1">
             <LineTree
               root={rootNode}
-              onBuild={(nodeId) => onBuild(undefined, nodeId)}
+              onBuild={(nodeId, fen, moveSequence) =>
+                onBuild(undefined, nodeId, fen, moveSequence)
+              }
               onLearn={(nodeId) => onLearn(undefined, nodeId)}
               onDelete={handleDeleteEntry}
               onLineClick={onLineClick}

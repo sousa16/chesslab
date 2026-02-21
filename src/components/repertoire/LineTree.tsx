@@ -3,7 +3,15 @@
  * Shows positions and expected moves with proper algebraic notation
  */
 
-import { ChevronDown, ChevronRight, Hammer, GraduationCap } from "lucide-react";
+"use client";
+
+import {
+  ChevronDown,
+  ChevronRight,
+  Hammer,
+  GraduationCap,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,6 +48,7 @@ export function LineTree({
   onLearn,
   onDelete,
   onLineClick,
+  onRefresh,
 }: LineTreeProps) {
   // Helper function to extract all moves from a node's moveSequence and convert to SAN
   const extractMovesForNode = (targetNode: LineNode): string[] => {
@@ -117,6 +126,7 @@ export function LineTree({
             onLearn={onLearn}
             onDelete={onDelete}
             onLineClick={onLineClick}
+            onRefresh={onRefresh}
             extractMovesForNode={extractMovesForNode}
             isRoot={true}
           />
@@ -134,6 +144,7 @@ export function LineTree({
         onLearn={onLearn}
         onDelete={onDelete}
         onLineClick={onLineClick}
+        onRefresh={onRefresh}
         extractMovesForNode={extractMovesForNode}
         isRoot={true}
       />
@@ -147,6 +158,7 @@ interface LineNodeComponentProps {
   onBuild: (nodeId: string) => void;
   onLearn: (nodeId: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
+  onRefresh?: () => void;
   onLineClick?: (moves: string[], startingFen: string) => void;
   extractMovesForNode: (node: LineNode) => string[];
   isRoot?: boolean;
@@ -161,6 +173,7 @@ function LineNodeComponent({
   onLineClick,
   extractMovesForNode,
   isRoot = false,
+  onRefresh,
 }: LineNodeComponentProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasChildren = node.children.length > 0;
@@ -254,7 +267,10 @@ function LineNodeComponent({
             size="sm"
             variant="ghost"
             className="h-7 w-7 p-0 rounded-lg hover:bg-primary/15 hover:text-primary"
-            onClick={() => onBuild(node.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onBuild(node.id);
+            }}
             title="Continue building from here">
             <Hammer size={13} />
           </Button>
@@ -262,10 +278,35 @@ function LineNodeComponent({
             size="sm"
             variant="ghost"
             className="h-7 w-7 p-0 rounded-lg hover:bg-primary/15 hover:text-primary"
-            onClick={() => onLearn(node.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onLearn(node.id);
+            }}
             title="Practice this line">
             <GraduationCap size={13} />
           </Button>
+          {onDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 rounded-lg hover:bg-destructive/15 hover:text-destructive"
+              onClick={async (e) => {
+                e.stopPropagation();
+                const ok = confirm(
+                  "Delete this line and all following child positions? This cannot be undone.",
+                );
+                if (!ok) return;
+                try {
+                  await onDelete(node.id);
+                  onRefresh?.();
+                } catch (err) {
+                  console.error("Failed to delete entry:", err);
+                }
+              }}
+              title="Delete this line">
+              <Trash2 size={13} />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -281,6 +322,7 @@ function LineNodeComponent({
               onLearn={onLearn}
               onDelete={onDelete}
               onLineClick={onLineClick}
+              onRefresh={onRefresh}
               extractMovesForNode={extractMovesForNode}
             />
           ))}

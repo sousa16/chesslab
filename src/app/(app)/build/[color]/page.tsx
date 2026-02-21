@@ -312,7 +312,7 @@ export default function BuildPage({
           <div className="lg:hidden w-full max-w-2xl px-4">
             <Button
               className="w-full h-12 text-sm btn-primary-gradient rounded-xl font-medium gap-2"
-              onClick={() => handleAddMove("")}
+              onClick={() => handleAddMove()}
               disabled={moves.length === 0 || isSavingLine}>
               <Save size={18} />
               {isSavingLine ? "Saving..." : "Save Line"}

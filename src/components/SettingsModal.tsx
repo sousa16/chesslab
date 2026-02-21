@@ -178,8 +178,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         <DialogPortal>
           <DialogOverlay className="!backdrop-blur-none bg-black" />
           <DialogPrimitive.Content
-            className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-[hsl(var(--background))] opacity-100 p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg max-h-[85vh] overflow-y-auto"
-            style={{ backgroundColor: 'hsl(var(--background))', opacity: 1 }}
+            className="fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] sm:w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background opacity-100 p-4 sm:p-6 shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-lg max-h-[90vh] overflow-y-auto"
           >
             <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none text-foreground z-10">
               <X className="h-4 w-4" />
@@ -188,16 +187,16 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             
             {/* Header */}
             <DialogHeader>
-              <DialogTitle className="text-2xl font-semibold">Settings</DialogTitle>
+              <DialogTitle className="text-xl sm:text-2xl font-semibold">Settings</DialogTitle>
             </DialogHeader>
 
           <div className="space-y-6 py-4">
             {/* Account Section */}
             <section>
-              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+              <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
                 Account
               </h2>
-              <div className="bg-surface-1 rounded-lg border border-border divide-y divide-border">
+              <div className="bg-background rounded-lg border border-border divide-y divide-border">
                 {/* Profile Picture & Basic Info */}
                 <div className="p-4 flex items-center gap-4">
                   <div className="relative w-14 h-14">
@@ -253,7 +252,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
                 {/* Email */}
                 <div
-                  className="p-4 flex items-center justify-between cursor-not-allowed opacity-60"
+                  className="p-3 sm:p-4 flex items-center justify-between cursor-not-allowed opacity-60"
                   title="Email changes coming soon">
                   <div className="flex items-center gap-3">
                     <Mail size={20} className="text-muted-foreground" />
@@ -271,7 +270,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 {/* Password Change */}
                 {hasPassword && (
                   <div
-                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-surface-2 transition-colors"
+                    className="p-3 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-surface-2 transition-colors"
                     onClick={() => setShowPasswordDialog(true)}>
                     <div className="flex items-center gap-3">
                       <Key size={20} className="text-muted-foreground" />
@@ -289,7 +288,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 )}
 
                 {/* Account Created */}
-                <div className="p-4 flex items-center gap-3">
+                <div className="p-3 sm:p-4 flex items-center gap-3">
                   <Calendar size={20} className="text-muted-foreground" />
                   <div>
                     <p className="text-base font-medium text-foreground">
@@ -314,11 +313,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
             {/* Appearance */}
             <section>
-              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+              <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
                 Appearance
               </h2>
-              <div className="bg-surface-1 rounded-lg border border-border">
-                <div className="p-4 flex items-center justify-between">
+              <div className="bg-background rounded-lg border border-border">
+                <div className="p-3 sm:p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Palette size={20} className="text-muted-foreground" />
                     <div>
@@ -337,18 +336,18 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
             {/* Training Preferences */}
             <section>
-              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+              <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
                 Training
               </h2>
-              <div className="bg-surface-1 rounded-lg border border-border divide-y divide-border">
-                <div className="p-4 flex items-center justify-between">
+              <div className="bg-background rounded-lg border border-border divide-y divide-border">
+                <div className="p-3 sm:p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Bell size={20} className="text-muted-foreground" />
                     <div>
-                      <p className="text-base font-medium text-foreground">
+                      <p className="text-sm sm:text-base font-medium text-foreground">
                         Daily reminder
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         Get notified to practice
                       </p>
                     </div>
@@ -358,14 +357,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     onCheckedChange={setDailyReminder}
                   />
                 </div>
-                <div className="p-4 flex items-center justify-between">
+                <div className="p-3 sm:p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Volume2 size={20} className="text-muted-foreground" />
                     <div>
-                      <p className="text-base font-medium text-foreground">
+                      <p className="text-sm sm:text-base font-medium text-foreground">
                         Sound effects
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         Play sounds for moves
                       </p>
                     </div>
@@ -375,14 +374,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     onCheckedChange={setSoundEffects}
                   />
                 </div>
-                <div className="p-4 flex items-center justify-between">
+                <div className="p-3 sm:p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Grid3x3 size={20} className="text-muted-foreground" />
                     <div>
-                      <p className="text-base font-medium text-foreground">
+                      <p className="text-sm sm:text-base font-medium text-foreground">
                         Show coordinates
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         Display board coordinates
                       </p>
                     </div>
@@ -399,12 +398,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
             {/* Danger Zone */}
             <section>
-              <h2 className="text-sm font-medium text-destructive uppercase tracking-wider mb-3">
+              <h2 className="text-xs sm:text-sm font-medium text-destructive uppercase tracking-wider mb-3">
                 Danger Zone
               </h2>
-              <div className="bg-surface-1 rounded-lg border border-border">
+              <div className="bg-background rounded-lg border border-border">
                 <div
-                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-destructive/5 transition-colors"
+                  className="p-3 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-destructive/5 transition-colors"
                   onClick={() => setShowDeleteDialog(true)}>
                   <div className="flex items-center gap-3">
                     <Trash2 size={20} className="text-destructive" />

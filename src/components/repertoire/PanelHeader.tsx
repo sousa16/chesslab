@@ -19,10 +19,10 @@ export function PanelHeader({
 }: PanelHeaderProps) {
   return (
     <div className="border-b border-border/50 glass-panel">
-      <div className="p-5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="p-4 lg:p-5 flex items-center justify-between">
+        <div className="flex items-center gap-3 lg:gap-4">
           {icon && <div>{icon}</div>}
-          <h2 className="text-xl font-semibold text-foreground tracking-tight">{title}</h2>
+          <h2 className="text-lg lg:text-xl font-semibold text-foreground tracking-tight">{title}</h2>
         </div>
         <Button
           variant="ghost"

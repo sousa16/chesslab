@@ -237,9 +237,16 @@ describe("TrainingClient Component", () => {
     it("should navigate back to home when back button is clicked", () => {
       renderWithProviders(<TrainingClient user={mockUser} />);
 
-      // Find the back button (ChevronLeft icon button)
-      const buttons = screen.getAllByRole("button");
-      fireEvent.click(buttons[0]); // First button is back
+      // Find the back button (ChevronLeft icon button) - it's in the sidebar header with aria-label or test specific button
+      // The sidebar header has a back button with ChevronLeft
+      const backButtons = screen.getAllByRole("button");
+      // Filter to find the back button in the Training sidebar (not the mobile nav toggle)
+      // The back button is inside the aside element, after mobile nav buttons
+      const sidebarBackButton = backButtons.find(
+        (btn) => btn.closest("aside") !== null
+      );
+      expect(sidebarBackButton).toBeTruthy();
+      fireEvent.click(sidebarBackButton!);
 
       expect(mockPush).toHaveBeenCalledWith("/home");
     });

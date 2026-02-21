@@ -3,8 +3,11 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
+import { MobileNav } from "@/components/MobileNav";
 import { Board, BoardHandle } from "@/components/Board";
 import { BuildPanel } from "@/components/BuildPanel";
+import { Button } from "@/components/ui/button";
+import { Save } from "lucide-react";
 import { convertSanToUci } from "@/lib/repertoire";
 import { useToast } from "@/components/ui/toast";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
@@ -35,6 +38,7 @@ export default function BuildPage({
   const [moves, setMoves] = useState<Move[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const moveParam = searchParams.get("move");
   const [initialMoves, setInitialMoves] = useState<string[]>([]);
@@ -193,23 +197,38 @@ export default function BuildPage({
   const currentMove = moves[currentMoveIndex - 1];
 
   return (
-    <div className="h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+      {/* Mobile Navigation */}
+      <MobileNav
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        onLogoClick={handleBack}
+      />
+
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Left Panel - Board */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
-        {/* Logo in corner */}
-        <div className="absolute top-4 left-4">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 min-h-screen pt-20 lg:pt-6 relative">
+        {/* Logo in corner - hidden on mobile */}
+        <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" />
         </div>
 
-        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-4">
+        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-2 lg:gap-4">
           {/* Position indicator */}
-          <div className="w-full px-1 h-14 flex items-center">
+          <div className="w-full px-1 h-10 lg:h-14 flex items-center">
             {currentMove && (
-              <div className="bg-surface-2 rounded-lg px-4 py-3 border border-border/50 inline-flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">
+              <div className="bg-surface-2 rounded-lg px-3 lg:px-4 py-2 lg:py-3 border border-border/50 inline-flex items-center gap-2 lg:gap-3">
+                <span className="text-xs lg:text-sm text-muted-foreground">
                   Position after
                 </span>
-                <span className="text-base font-mono text-foreground">
+                <span className="text-sm lg:text-base font-mono text-foreground">
                   {currentMoveIndex}. {currentMove.white}
                   {currentMove.black && ` ${currentMove.black}`}
                 </span>
@@ -228,7 +247,7 @@ export default function BuildPage({
           />
 
           {/* Hint - Enhanced with better styling */}
-          <div className="text-center h-14 flex items-center justify-center w-full">
+          <div className="text-center h-10 lg:h-14 flex items-center justify-center w-full">
             {(() => {
               // Determine whose turn it is based on the moves array
               const lastMove = moves[moves.length - 1];
@@ -257,7 +276,7 @@ export default function BuildPage({
 
               return (
                 <div
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${
+                  className={`inline-flex items-center gap-2 px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl ${
                     isUserTurn
                       ? "bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30"
                       : "bg-surface-2/50 border border-border/30"
@@ -266,7 +285,7 @@ export default function BuildPage({
                     <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                   )}
                   <p
-                    className={`text-sm font-medium ${
+                    className={`text-xs lg:text-sm font-medium ${
                       isUserTurn ? "text-foreground" : "text-muted-foreground"
                     }`}>
                     {message}
@@ -276,8 +295,8 @@ export default function BuildPage({
             })()}
           </div>
 
-          {/* Invisible placeholder for board controls alignment */}
-          <div className="flex items-center gap-3 invisible">
+          {/* Invisible placeholder for board controls alignment - hidden on mobile */}
+          <div className="hidden lg:flex items-center gap-3 invisible">
             <div className="flex items-center justify-center gap-3">
               <button className="h-14 w-14 p-0" />
               <button className="h-14 w-14 p-0" />
@@ -288,11 +307,30 @@ export default function BuildPage({
             </div>
             <button className="h-12 w-12 p-0" />
           </div>
+
+          {/* Mobile Save Button - Below Board */}
+          <div className="lg:hidden w-full max-w-2xl px-4">
+            <Button
+              className="w-full h-12 text-sm btn-primary-gradient rounded-xl font-medium gap-2"
+              onClick={() => handleAddMove("")}
+              disabled={moves.length === 0 || isSavingLine}>
+              <Save size={18} />
+              {isSavingLine ? "Saving..." : "Save Line"}
+            </Button>
+            {moves.length > 0 && (
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                This will add {moves.length} positions to your repertoire
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Right Panel */}
-      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0 flex flex-col overflow-hidden">
+      {/* Right Panel - Sidebar */}
+      <aside
+        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-background flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        }`}>
         <BuildPanel
           color={color}
           onBack={handleBack}

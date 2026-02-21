@@ -13,19 +13,22 @@ export function ProgressCard({ label, current, total }: ProgressCardProps) {
   const isComplete = percentage === 100;
 
   return (
-    <div className="glass-card rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <div className="flex items-center gap-2">
+    <div className="glass-card rounded-xl p-3 lg:p-4">
+      <div className="flex items-center justify-between mb-2 lg:mb-3">
+        <p className="text-xs lg:text-sm font-medium text-muted-foreground">{label}</p>
+        <div className="flex items-center gap-1.5 lg:gap-2">
           {isComplete && (
-            <CheckCircle2 size={14} className="text-primary" />
+            <CheckCircle2 size={12} className="text-primary lg:hidden" />
           )}
-          <p className="text-sm font-semibold text-foreground">
+          {isComplete && (
+            <CheckCircle2 size={14} className="text-primary hidden lg:block" />
+          )}
+          <p className="text-xs lg:text-sm font-semibold text-foreground">
             {current}/{total}
           </p>
         </div>
       </div>
-      <div className="h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
+      <div className="h-1 lg:h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-500 ${
             isComplete 
@@ -35,7 +38,7 @@ export function ProgressCard({ label, current, total }: ProgressCardProps) {
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <p className={`text-sm mt-2 ${
+      <p className={`text-xs lg:text-sm mt-1.5 lg:mt-2 ${
         isComplete ? "text-primary font-medium" : "text-muted-foreground"
       }`}>
         {isComplete ? "Complete!" : `${percentage}% complete`}

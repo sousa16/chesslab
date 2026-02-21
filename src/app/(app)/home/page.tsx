@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeftRight } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { MobileNav } from "@/components/MobileNav";
 import { HomePanel } from "@/components/HomePanel";
 import { RepertoirePanel } from "@/components/RepertoirePanel";
 import { Board, BoardHandle } from "@/components/Board";
@@ -39,6 +40,7 @@ export default function Home() {
   );
   const [initialMoves, setInitialMoves] = useState<string[]>([]);
   const [initialFen, setInitialFen] = useState<string>("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const boardRef = useRef<BoardHandle>(null);
 
   useEffect(() => {
@@ -133,11 +135,26 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+      {/* Mobile Navigation */}
+      <MobileNav
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        onLogoClick={() => setView("home")}
+      />
+
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Left Panel - Board */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
-        {/* Logo in corner */}
-        <div className="absolute top-4 left-4">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 min-h-screen pt-20 lg:pt-6 relative">
+        {/* Logo in corner - hidden on mobile */}
+        <div className="absolute top-4 left-4 hidden lg:block">
           <Logo
             size="xl"
             clickable={true}
@@ -145,23 +162,23 @@ export default function Home() {
           />
         </div>
 
-        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-4">
+        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-2 lg:gap-4">
           {/* Player Info - Top */}
-          <div className="h-14 flex items-center gap-4 px-1">
+          <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center ${
+              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "black"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-lg font-medium ${
+                className={`text-base lg:text-lg font-medium ${
                   selectedColor === "black" ? "text-zinc-800" : "text-zinc-300"
                 }`}>
                 {selectedColor === "black" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-base text-muted-foreground">
+            <p className="text-sm lg:text-base text-muted-foreground">
               {selectedColor === "black" ? "White" : "Black"}
             </p>
           </div>
@@ -177,25 +194,25 @@ export default function Home() {
           />
 
           {/* Player Info - Bottom */}
-          <div className="h-14 flex items-center gap-4 px-1">
+          <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center ${
+              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "white"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-lg font-medium ${
+                className={`text-base lg:text-lg font-medium ${
                   selectedColor === "white" ? "text-zinc-800" : "text-zinc-300"
                 }`}>
                 {selectedColor === "white" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-base text-foreground font-medium">You</p>
+            <p className="text-sm lg:text-base text-foreground font-medium">You</p>
           </div>
 
           {/* Board Controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 lg:gap-3">
             <BoardControls
               onFirstMove={() => boardRef.current?.goToFirst()}
               onPreviousMove={() => boardRef.current?.goToPrevious()}
@@ -205,17 +222,30 @@ export default function Home() {
             />
             <Button
               variant="ghost"
-              className="h-12 w-12 p-0 text-muted-foreground hover:text-foreground [&_svg]:size-auto"
+              className="h-10 w-10 lg:h-12 lg:w-12 p-0 text-muted-foreground hover:text-foreground [&_svg]:size-auto"
               title="Rotate board"
               onClick={handleRotateBoard}>
-              <ArrowLeftRight size={26} />
+              <ArrowLeftRight size={22} className="lg:hidden" />
+              <ArrowLeftRight size={26} className="hidden lg:block" />
+            </Button>
+          </div>
+
+          {/* Mobile Start Practice Button - Below Board */}
+          <div className="lg:hidden w-full max-w-2xl px-4 mt-6">
+            <Button
+              className="w-full h-12 text-sm btn-primary-gradient rounded-xl font-medium"
+              onClick={handleStartPractice}>
+              Start Practice
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Right Panel */}
-      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0 flex flex-col overflow-hidden">
+      {/* Right Panel - Sidebar */}
+      <aside
+        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-background flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        }`}>
         {view === "home" ? (
           <HomePanel
             onSelectRepertoire={handleSelectRepertoire}

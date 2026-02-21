@@ -87,7 +87,7 @@ describe("BoardControls Component", () => {
 
     expect(controlsWrapper).toHaveClass(
       "glass-card",
-      "rounded-2xl",
+      "rounded-xl",
       "inline-flex",
       "items-center"
     );

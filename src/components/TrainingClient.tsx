@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
+import { MobileNav } from "@/components/MobileNav";
 import { Board, BoardHandle } from "@/components/Board";
 import { type ReviewResponse } from "@/lib/sm2";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -69,6 +70,7 @@ export default function TrainingClient({
     color: "correct" | "incorrect";
   } | null>(null);
   const [sessionComplete, setSessionComplete] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const cardStartTimeRef = useRef<number>(Date.now());
 
   // Initialize to first non-empty repertoire
@@ -263,18 +265,18 @@ export default function TrainingClient({
   // Empty state
   if (!currentRepertoire || currentRepertoire.entries.length === 0) {
     return (
-      <div className="h-screen bg-background flex">
+      <div className="min-h-screen bg-background flex flex-col lg:flex-row">
         {/* Left Panel - Empty Board */}
-        <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
-          <div className="absolute top-4 left-4">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 min-h-[50vh] lg:min-h-screen relative">
+          <div className="absolute top-4 left-4 hidden lg:block">
             <Logo size="xl" clickable={true} onLogoClick={handleBack} />
           </div>
           <div className="text-center space-y-4">
-            <Trophy className="w-16 h-16 text-primary mx-auto" />
-            <h2 className="text-2xl font-semibold text-foreground">
+            <Trophy className="w-12 h-12 lg:w-16 lg:h-16 text-primary mx-auto" />
+            <h2 className="text-xl lg:text-2xl font-semibold text-foreground">
               All caught up!
             </h2>
-            <p className="text-muted-foreground max-w-md">
+            <p className="text-sm lg:text-base text-muted-foreground max-w-md">
               No cards to review right now. Add new positions to your repertoire
               or come back later.
             </p>
@@ -290,17 +292,17 @@ export default function TrainingClient({
   // Session complete state
   if (sessionComplete) {
     return (
-      <div className="h-screen bg-background flex">
-        <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
-          <div className="absolute top-4 left-4">
+      <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 min-h-[50vh] lg:min-h-screen relative">
+          <div className="absolute top-4 left-4 hidden lg:block">
             <Logo size="xl" clickable={true} onLogoClick={handleBack} />
           </div>
           <div className="text-center space-y-4">
-            <Trophy className="w-16 h-16 text-primary mx-auto" />
-            <h2 className="text-2xl font-semibold text-foreground">
+            <Trophy className="w-12 h-12 lg:w-16 lg:h-16 text-primary mx-auto" />
+            <h2 className="text-xl lg:text-2xl font-semibold text-foreground">
               Session Complete!
             </h2>
-            <p className="text-muted-foreground">
+            <p className="text-sm lg:text-base text-muted-foreground">
               You reviewed {totalCards} position{totalCards !== 1 ? "s" : ""}.
             </p>
             <Button onClick={handleBack} className="mt-4 btn-primary-gradient">
@@ -321,25 +323,40 @@ export default function TrainingClient({
     repertoires.some((r) => r.color === "Black");
 
   return (
-    <div className="h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+      {/* Mobile Navigation */}
+      <MobileNav
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        onLogoClick={handleBack}
+      />
+
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Left Panel - Board */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 min-w-0 h-screen">
-        {/* Logo in corner */}
-        <div className="absolute top-4 left-4">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 min-h-screen pt-20 lg:pt-6 relative">
+        {/* Logo in corner - hidden on mobile */}
+        <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" clickable={true} onLogoClick={handleBack} />
         </div>
 
-        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-4">
+        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-2 lg:gap-4">
           {/* Player Info - Top (Opponent) */}
-          <div className="h-14 flex items-center gap-4 px-1">
+          <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center ${
+              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
                 repertoireColor === "black"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-lg font-medium ${
+                className={`text-base lg:text-lg font-medium ${
                   repertoireColor === "black"
                     ? "text-zinc-800"
                     : "text-zinc-300"
@@ -347,7 +364,7 @@ export default function TrainingClient({
                 {repertoireColor === "black" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-base text-muted-foreground">
+            <p className="text-sm lg:text-base text-muted-foreground">
               {repertoireColor === "black" ? "White" : "Black"}
             </p>
           </div>
@@ -365,15 +382,15 @@ export default function TrainingClient({
           />
 
           {/* Player Info - Bottom (You) */}
-          <div className="h-14 flex items-center gap-4 px-1">
+          <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center ${
+              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
                 repertoireColor === "white"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-lg font-medium ${
+                className={`text-base lg:text-lg font-medium ${
                   repertoireColor === "white"
                     ? "text-zinc-800"
                     : "text-zinc-300"
@@ -381,19 +398,19 @@ export default function TrainingClient({
                 {repertoireColor === "white" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-base text-foreground font-medium">You</p>
+            <p className="text-sm lg:text-base text-foreground font-medium">You</p>
           </div>
 
           {/* Status indicator */}
-          <div className="flex items-center justify-center h-12">
+          <div className="flex items-center justify-center h-10 lg:h-12">
             {feedbackSquare && (
               <div
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl ${
+                className={`inline-flex items-center gap-2 px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl ${
                   feedbackSquare.color === "correct"
                     ? "bg-green-500/20 border border-green-500/30 text-green-400"
                     : "bg-red-500/20 border border-red-500/30 text-red-400"
                 }`}>
-                <span className="text-sm font-medium">
+                <span className="text-xs lg:text-sm font-medium">
                   {feedbackSquare.color === "correct"
                     ? "Correct!"
                     : "Try again"}
@@ -405,10 +422,13 @@ export default function TrainingClient({
       </div>
 
       {/* Right Panel - Training Sidebar */}
-      <aside className="w-96 xl:w-[28rem] border-l border-border bg-surface-1 flex-shrink-0 flex flex-col overflow-hidden">
+      <aside
+        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-background flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        }`}>
         {/* Header */}
-        <div className="p-5 border-b border-border/50 glass-panel">
-          <div className="flex items-center justify-between mb-4">
+        <div className="p-4 lg:p-5 border-b border-border/50 glass-panel">
+          <div className="flex items-center justify-between mb-3 lg:mb-4">
             <Button
               variant="ghost"
               size="icon"
@@ -416,7 +436,7 @@ export default function TrainingClient({
               onClick={handleBack}>
               <ChevronLeft size={20} />
             </Button>
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium uppercase tracking-wide">
+            <div className="flex items-center gap-1.5 px-2.5 lg:px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium uppercase tracking-wide">
               {isPracticeMode ? (
                 <GraduationCap size={12} />
               ) : (
@@ -427,24 +447,24 @@ export default function TrainingClient({
           </div>
 
           {/* Color Badge - Hero Style */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 lg:gap-4">
             {isBothColors ? (
               <>
                 <div className="relative flex -space-x-3">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50 z-10">
-                    <span className="text-2xl drop-shadow-sm">♔</span>
+                  <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50 z-10">
+                    <span className="text-xl lg:text-2xl drop-shadow-sm">♔</span>
                   </div>
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50">
-                    <span className="text-2xl drop-shadow-sm text-zinc-300">
+                  <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50">
+                    <span className="text-xl lg:text-2xl drop-shadow-sm text-zinc-300">
                       ♚
                     </span>
                   </div>
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground">
+                  <h2 className="text-lg lg:text-xl font-semibold text-foreground">
                     Both Colors
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-xs lg:text-sm text-muted-foreground mt-0.5">
                     {totalCards} positions to{" "}
                     {isPracticeMode ? "practice" : "review"}
                   </p>
@@ -453,21 +473,21 @@ export default function TrainingClient({
             ) : (
               <>
                 <div
-                  className={`relative w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${
+                  className={`relative w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg ${
                     repertoireColor === "white"
                       ? "bg-gradient-to-br from-white via-zinc-100 to-zinc-300 border border-white/50"
                       : "bg-gradient-to-br from-zinc-600 via-zinc-800 to-zinc-900 border border-zinc-600/50"
                   }`}>
                   <span
-                    className={`text-2xl drop-shadow-sm ${repertoireColor === "black" ? "text-zinc-300" : ""}`}>
+                    className={`text-xl lg:text-2xl drop-shadow-sm ${repertoireColor === "black" ? "text-zinc-300" : ""}`}>
                     {repertoireColor === "white" ? "♔" : "♚"}
                   </span>
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground capitalize">
+                  <h2 className="text-lg lg:text-xl font-semibold text-foreground capitalize">
                     {repertoireColor} Repertoire
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-xs lg:text-sm text-muted-foreground mt-0.5">
                     {totalCards} positions to{" "}
                     {isPracticeMode ? "practice" : "review"}
                   </p>
@@ -478,16 +498,16 @@ export default function TrainingClient({
         </div>
 
         {/* Content */}
-        <div className="flex-1 p-5 flex flex-col overflow-y-auto">
+        <div className="flex-1 p-4 lg:p-5 flex flex-col overflow-y-auto">
           {/* Progress */}
-          <div className="glass-card rounded-xl p-4 mb-5">
-            <div className="flex justify-between text-sm mb-2">
+          <div className="glass-card rounded-xl p-3 lg:p-4 mb-4 lg:mb-5">
+            <div className="flex justify-between text-xs lg:text-sm mb-2">
               <span className="text-muted-foreground">Progress</span>
               <span className="text-foreground font-medium">
                 {totalReviewed + 1} / {totalCards}
               </span>
             </div>
-            <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+            <div className="h-1.5 lg:h-2 bg-surface-2 rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary transition-all duration-300"
                 style={{ width: `${progress}%` }}
@@ -496,15 +516,15 @@ export default function TrainingClient({
           </div>
 
           {/* Streak */}
-          <div className="glass-card rounded-xl p-4 mb-5">
-            <div className="flex items-center justify-center gap-3">
+          <div className="glass-card rounded-xl p-3 lg:p-4 mb-4 lg:mb-5">
+            <div className="flex items-center justify-center gap-2 lg:gap-3">
               <Flame
-                className={`w-6 h-6 ${streak > 0 ? "text-orange-500" : "text-muted-foreground"}`}
+                className={`w-5 h-5 lg:w-6 lg:h-6 ${streak > 0 ? "text-orange-500" : "text-muted-foreground"}`}
               />
-              <span className="text-2xl font-bold text-foreground">
+              <span className="text-xl lg:text-2xl font-bold text-foreground">
                 {streak}
               </span>
-              <span className="text-sm text-muted-foreground">streak</span>
+              <span className="text-xs lg:text-sm text-muted-foreground">streak</span>
             </div>
           </div>
 
@@ -512,14 +532,14 @@ export default function TrainingClient({
           <div className="flex-1 flex flex-col items-center justify-center">
             {!showingAnswer ? (
               /* Prompt to make move or show answer */
-              <div className="text-center space-y-5 w-full">
-                <div className="relative overflow-hidden rounded-xl p-5 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-12 -mt-12" />
+              <div className="text-center space-y-4 lg:space-y-5 w-full">
+                <div className="relative overflow-hidden rounded-xl p-4 lg:p-5 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30">
+                  <div className="absolute top-0 right-0 w-24 lg:w-32 h-24 lg:h-32 bg-primary/10 rounded-full blur-3xl -mr-8 lg:-mr-12 -mt-8 lg:-mt-12" />
                   <div className="relative">
-                    <p className="text-lg text-foreground font-semibold mb-2">
+                    <p className="text-base lg:text-lg text-foreground font-semibold mb-1 lg:mb-2">
                       Ready to reveal?
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs lg:text-sm text-muted-foreground">
                       Click below to see the answer
                     </p>
                   </div>
@@ -527,28 +547,29 @@ export default function TrainingClient({
 
                 <Button
                   variant="outline"
-                  className="w-full h-12 text-base rounded-xl border-border/50 hover:bg-surface-2"
+                  className="w-full h-10 lg:h-12 text-sm lg:text-base rounded-xl border-border/50 hover:bg-surface-2"
                   onClick={handleShowAnswer}>
-                  <Eye size={18} className="mr-2" />
+                  <Eye size={16} className="mr-2 lg:hidden" />
+                  <Eye size={18} className="mr-2 hidden lg:block" />
                   Show Answer
                 </Button>
               </div>
             ) : (
               /* Answer revealed - show move and feedback buttons */
-              <div className="text-center space-y-5 w-full">
+              <div className="text-center space-y-4 lg:space-y-5 w-full">
                 {/* The Move */}
-                <div className="glass-card rounded-xl p-6">
-                  <p className="text-sm text-muted-foreground mb-2">
+                <div className="glass-card rounded-xl p-4 lg:p-6">
+                  <p className="text-xs lg:text-sm text-muted-foreground mb-1 lg:mb-2">
                     The move was
                   </p>
-                  <p className="text-3xl font-mono font-bold text-foreground">
+                  <p className="text-2xl lg:text-3xl font-mono font-bold text-foreground">
                     {getExpectedMoveDisplay()}
                   </p>
                 </div>
 
                 {/* Feedback Question */}
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
+                <div className="space-y-2 lg:space-y-3">
+                  <p className="text-xs lg:text-sm text-muted-foreground">
                     How well did you know this?
                   </p>
 
@@ -557,34 +578,34 @@ export default function TrainingClient({
                     <Button
                       onClick={() => handleRecallRating("forgot")}
                       disabled={isReviewing}
-                      className="h-14 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                      className="h-12 lg:h-14 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
-                      <span className="text-sm font-medium">Forgot</span>
-                      <span className="text-xs opacity-70">Again</span>
+                      <span className="text-xs lg:text-sm font-medium">Forgot</span>
+                      <span className="text-[10px] lg:text-xs opacity-70">Again</span>
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("partial")}
                       disabled={isReviewing}
-                      className="h-14 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                      className="h-12 lg:h-14 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
-                      <span className="text-sm font-medium">Hard</span>
-                      <span className="text-xs opacity-70">Struggled</span>
+                      <span className="text-xs lg:text-sm font-medium">Hard</span>
+                      <span className="text-[10px] lg:text-xs opacity-70">Struggled</span>
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("effort")}
                       disabled={isReviewing}
-                      className="h-14 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                      className="h-12 lg:h-14 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
-                      <span className="text-sm font-medium">Good</span>
-                      <span className="text-xs opacity-70">With effort</span>
+                      <span className="text-xs lg:text-sm font-medium">Good</span>
+                      <span className="text-[10px] lg:text-xs opacity-70">With effort</span>
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("easy")}
                       disabled={isReviewing}
-                      className="h-14 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                      className="h-12 lg:h-14 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
-                      <span className="text-sm font-medium">Easy</span>
-                      <span className="text-xs opacity-70">No problem</span>
+                      <span className="text-xs lg:text-sm font-medium">Easy</span>
+                      <span className="text-[10px] lg:text-xs opacity-70">No problem</span>
                     </Button>
                   </div>
                 </div>
@@ -595,7 +616,7 @@ export default function TrainingClient({
           {/* Feedback message */}
           {feedback && (
             <div
-              className={`mt-4 p-3 rounded-xl text-sm text-center ${
+              className={`mt-3 lg:mt-4 p-2 lg:p-3 rounded-xl text-xs lg:text-sm text-center ${
                 feedback.includes("Error")
                   ? "bg-red-500/20 text-red-400 border border-red-500/30"
                   : "bg-primary/20 text-primary border border-primary/30"
@@ -606,12 +627,12 @@ export default function TrainingClient({
         </div>
 
         {/* Footer with current color indicator */}
-        <div className="border-t border-border/50 p-5 glass-panel">
-          <div className="flex items-center justify-between text-sm">
+        <div className="border-t border-border/50 p-4 lg:p-5 glass-panel">
+          <div className="flex items-center justify-between text-xs lg:text-sm">
             <span className="text-muted-foreground">Currently reviewing</span>
             <div className="flex items-center gap-2">
               <div
-                className={`w-6 h-6 rounded-lg flex items-center justify-center text-sm ${
+                className={`w-5 h-5 lg:w-6 lg:h-6 rounded-lg flex items-center justify-center text-xs lg:text-sm ${
                   repertoireColor === "white"
                     ? "bg-zinc-100 text-zinc-900"
                     : "bg-zinc-800 text-zinc-100"

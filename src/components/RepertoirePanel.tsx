@@ -110,7 +110,7 @@ export function RepertoirePanel({
         title={`${color.charAt(0).toUpperCase() + color.slice(1)} Repertoire`}
         onBack={onBack}
         icon={<ColorBadge color={color} />}>
-        <div className="p-4 pt-0">
+        <div className="p-3 lg:p-4 pt-0">
           <ProgressCard
             label="Mastery Level"
             current={masteredPositions}
@@ -120,7 +120,7 @@ export function RepertoirePanel({
       </PanelHeader>
 
       {/* Global Actions */}
-      <div className="p-5 space-y-3 border-b border-border/50">
+      <div className="p-4 lg:p-5 space-y-2 lg:space-y-3 border-b border-border/50">
         <ActionButton
           icon={Hammer}
           title="Build"
@@ -138,24 +138,24 @@ export function RepertoirePanel({
       </div>
 
       {/* Openings Tree */}
-      <div className="flex-1 p-5 overflow-hidden flex flex-col">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+      <div className="flex-1 p-4 lg:p-5 overflow-hidden flex flex-col">
+        <h3 className="text-[10px] lg:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 lg:mb-4">
           Opening Lines
         </h3>
         {isLoading ? (
-          <div className="text-center py-12">
-            <div className="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-4 animate-pulse">
-              <span className="text-2xl">♟</span>
+          <div className="text-center py-8 lg:py-12">
+            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-3 lg:mb-4 animate-pulse">
+              <span className="text-xl lg:text-2xl">♟</span>
             </div>
-            <p className="text-muted-foreground">Loading repertoire...</p>
+            <p className="text-xs lg:text-sm text-muted-foreground">Loading repertoire...</p>
           </div>
         ) : !rootNode || rootNode.children.length === 0 ? (
-          <div className="glass-card rounded-xl p-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">♔</span>
+          <div className="glass-card rounded-xl p-6 lg:p-8 text-center">
+            <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl lg:rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mx-auto mb-3 lg:mb-4">
+              <span className="text-2xl lg:text-3xl">♔</span>
             </div>
-            <p className="text-foreground font-medium mb-2">No openings yet</p>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm lg:text-base text-foreground font-medium mb-1 lg:mb-2">No openings yet</p>
+            <p className="text-xs lg:text-sm text-muted-foreground mb-3 lg:mb-4">
               Start building your repertoire by adding your first opening line.
             </p>
           </div>

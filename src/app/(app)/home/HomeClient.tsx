@@ -130,7 +130,7 @@ export default function HomeClient() {
         />
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-screen lg:h-screen pt-14 relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-screen lg:h-screen pt-14 lg:pt-0 pb-4 lg:pb-6 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo
             size="xl"
@@ -139,7 +139,7 @@ export default function HomeClient() {
           />
         </div>
 
-        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-2 lg:gap-4 min-h-0">
+        <div className="w-full max-w-2xl h-full flex flex-col items-center gap-2 lg:gap-4 min-h-0 py-2 lg:py-4">
           <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div
               className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${selectedColor === "black" ? "bg-zinc-100" : "bg-zinc-800 border border-zinc-700"}`}>
@@ -153,14 +153,18 @@ export default function HomeClient() {
             </p>
           </div>
 
-          <Board
-            ref={boardRef}
-            playerColor={selectedColor}
-            buildMode={true}
-            onMoveMade={handleMoveMade}
-            initialMoves={initialMoves}
-            initialFen={initialFen}
-          />
+          <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+            <div className="aspect-square h-full max-w-full">
+              <Board
+                ref={boardRef}
+                playerColor={selectedColor}
+                buildMode={true}
+                onMoveMade={handleMoveMade}
+                initialMoves={initialMoves}
+                initialFen={initialFen}
+              />
+            </div>
+          </div>
 
           <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div

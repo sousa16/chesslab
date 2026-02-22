@@ -465,7 +465,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     return (
       <div className="relative">
         <div
-          className="w-full aspect-square max-w-2xl max-h-full rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
+          className="w-full h-full rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
           data-testid="board"
           onClick={(e) => {
             const rect = (

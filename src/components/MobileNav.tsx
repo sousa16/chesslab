@@ -16,7 +16,9 @@ export function MobileNav({
   onLogoClick,
 }: MobileNavProps) {
   return (
-    <div className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-background border-b border-border flex items-center justify-between px-4 shadow-sm">
+    <div
+      className="lg:hidden fixed top-0 left-0 right-0 z-50 mobile-nav-safe bg-background border-b border-border flex items-center justify-between px-4 shadow-sm"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}>
       <Logo size="lg" clickable={true} onLogoClick={onLogoClick} />
       <Button
         variant="ghost"

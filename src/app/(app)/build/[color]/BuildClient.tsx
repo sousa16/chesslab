@@ -201,7 +201,7 @@ export default function BuildClient({
         />
       )}
 
-      <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-[calc(100vh-3.5rem)] lg:h-screen mt-14 lg:mt-0 pb-2 lg:pb-6 relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-below-nav lg:h-screen mt-nav lg:mt-0 pb-2 lg:pb-6 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" />
         </div>
@@ -224,7 +224,9 @@ export default function BuildClient({
           {/* Board */}
           <div
             className="flex-shrink-0 w-full"
-            style={{ maxWidth: "min(100%, calc(100dvh - 3.5rem - 180px))" }}>
+            style={{
+              maxWidth: "min(100%, calc(100dvh - var(--mobile-nav-h) - 180px))",
+            }}>
             <Board
               ref={boardRef}
               playerColor={color}
@@ -294,7 +296,7 @@ export default function BuildClient({
       </div>
 
       <aside
-        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${
+        className={`fixed lg:relative top-[var(--mobile-nav-h)] lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-below-nav lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-hidden pb-safe transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
         }`}>
         <BuildPanel

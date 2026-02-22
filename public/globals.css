@@ -159,6 +159,8 @@
     letter-spacing: -0.01em;
     height: 100%;
     overflow: hidden;
+    /* CSS variable for mobile nav height — accounts for iOS status bar */
+    --mobile-nav-h: calc(3.5rem + env(safe-area-inset-top, 0px));
   }
 
   body {
@@ -424,8 +426,23 @@
 
   /* iOS safe area support */
   .mobile-nav-safe {
-    padding-top: env(safe-area-inset-top);
-    height: calc(3.5rem + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top, 0px);
+    height: calc(3.5rem + env(safe-area-inset-top, 0px));
+  }
+
+  /* Bottom safe area padding — use on scrollable panels and fixed bottom elements */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Height minus mobile nav, accounting for iOS status bar */
+  .h-below-nav {
+    height: calc(100dvh - var(--mobile-nav-h));
+  }
+
+  /* Margin-top equal to mobile nav height */
+  .mt-nav {
+    margin-top: var(--mobile-nav-h);
   }
 
   /* Prevent iOS rubber-band scroll on fixed containers */

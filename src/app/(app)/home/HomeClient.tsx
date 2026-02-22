@@ -116,7 +116,7 @@ export default function HomeClient() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -130,7 +130,7 @@ export default function HomeClient() {
         />
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 min-h-screen pt-20 lg:pt-6 relative">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-full pt-20 lg:pt-6 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo
             size="xl"
@@ -204,7 +204,7 @@ export default function HomeClient() {
       </div>
 
       <aside
-        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`}>
+        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-y-auto transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`}>
         {view === "home" ? (
           <HomePanel
             onSelectRepertoire={handleSelectRepertoire}

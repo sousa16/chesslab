@@ -8,6 +8,7 @@ import {
   forwardRef,
   useImperativeHandle,
   useEffect,
+  useMemo,
 } from "react";
 import { useSettings } from "@/contexts/SettingsContext";
 import { playMoveSound, playCaptureSound } from "@/lib/sounds";
@@ -74,6 +75,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     const [position, setPosition] = useState(gameRef.current.fen());
     const [moveHistory, setMoveHistory] = useState<string[]>([]);
     const [moves, setMoves] = useState<string[]>([]);
+    const [uciMoves, setUciMoves] = useState<string[]>([]);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
     const { soundEffects, showCoordinates } = useSettings();
@@ -88,12 +90,15 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       if (initialMoves && initialMoves.length > 0) {
         const newHistory: string[] = [];
         const newMoves: string[] = [];
+        const newUciMoves: string[] = [];
 
         for (const moveSan of initialMoves) {
           try {
             const move = gameRef.current.move(moveSan);
             if (move) {
               newMoves.push(move.san);
+              const uci = `${move.from}${move.to}${move.promotion ? move.promotion : ""}`;
+              newUciMoves.push(uci);
               newHistory.push(gameRef.current.fen());
             }
           } catch (e) {
@@ -102,20 +107,22 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         }
 
         setMoves(newMoves);
+        setUciMoves(newUciMoves);
         setMoveHistory(newHistory);
         setCurrentMoveIndex(newHistory.length - 1);
         setPosition(gameRef.current.fen());
       } else {
         // Reset to initial state
         setMoves([]);
+        setUciMoves([]);
         setMoveHistory([]);
         setCurrentMoveIndex(-1);
         setPosition(gameRef.current.fen());
       }
     }, [initialFen, JSON.stringify(initialMoves)]);
 
-    // Notify parent of moves changes
-    useEffect(() => {
+    // Memoize pairing of SAN moves and UCI moves to avoid replaying the game
+    const pairedMoves = useMemo(() => {
       const result: {
         number: number;
         white: string;
@@ -124,33 +131,27 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         blackUci?: string;
       }[] = [];
 
-      // Replay moves to get both SAN and UCI
-      const tempGame = new Chess();
       for (let i = 0; i < moves.length; i++) {
         const moveNumber = Math.floor(i / 2) + 1;
-        try {
-          const moveObj = tempGame.move(moves[i]);
-          if (!moveObj) {
-            continue;
-          }
+        const uci = uciMoves[i] ?? "";
 
-          const uci = `${moveObj.from}${moveObj.to}${moveObj.promotion ? moveObj.promotion : ""}`;
-
-          if (i % 2 === 0) {
-            result.push({ number: moveNumber, white: moves[i], whiteUci: uci });
-          } else {
-            const lastMove = result[result.length - 1];
-            if (lastMove) {
-              lastMove.black = moves[i];
-              lastMove.blackUci = uci;
-            }
+        if (i % 2 === 0) {
+          result.push({ number: moveNumber, white: moves[i], whiteUci: uci });
+        } else {
+          const lastMove = result[result.length - 1];
+          if (lastMove) {
+            lastMove.black = moves[i];
+            lastMove.blackUci = uci;
           }
-        } catch (e) {
-          continue;
         }
       }
-      onMovesUpdated?.(result);
-    }, [moves, onMovesUpdated]);
+
+      return result;
+    }, [moves, uciMoves]);
+
+    useEffect(() => {
+      onMovesUpdated?.(pairedMoves);
+    }, [pairedMoves, onMovesUpdated]);
 
     const handleSquareClick = (square: string) => {
       // Disable square selection outside of training or build mode
@@ -261,8 +262,10 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
             return false;
           }
           const newMoves = [...moves, move.san];
+          const newUciMoves = [...uciMoves, `${move.from}${move.to}${move.promotion ? move.promotion : ""}`];
           const newHistory = [...moveHistory, gameRef.current.fen()];
           setMoves(newMoves);
+          setUciMoves(newUciMoves);
           setMoveHistory(newHistory);
           setCurrentMoveIndex(newHistory.length - 1);
           setPosition(gameRef.current.fen());
@@ -310,7 +313,10 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
         const newMoves = moves.slice(0, currentMoveIndex + 1);
         newMoves.push(move.san);
+        const newUciMoves = uciMoves.slice(0, currentMoveIndex + 1);
+        newUciMoves.push(`${move.from}${move.to}${move.promotion ? move.promotion : ""}`);
         setMoves(newMoves);
+        setUciMoves(newUciMoves);
 
         setCurrentMoveIndex(newHistory.length - 1);
         setPosition(gameRef.current.fen());
@@ -362,6 +368,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       gameRef.current.reset();
       setMoveHistory([]);
       setMoves([]);
+      setUciMoves([]);
       setCurrentMoveIndex(-1);
       setPosition(gameRef.current.fen());
       onMoveHistoryChange?.(0);
@@ -377,13 +384,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         blackUci?: string;
       }[] = [];
 
-      const tempGame = new Chess();
       for (let i = 0; i < moves.length; i++) {
         const moveNumber = Math.floor(i / 2) + 1;
-        const moveObj = tempGame.move(moves[i]);
-        if (!moveObj) continue;
-
-        const uci = `${moveObj.from}${moveObj.to}${moveObj.promotion ? moveObj.promotion : ""}`;
+        const uci = uciMoves[i] ?? "";
 
         if (i % 2 === 0) {
           // White move
@@ -406,9 +409,11 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       // If sanMoveCount = 0, delete all moves
       // If sanMoveCount = 2, keep first 2 moves (white's move, black's response)
       const newMoves = moves.slice(0, sanMoveCount);
+      const newUciMoves = uciMoves.slice(0, sanMoveCount);
       const newHistory = moveHistory.slice(0, sanMoveCount);
 
       setMoves(newMoves);
+      setUciMoves(newUciMoves);
       setMoveHistory(newHistory);
       setCurrentMoveIndex(Math.max(-1, sanMoveCount - 1));
 

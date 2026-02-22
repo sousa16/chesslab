@@ -295,11 +295,7 @@ export default function BuildClient({
               <Save size={18} />
               {isSavingLine ? "Saving..." : "Save Line"}
             </Button>
-            {moves.length > 0 && (
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                This will add {moves.length} positions to your repertoire
-              </p>
-            )}
+            {/* mobile footer note removed per UX request */}
           </div>
         </div>
       </div>

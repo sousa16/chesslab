@@ -48,6 +48,35 @@ export function AuthModal({
     if (initialSuccess) setSuccess(initialSuccess);
   }, [initialError, initialSuccess]);
 
+  // Detect mobile (coarse pointer, no hover) so we can allow
+  // click-outside-to-close on mobile but prevent it on desktop
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const update = (e: MediaQueryListEvent | MediaQueryList) => {
+      setIsMobile((e as MediaQueryList).matches ?? false);
+    };
+
+    setIsMobile(mq.matches);
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", update);
+      return () => mq.removeEventListener("change", update);
+    }
+
+    // fallback for older browsers
+    // @ts-ignore
+    const listener = (ev: MediaQueryListEvent) => update(ev);
+    // @ts-ignore
+    mq.addListener(listener);
+    return () => {
+      // @ts-ignore
+      mq.removeListener(listener);
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -152,7 +181,12 @@ export function AuthModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-solid">
+      <DialogContent
+        className="max-w-md bg-solid"
+        onPointerDownOutside={(e) => {
+          // On desktop, prevent closing when clicking outside. On mobile, allow it.
+          if (!isMobile) e.preventDefault();
+        }}>
         <DialogHeader className="text-center">
           <div className="flex justify-center mb-2">
             <Logo size="md" />
@@ -324,7 +358,11 @@ export function AuthModal({
 
         {/* Forgot Password Modal */}
         <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
-          <DialogContent className="max-w-md bg-solid">
+          <DialogContent
+            className="max-w-md bg-solid"
+            onPointerDownOutside={(e) => {
+              if (!isMobile) e.preventDefault();
+            }}>
             <DialogHeader className="text-center">
               <DialogTitle className="text-2xl font-semibold text-white">
                 Reset Password

@@ -48,7 +48,7 @@ export async function saveRepertoireLine(
   moveHistory: string[], // FEN positions after each move (in order)
   movesInSan: string[], // Moves in SAN notation (e.g., ["e4", "c5", "Nf3"])
   movesInUci: string[], // Moves in UCI notation (e.g., ["e2e4", "c7c5", "g1f3"])
-) {
+): Promise<number> {
   if (movesInSan.length === 0) {
     throw new Error("Cannot save empty line");
   }
@@ -114,6 +114,8 @@ export async function saveRepertoireLine(
   // Save only positions where it's the USER's turn to move
   // For White repertoire: save positions before White's moves (even indices: 0, 2, 4...)
   // For Black repertoire: save positions before Black's moves (odd indices: 1, 3, 5...)
+  let createdCount = 0;
+
   for (let i = 0; i < movesInSan.length; i++) {
     const isWhiteMove = i % 2 === 0; // 0, 2, 4... are White's moves
 
@@ -131,9 +133,8 @@ export async function saveRepertoireLine(
       create: { fen: fenBefore },
     });
 
-    // Create or update the repertoire entry
-    // If it already exists with the same expectedMove, don't overwrite SRS data
-    await prisma.repertoireEntry.upsert({
+    // Check if an entry already exists for this repertoire/position/expectedMove
+    const existingEntry = await prisma.repertoireEntry.findUnique({
       where: {
         repertoireId_positionId_expectedMove: {
           repertoireId: repertoire.id,
@@ -141,19 +142,26 @@ export async function saveRepertoireLine(
           expectedMove: uciMove,
         },
       },
-      update: {}, // Don't modify if exists (preserve SRS)
-      create: {
-        repertoireId: repertoire.id,
-        openingId: openingId,
-        positionId: position.id,
-        expectedMove: uciMove,
-        interval: 0,
-        easeFactor: 2.5,
-        repetitions: 0,
-        nextReviewDate: new Date(),
-      },
     });
+
+    if (!existingEntry) {
+      await prisma.repertoireEntry.create({
+        data: {
+          repertoireId: repertoire.id,
+          openingId: openingId,
+          positionId: position.id,
+          expectedMove: uciMove,
+          interval: 0,
+          easeFactor: 2.5,
+          repetitions: 0,
+          nextReviewDate: new Date(),
+        },
+      });
+      createdCount++;
+    }
   }
+
+  return createdCount;
 }
 
 /**

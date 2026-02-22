@@ -59,8 +59,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save the line
-    await saveRepertoireLine(
+    // Save the line and get how many new entries were created
+    const entriesCreated = await saveRepertoireLine(
       session.user.id,
       color,
       [],
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        entriesCreated: movesInSan.length,
+        entriesCreated,
       },
       { status: 201 },
     );

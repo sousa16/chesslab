@@ -90,18 +90,19 @@ describe("Opening Line Save Feature", () => {
       };
     });
 
-    // Setup mock repertoireEntry upsert
+    // Setup mock repertoireEntry behavior: default to no existing entry
     let entryCounter = 0;
-    mockPrisma.repertoireEntry.upsert.mockImplementation(async (args) => {
+    mockPrisma.repertoireEntry.findUnique.mockImplementation(async (args) => null);
+    mockPrisma.repertoireEntry.create.mockImplementation(async (args) => {
       return {
         id: `entry${++entryCounter}`,
-        repertoireId: args.create.repertoireId,
-        positionId: args.create.positionId,
-        expectedMove: args.create.expectedMove,
-        interval: args.create.interval,
-        easeFactor: args.create.easeFactor,
-        repetitions: args.create.repetitions,
-        nextReviewDate: args.create.nextReviewDate,
+        repertoireId: args.data.repertoireId,
+        positionId: args.data.positionId,
+        expectedMove: args.data.expectedMove,
+        interval: args.data.interval,
+        easeFactor: args.data.easeFactor,
+        repetitions: args.data.repetitions,
+        nextReviewDate: args.data.nextReviewDate,
       };
     });
   });
@@ -187,13 +188,15 @@ describe("Opening Line Save Feature", () => {
       const movesInSan = ["e4", "c5", "Nf3"];
       const movesInUci = convertSanToUci(movesInSan);
 
-      await saveRepertoireLine(testUserId, "white", [], movesInSan, movesInUci);
+        const created = await saveRepertoireLine(testUserId, "white", [], movesInSan, movesInUci);
 
-      // Verify position.upsert was called
-      expect(mockPrisma.position.upsert).toHaveBeenCalled();
+        // Verify position.upsert was called
+        expect(mockPrisma.position.upsert).toHaveBeenCalled();
 
-      // Verify repertoireEntry.upsert was called
-      expect(mockPrisma.repertoireEntry.upsert).toHaveBeenCalled();
+        // Verify repertoireEntry.findUnique and create were used
+        expect(mockPrisma.repertoireEntry.findUnique).toHaveBeenCalled();
+        expect(mockPrisma.repertoireEntry.create).toHaveBeenCalled();
+        expect(typeof created).toBe("number");
     });
 
     it("reuses Position when saving transposed lines", async () => {
@@ -249,20 +252,12 @@ describe("Opening Line Save Feature", () => {
 
       // Save initial line
       const moves = convertSanToUci(["e4"]);
-      await saveRepertoireLine(testUserId, "white", [], ["e4"], moves);
+      const created = await saveRepertoireLine(testUserId, "white", [], ["e4"], moves);
 
-      // Verify upsert was called (not update/create separately)
-      // This tests that we're using upsert to preserve SRS data
-      expect(mockPrisma.repertoireEntry.upsert).toHaveBeenCalled();
-
-      // Verify the upsert call had empty update clause to preserve data
-      const upsertCalls = mockPrisma.repertoireEntry.upsert.mock.calls;
-      expect(upsertCalls.length).toBeGreaterThan(0);
-      
-      // The update field should be empty object to preserve existing SRS data
-      upsertCalls.forEach((call) => {
-        expect(call[0].update).toEqual({});
-      });
+      // Verify findUnique was used to check existing entry and create was used when missing
+      expect(mockPrisma.repertoireEntry.findUnique).toHaveBeenCalled();
+      expect(mockPrisma.repertoireEntry.create).toHaveBeenCalled();
+      expect(typeof created).toBe("number");
     });
 
     it("throws error if repertoire does not exist", async () => {

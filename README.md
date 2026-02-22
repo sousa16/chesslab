@@ -1,6 +1,6 @@
 # Chesslab
 
-A chess opening repertoire builder and training platform. Build, manage, and practice chess opening lines.
+Minimal, focused chess opening **repertoire builder and training platform**, designed for serious improvement. ChessLab lets you **build**, **manage**, and **practice** your chess openings with modern UI, robust authentication, and powerful spaced repetition training.  
 
 ## Tech Stack
 
@@ -12,58 +12,27 @@ A chess opening repertoire builder and training platform. Build, manage, and pra
 - **Email**: Resend
 - **Testing**: Jest + React Testing Library
 
-## Getting Started
-
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Create `.env.local`:
-```env
-DATABASE_URL="postgresql://..."
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="$(openssl rand -base64 32)"
-GOOGLE_CLIENT_ID="..."
-GOOGLE_CLIENT_SECRET="..."
-RESEND_API_KEY="..."
-FROM_EMAIL="noreply@chesslab.dev"
-```
-
-3. Setup database and run:
-```bash
-npx prisma db push
-npm run dev
-```
-
 ## Project Structure
 
 ```
 src/
-├── app/
-│   ├── (app)/              # Protected routes (require auth)
-│   │   ├── page.tsx        # Home/dashboard
-│   │   ├── build/[color]/  # Build repertoire
-│   │   ├── repertoire/     # View openings
-│   │   ├── training/       # Practice mode
-│   │   └── settings/       # User settings
-│   ├── (auth)/auth/        # Login/register
-│   └── api/auth/           # NextAuth handlers
-├── components/
-│   ├── Board.tsx           # Interactive chess board
-│   ├── BuildPanel.tsx      # Repertoire editor
-│   ├── RepertoirePanel.tsx # Opening browser
-│   ├── Sidebar.tsx         # Navigation
-│   └── ui/                 # Radix UI wrappers
-├── lib/
-│   ├── auth.ts             # Auth config
-│   ├── email.ts            # Email service
-│   └── prisma.ts           # DB client
-├── proxy.ts                # Route protection logic
-└── types/                  # TypeScript types
-
-prisma/schema.prisma        # Database schema
-__tests__/                  # Tests
+  app/              # App routes
+    (app)/          # Auth protected pages (build, training, settings)
+    (auth)/auth/    # Authentication pages
+    api/auth/       # NextAuth handlers
+  components/       
+    Board.tsx       # Interactive chess board
+    BuildPanel.tsx  # Repertoire editor
+    RepertoirePanel.tsx # Opening browser
+    ui/             # Radix UI wrappers
+  lib/
+    auth.ts         # Auth config
+    sm2.ts          # Spaced repetition algorithm
+    email.ts        # Email service
+    prisma.ts       # DB client
+  proxy.ts          # Route protection
+__tests__/          # Tests (Jest + React Testing Library)
+prisma/schema.prisma # DB schema
 ```
 
 ## Route Protection

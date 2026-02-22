@@ -41,6 +41,10 @@ export async function ensureUserRepertoires(userId: string) {
  * 3. Create or reuse a Position (deduplicated by FEN)
  * 4. Create a RepertoireEntry linking the position to the expected move
  * 5. Initialize SRS fields for spaced repetition training
+ *
+ * Performance: all DB work is batched inside a single transaction —
+ * positions are upserted in parallel, existing entries are fetched in
+ * one query, and new entries are bulk-inserted with createMany.
  */
 export async function saveRepertoireLine(
   userId: string,
@@ -76,92 +80,96 @@ export async function saveRepertoireLine(
     );
   }
 
-  // Get or create the repertoire for this user and color
-  const repertoire = await prisma.repertoire.findUnique({
-    where: {
-      userId_color: {
-        userId,
-        color: repertoireColor === "white" ? "White" : "Black",
-      },
-    },
-  });
-
-  if (!repertoire) {
-    throw new Error(
-      `Repertoire not found for user ${userId} and color ${repertoireColor}`,
-    );
-  }
-
-  // Create a new opening for each line saved
-  // This ensures each saved line is a separate, independent entry
-  const newOpening = await prisma.opening.create({
-    data: {
-      repertoireId: repertoire.id,
-      name: "Opening Line",
-    },
-  });
-  const openingId = newOpening.id;
-
+  // Compute FENs before each user move (CPU-only, no DB calls)
   const game = new Chess();
-  const fensBeforeMoves: string[] = [];
+  const userMoves: { fen: string; uci: string }[] = [];
 
-  // Collect FEN before each move
   for (let i = 0; i < movesInSan.length; i++) {
-    fensBeforeMoves.push(game.fen());
+    const fen = game.fen();
+    const isWhiteMove = i % 2 === 0; // 0, 2, 4... are White's moves
+
+    if (
+      (isWhiteRepertoire && isWhiteMove) ||
+      (!isWhiteRepertoire && !isWhiteMove)
+    ) {
+      userMoves.push({ fen, uci: movesInUci[i] });
+    }
+
     game.move(movesInSan[i]);
   }
 
-  // Save only positions where it's the USER's turn to move
-  // For White repertoire: save positions before White's moves (even indices: 0, 2, 4...)
-  // For Black repertoire: save positions before Black's moves (odd indices: 1, 3, 5...)
-  let createdCount = 0;
-
-  for (let i = 0; i < movesInSan.length; i++) {
-    const isWhiteMove = i % 2 === 0; // 0, 2, 4... are White's moves
-
-    // Only save if this move belongs to the user
-    if (isWhiteRepertoire && !isWhiteMove) continue; // Skip Black's moves for White repertoire
-    if (!isWhiteRepertoire && isWhiteMove) continue; // Skip White's moves for Black repertoire
-
-    const fenBefore = fensBeforeMoves[i];
-    const uciMove = movesInUci[i];
-
-    // Get or create position by FEN
-    const position = await prisma.position.upsert({
-      where: { fen: fenBefore },
-      update: {}, // No update needed
-      create: { fen: fenBefore },
-    });
-
-    // Check if an entry already exists for this repertoire/position/expectedMove
-    const existingEntry = await prisma.repertoireEntry.findUnique({
+  // Run all DB work in a single transaction
+  return prisma.$transaction(async (tx) => {
+    // Fetch the repertoire
+    const repertoire = await tx.repertoire.findUnique({
       where: {
-        repertoireId_positionId_expectedMove: {
-          repertoireId: repertoire.id,
-          positionId: position.id,
-          expectedMove: uciMove,
+        userId_color: {
+          userId,
+          color: isWhiteRepertoire ? "White" : "Black",
         },
       },
     });
 
-    if (!existingEntry) {
-      await prisma.repertoireEntry.create({
-        data: {
-          repertoireId: repertoire.id,
-          openingId: openingId,
-          positionId: position.id,
-          expectedMove: uciMove,
-          interval: 0,
-          easeFactor: 2.5,
-          repetitions: 0,
-          nextReviewDate: new Date(),
-        },
-      });
-      createdCount++;
+    if (!repertoire) {
+      throw new Error(
+        `Repertoire not found for user ${userId} and color ${repertoireColor}`,
+      );
     }
-  }
 
-  return createdCount;
+    // Create a new opening for this line
+    const newOpening = await tx.opening.create({
+      data: {
+        repertoireId: repertoire.id,
+        name: "Opening Line",
+      },
+    });
+
+    // Upsert all positions in parallel (one round-trip each, but concurrent)
+    const positions = await Promise.all(
+      userMoves.map(({ fen }) =>
+        tx.position.upsert({
+          where: { fen },
+          update: {},
+          create: { fen },
+        }),
+      ),
+    );
+
+    // Fetch all existing entries for these positions in a single query
+    const positionIds = positions.map((p) => p.id);
+    const existingEntries = await tx.repertoireEntry.findMany({
+      where: {
+        repertoireId: repertoire.id,
+        positionId: { in: positionIds },
+      },
+      select: { positionId: true, expectedMove: true },
+    });
+
+    const existingSet = new Set(
+      existingEntries.map((e) => `${e.positionId}:${e.expectedMove}`),
+    );
+
+    // Bulk-insert all new entries in a single query
+    const toCreate = userMoves
+      .map(({ uci }, idx) => ({ position: positions[idx], uci }))
+      .filter(({ position, uci }) => !existingSet.has(`${position.id}:${uci}`))
+      .map(({ position, uci }) => ({
+        repertoireId: repertoire.id,
+        openingId: newOpening.id,
+        positionId: position.id,
+        expectedMove: uci,
+        interval: 0,
+        easeFactor: 2.5,
+        repetitions: 0,
+        nextReviewDate: new Date(),
+      }));
+
+    if (toCreate.length > 0) {
+      await tx.repertoireEntry.createMany({ data: toCreate });
+    }
+
+    return toCreate.length;
+  });
 }
 
 /**

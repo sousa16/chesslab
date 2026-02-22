@@ -41,6 +41,12 @@ export default function HomeClient() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const boardRef = useRef<BoardHandle>(null);
 
+  // Prefetch both build pages so navigation is instant when a piece is moved
+  useEffect(() => {
+    router.prefetch("/build/white");
+    router.prefetch("/build/black");
+  }, [router]);
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/");

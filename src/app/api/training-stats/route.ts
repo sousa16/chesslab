@@ -27,15 +27,10 @@ function isFirstMovePosition(
 }
 
 /**
- * Calculate streak by counting consecutive days with activity
+ * Calculate streak by counting consecutive days with activity.
+ * Accepts pre-fetched activities (sorted by date desc) to avoid an extra DB query.
  */
-async function calculateStreak(userId: string): Promise<number> {
-  const activities = await prisma.dailyActivity.findMany({
-    where: { userId },
-    orderBy: { date: "desc" },
-    select: { date: true },
-  });
-
+function calculateStreakFromActivities(activities: { date: Date }[]): number {
   if (activities.length === 0) return 0;
 
   let streak = 0;
@@ -55,7 +50,6 @@ async function calculateStreak(userId: string): Promise<number> {
   // If last activity was more than 1 day ago, streak is broken
   if (daysDiff > 1) return 0;
 
-  // If practice happened today or yesterday, count it as start of streak
   // Start counting from the last activity date
   let expectedDate = new Date(lastActivityDate);
 
@@ -129,78 +123,86 @@ export async function GET() {
         // A position is "learned" if it's not due for review (next review in future)
         if (new Date(entry.nextReviewDate) > now) {
           colorStats[colorKey].learned++;
-        } else if (new Date(entry.nextReviewDate) <= now) {
+        } else {
           // Only count non-first-move positions as due
           dueCount++;
         }
       }
     }
 
-    // Get streak
+    // Get streak, accuracy, and today's stats — all from a single DB query
     let streak = 0;
     let accuracy = 0;
     let timeSpentMinutes = 0;
     let positionsReviewedToday = 0;
 
     try {
-      streak = await calculateStreak(user.id);
+      const today = new Date();
+      const todayUTC = new Date(
+        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+      );
 
-      // Get all-time accuracy (sum of all days)
+      // Single query replaces the previous three separate dailyActivity fetches:
+      // calculateStreak(), findMany() for accuracy, and findMany() for today
       const allActivities = await prisma.dailyActivity.findMany({
         where: { userId: user.id },
+        orderBy: { date: "desc" },
+        select: {
+          date: true,
+          correctCount: true,
+          incorrectCount: true,
+          timeSpentMs: true,
+          positionsReviewed: true,
+        },
       });
+
+      streak = calculateStreakFromActivities(allActivities);
 
       let totalCorrect = 0;
       let totalIncorrect = 0;
-      let totalTimeMsAll = 0;
+      let totalTimeMsToday = 0;
+      let totalPositionsReviewedToday = 0;
 
       for (const activity of allActivities) {
         totalCorrect += activity.correctCount;
         totalIncorrect += activity.incorrectCount;
-        totalTimeMsAll += activity.timeSpentMs;
+
+        // Accumulate today-specific stats in the same loop
+        if (new Date(activity.date).getTime() === todayUTC.getTime()) {
+          totalTimeMsToday += activity.timeSpentMs;
+          totalPositionsReviewedToday += activity.positionsReviewed ?? 0;
+        }
       }
 
       const totalReviews = totalCorrect + totalIncorrect;
       accuracy =
         totalReviews > 0 ? Math.round((totalCorrect / totalReviews) * 100) : 0;
 
-      // Calculate time spent today specifically (match UTC date used when recording activity)
-      const today = new Date();
-      const todayUTC = new Date(
-        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
-      );
-
-      const todaysActivities = await prisma.dailyActivity.findMany({
-        where: { userId: user.id, date: todayUTC },
-      });
-
-      let totalTimeMsToday = 0;
-      let totalPositionsReviewedToday = 0;
-      for (const activity of todaysActivities) {
-        totalTimeMsToday += activity.timeSpentMs;
-        // positionsReviewed is tracked on DailyActivity
-        totalPositionsReviewedToday += activity.positionsReviewed ?? 0;
-      }
-
-      // API returns minutes for the UI; `timeSpentMinutes` should be "today"
+      // API returns minutes for the UI; timeSpentMinutes is "today"
       timeSpentMinutes = Math.round(totalTimeMsToday / 60000);
-
-      // Assign positions reviewed today to outer-scoped variable
       positionsReviewedToday = totalPositionsReviewedToday;
     } catch (activityError) {
       // If daily activity queries fail, continue with default values
       console.error("Error fetching daily activity:", activityError);
     }
 
-    return NextResponse.json({
-      dueCount,
-      totalPositions,
-      colorStats,
-      streak,
-      accuracy,
-      timeSpentMinutes,
-      positionsReviewedToday,
-    });
+    return NextResponse.json(
+      {
+        dueCount,
+        totalPositions,
+        colorStats,
+        streak,
+        accuracy,
+        timeSpentMinutes,
+        positionsReviewedToday,
+      },
+      {
+        headers: {
+          // Cache per-user in the browser for 30s; serve stale for up to 60s while revalidating
+          "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+        },
+      },
+    );
   } catch (error) {
     console.error("Error fetching training stats:", error);
     return NextResponse.json(

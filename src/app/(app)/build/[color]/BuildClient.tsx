@@ -41,41 +41,42 @@ export default function BuildClient({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const moveParam = searchParams.get("move");
-  const [initialMoves, setInitialMoves] = useState<string[]>([]);
-  const [initialFen, setInitialFen] = useState<string | undefined>(undefined);
 
-  // Read from sessionStorage on mount
-  useEffect(() => {
-    const fenFromSession = sessionStorage.getItem("buildFen");
+  // Read sessionStorage synchronously during first render so the board gets
+  // the correct position immediately — no empty-board flash before useEffect fires.
+  const [initialMoves] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
     const moveSequenceFromSession = sessionStorage.getItem("buildMoveSequence");
     const moveFromSession = sessionStorage.getItem("buildMove");
-
     if (moveSequenceFromSession) {
-      const moves = moveSequenceFromSession
+      return moveSequenceFromSession
         .split(" ")
         .filter((m) => m.length > 0)
-        .map((part) => {
-          return part.includes(".") ? part.split(".")[1] : part;
-        })
+        .map((part) => (part.includes(".") ? part.split(".")[1] : part))
         .filter((m) => m && m.length > 0);
-      setInitialMoves(moves);
-    } else if (moveFromSession) {
-      setInitialMoves([moveFromSession]);
-    } else if (moveParam) {
-      setInitialMoves([moveParam]);
     }
+    if (moveFromSession) return [moveFromSession];
+    if (moveParam) return [moveParam];
+    return [];
+  });
 
-    if (fenFromSession && !moveSequenceFromSession) {
-      setInitialFen(fenFromSession);
-    }
+  const [initialFen] = useState<string | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    const fenFromSession = sessionStorage.getItem("buildFen");
+    const moveSequenceFromSession = sessionStorage.getItem("buildMoveSequence");
+    return fenFromSession && !moveSequenceFromSession
+      ? fenFromSession
+      : undefined;
+  });
 
-    // Clear sessionStorage after reading
+  // Clean up sessionStorage after values have been read into state
+  useEffect(() => {
     sessionStorage.removeItem("buildOpeningId");
     sessionStorage.removeItem("buildLineId");
     sessionStorage.removeItem("buildFen");
     sessionStorage.removeItem("buildMoveSequence");
     sessionStorage.removeItem("buildMove");
-  }, [moveParam]);
+  }, []);
 
   const handleMovesUpdated = useCallback((updatedMoves: Move[]) => {
     setMoves(updatedMoves);
@@ -208,17 +209,19 @@ export default function BuildClient({
 
         <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
           <div className="w-full px-1 flex items-center flex-shrink-0">
-            {currentMove && (
-              <div className="bg-surface-2 rounded-lg px-3 py-2 border border-border/50 inline-flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  Position after
-                </span>
-                <span className="text-sm font-mono text-foreground">
-                  {currentMoveIndex}. {currentMove.white}
-                  {currentMove.black && ` ${currentMove.black}`}
-                </span>
-              </div>
-            )}
+            <div
+              className={`bg-surface-2 rounded-lg px-3 py-2 border border-border/50 inline-flex items-center gap-2 transition-opacity duration-150 ${
+                currentMove ? "opacity-100" : "opacity-0"
+              }`}>
+              <span className="text-xs text-muted-foreground">
+                Position after
+              </span>
+              <span className="text-sm font-mono text-foreground">
+                {currentMove
+                  ? `${currentMoveIndex}. ${currentMove.white}${currentMove.black ? ` ${currentMove.black}` : ""}`
+                  : "\u00A0"}
+              </span>
+            </div>
           </div>
 
           {/* Board */}

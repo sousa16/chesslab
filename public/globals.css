@@ -157,6 +157,8 @@
   html {
     font-family: var(--font-geist-sans, "Inter"), system-ui, sans-serif;
     letter-spacing: -0.01em;
+    height: 100%;
+    overflow: hidden;
   }
 
   body {
@@ -165,6 +167,13 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    height: 100%;
+    overflow: hidden;
+    /* Prevent iOS bounce/overscroll */
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
+    position: fixed;
+    width: 100%;
   }
 
   /* Force solid backgrounds for mobile elements */
@@ -411,6 +420,18 @@
     50% {
       opacity: 0.95;
     }
+  }
+
+  /* iOS safe area support */
+  .mobile-nav-safe {
+    padding-top: env(safe-area-inset-top);
+    height: calc(3.5rem + env(safe-area-inset-top));
+  }
+
+  /* Prevent iOS rubber-band scroll on fixed containers */
+  .no-overscroll {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
   }
 
   /* Glow animation */

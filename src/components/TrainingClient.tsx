@@ -434,6 +434,8 @@ export default function TrainingClient({
           </div>
 
           {/* Main: Show Answer / Rating Buttons inline below board */}
+          {/* Show Answer button: visible on both mobile and desktop (triggers answer reveal) */}
+          {/* Answer + rating buttons: mobile only (lg:hidden) — desktop uses sidebar */}
           <div className="w-full flex-shrink-0">
             {!showingAnswer ? (
               <Button
@@ -444,7 +446,8 @@ export default function TrainingClient({
                 Show Answer
               </Button>
             ) : (
-              <div className="space-y-2">
+              /* Answer revealed — only shown in main panel on mobile */
+              <div className="lg:hidden space-y-2">
                 <div className="glass-card rounded-xl p-2.5 text-center">
                   <p className="text-xs text-muted-foreground mb-1">
                     The move was
@@ -607,8 +610,8 @@ export default function TrainingClient({
             </div>
           </div>
 
-          {/* Main Action Area */}
-          <div className="flex-1 flex flex-col items-center justify-center">
+          {/* Main Action Area — desktop only (mobile uses inline below board) */}
+          <div className="hidden lg:flex flex-1 flex-col items-center justify-center">
             {!showingAnswer ? (
               <div className="text-center space-y-4 lg:space-y-5 w-full">
                 <div className="relative overflow-hidden rounded-xl p-4 lg:p-5 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30">

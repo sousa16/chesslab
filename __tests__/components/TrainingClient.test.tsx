@@ -65,7 +65,7 @@ const renderWithProviders = (component: React.ReactElement) => {
   return render(
     <SettingsProvider>
       <ToastProvider>{component}</ToastProvider>
-    </SettingsProvider>
+    </SettingsProvider>,
   );
 };
 
@@ -167,17 +167,17 @@ describe("TrainingClient Component", () => {
 
       fireEvent.click(screen.getByText("Show Answer"));
 
-      expect(screen.getByText("Forgot")).toBeInTheDocument();
-      expect(screen.getByText("Hard")).toBeInTheDocument();
-      expect(screen.getByText("Good")).toBeInTheDocument();
-      expect(screen.getByText("Easy")).toBeInTheDocument();
+      expect(screen.getAllByText("Forgot")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("Hard")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("Good")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("Easy")[0]).toBeInTheDocument();
     });
 
     it("should call API when feedback is given in review mode", async () => {
       renderWithProviders(<TrainingClient user={mockUser} mode="review" />);
 
       fireEvent.click(screen.getByText("Show Answer"));
-      fireEvent.click(screen.getByText("Good"));
+      fireEvent.click(screen.getAllByText("Good")[0]);
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
@@ -209,7 +209,7 @@ describe("TrainingClient Component", () => {
       renderWithProviders(<TrainingClient user={mockUser} mode="practice" />);
 
       fireEvent.click(screen.getByText("Show Answer"));
-      fireEvent.click(screen.getByText("Good"));
+      fireEvent.click(screen.getAllByText("Good")[0]);
 
       // Wait a bit to ensure no API call is made
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -224,7 +224,7 @@ describe("TrainingClient Component", () => {
       expect(screen.getByText("1 / 2")).toBeInTheDocument();
 
       fireEvent.click(screen.getByText("Show Answer"));
-      fireEvent.click(screen.getByText("Good"));
+      fireEvent.click(screen.getAllByText("Good")[0]);
 
       // Should progress to card 2
       await waitFor(() => {
@@ -243,7 +243,7 @@ describe("TrainingClient Component", () => {
       // Filter to find the back button in the Training sidebar (not the mobile nav toggle)
       // The back button is inside the aside element, after mobile nav buttons
       const sidebarBackButton = backButtons.find(
-        (btn) => btn.closest("aside") !== null
+        (btn) => btn.closest("aside") !== null,
       );
       expect(sidebarBackButton).toBeTruthy();
       fireEvent.click(sidebarBackButton!);
@@ -265,10 +265,12 @@ describe("TrainingClient Component", () => {
         ],
       };
 
-      renderWithProviders(<TrainingClient user={singleCardUser} mode="practice" />);
+      renderWithProviders(
+        <TrainingClient user={singleCardUser} mode="practice" />,
+      );
 
       fireEvent.click(screen.getByText("Show Answer"));
-      fireEvent.click(screen.getByText("Good"));
+      fireEvent.click(screen.getAllByText("Good")[0]);
 
       await waitFor(() => {
         expect(screen.getByText("Session Complete!")).toBeInTheDocument();

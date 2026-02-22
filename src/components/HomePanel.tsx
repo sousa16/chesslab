@@ -245,12 +245,13 @@ export function HomePanel({
     let intervalId: number | undefined;
 
     const startPolling = () => {
-      // Poll every 10 seconds to keep time updated during active sessions
+      // Poll every 60 seconds; the training-stats-updated event handles immediate
+      // updates after a session ends, so high-frequency polling isn't needed
       intervalId = window.setInterval(() => {
         if (document.visibilityState === "visible") {
           fetchStats();
         }
-      }, 10_000);
+      }, 60_000);
     };
 
     startPolling();

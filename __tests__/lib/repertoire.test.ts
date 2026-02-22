@@ -54,7 +54,7 @@ const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 beforeEach(() => {
   // Reset all mocks before each test
   jest.clearAllMocks();
-  
+
   // Set up default mock return value for opening.create
   mockPrisma.opening.create.mockResolvedValue({
     id: "opening-1",
@@ -92,7 +92,9 @@ describe("Opening Line Save Feature", () => {
 
     // Setup mock repertoireEntry behavior: default to no existing entry
     let entryCounter = 0;
-    mockPrisma.repertoireEntry.findUnique.mockImplementation(async (args) => null);
+    mockPrisma.repertoireEntry.findUnique.mockImplementation(
+      async (args) => null,
+    );
     mockPrisma.repertoireEntry.create.mockImplementation(async (args) => {
       return {
         id: `entry${++entryCounter}`,
@@ -133,10 +135,23 @@ describe("Opening Line Save Feature", () => {
 
   describe("ensureUserRepertoires", () => {
     it("creates White and Black repertoires for new user", async () => {
-      const whiteRepertoire = { id: "rep-white", userId: testUserId, color: "White", entries: [] };
-      const blackRepertoire = { id: "rep-black", userId: testUserId, color: "Black", entries: [] };
+      const whiteRepertoire = {
+        id: "rep-white",
+        userId: testUserId,
+        color: "White",
+        entries: [],
+      };
+      const blackRepertoire = {
+        id: "rep-black",
+        userId: testUserId,
+        color: "Black",
+        entries: [],
+      };
 
-      mockPrisma.repertoire.findMany.mockResolvedValue([whiteRepertoire, blackRepertoire]);
+      mockPrisma.repertoire.findMany.mockResolvedValue([
+        whiteRepertoire,
+        blackRepertoire,
+      ]);
 
       await ensureUserRepertoires(testUserId);
 
@@ -188,15 +203,21 @@ describe("Opening Line Save Feature", () => {
       const movesInSan = ["e4", "c5", "Nf3"];
       const movesInUci = convertSanToUci(movesInSan);
 
-        const created = await saveRepertoireLine(testUserId, "white", [], movesInSan, movesInUci);
+      const created = await saveRepertoireLine(
+        testUserId,
+        "white",
+        [],
+        movesInSan,
+        movesInUci,
+      );
 
-        // Verify position.upsert was called
-        expect(mockPrisma.position.upsert).toHaveBeenCalled();
+      // Verify position.upsert was called
+      expect(mockPrisma.position.upsert).toHaveBeenCalled();
 
-        // Verify repertoireEntry.findUnique and create were used
-        expect(mockPrisma.repertoireEntry.findUnique).toHaveBeenCalled();
-        expect(mockPrisma.repertoireEntry.create).toHaveBeenCalled();
-        expect(typeof created).toBe("number");
+      // Verify repertoireEntry.findUnique and create were used
+      expect(mockPrisma.repertoireEntry.findUnique).toHaveBeenCalled();
+      expect(mockPrisma.repertoireEntry.create).toHaveBeenCalled();
+      expect(typeof created).toBe("number");
     });
 
     it("reuses Position when saving transposed lines", async () => {
@@ -252,7 +273,13 @@ describe("Opening Line Save Feature", () => {
 
       // Save initial line
       const moves = convertSanToUci(["e4"]);
-      const created = await saveRepertoireLine(testUserId, "white", [], ["e4"], moves);
+      const created = await saveRepertoireLine(
+        testUserId,
+        "white",
+        [],
+        ["e4"],
+        moves,
+      );
 
       // Verify findUnique was used to check existing entry and create was used when missing
       expect(mockPrisma.repertoireEntry.findUnique).toHaveBeenCalled();
@@ -295,7 +322,10 @@ describe("Opening Line Save Feature", () => {
           interval: 0,
           easeFactor: 2.5,
           repetitions: 0,
-          position: { id: "pos1", fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1" },
+          position: {
+            id: "pos1",
+            fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+          },
         },
       ]);
 

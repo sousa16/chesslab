@@ -139,10 +139,10 @@ export default function HomeClient() {
           />
         </div>
 
-        <div className="w-full max-w-2xl h-full flex flex-col items-center gap-2 lg:gap-4 min-h-0 py-2 lg:py-4">
-          <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
+        <div className="w-full max-w-2xl flex flex-col items-center gap-3 lg:gap-4 min-h-0 pt-4 pb-3 lg:py-4 justify-center">
+          <div className="h-8 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div
-              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${selectedColor === "black" ? "bg-zinc-100" : "bg-zinc-800 border border-zinc-700"}`}>
+              className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${selectedColor === "black" ? "bg-zinc-100" : "bg-zinc-800 border border-zinc-700"}`}>
               <span
                 className={`text-base lg:text-lg font-medium ${selectedColor === "black" ? "text-zinc-800" : "text-zinc-300"}`}>
                 {selectedColor === "black" ? "W" : "B"}
@@ -153,8 +153,8 @@ export default function HomeClient() {
             </p>
           </div>
 
-          <div className="flex-1 min-h-0 w-full flex items-center justify-center">
-            <div className="aspect-square h-full max-w-full">
+          <div className="min-h-0 w-full max-h-[min(55vw,360px)] flex items-center justify-center">
+            <div className="aspect-square h-full max-w-full w-full">
               <Board
                 ref={boardRef}
                 playerColor={selectedColor}
@@ -166,9 +166,9 @@ export default function HomeClient() {
             </div>
           </div>
 
-          <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
+          <div className="h-8 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div
-              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${selectedColor === "white" ? "bg-zinc-100" : "bg-zinc-800 border border-zinc-700"}`}>
+              className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${selectedColor === "white" ? "bg-zinc-100" : "bg-zinc-800 border border-zinc-700"}`}>
               <span
                 className={`text-base lg:text-lg font-medium ${selectedColor === "white" ? "text-zinc-800" : "text-zinc-300"}`}>
                 {selectedColor === "white" ? "W" : "B"}
@@ -179,7 +179,7 @@ export default function HomeClient() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 lg:gap-3">
+          <div className="flex items-center gap-3 lg:gap-3">
             <BoardControls
               onFirstMove={() => boardRef.current?.goToFirst()}
               onPreviousMove={() => boardRef.current?.goToPrevious()}
@@ -197,7 +197,7 @@ export default function HomeClient() {
             </Button>
           </div>
 
-          <div className="lg:hidden w-full max-w-2xl px-4 mt-6">
+          <div className="lg:hidden w-full max-w-2xl px-4 py-2">
             <Button
               className="w-full h-12 text-sm btn-primary-gradient rounded-xl font-medium"
               onClick={handleStartPractice}>

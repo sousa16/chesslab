@@ -262,7 +262,10 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
             return false;
           }
           const newMoves = [...moves, move.san];
-          const newUciMoves = [...uciMoves, `${move.from}${move.to}${move.promotion ? move.promotion : ""}`];
+          const newUciMoves = [
+            ...uciMoves,
+            `${move.from}${move.to}${move.promotion ? move.promotion : ""}`,
+          ];
           const newHistory = [...moveHistory, gameRef.current.fen()];
           setMoves(newMoves);
           setUciMoves(newUciMoves);
@@ -314,7 +317,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         const newMoves = moves.slice(0, currentMoveIndex + 1);
         newMoves.push(move.san);
         const newUciMoves = uciMoves.slice(0, currentMoveIndex + 1);
-        newUciMoves.push(`${move.from}${move.to}${move.promotion ? move.promotion : ""}`);
+        newUciMoves.push(
+          `${move.from}${move.to}${move.promotion ? move.promotion : ""}`,
+        );
         setMoves(newMoves);
         setUciMoves(newUciMoves);
 

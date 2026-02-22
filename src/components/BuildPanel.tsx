@@ -100,7 +100,9 @@ export function BuildPanel({
               </p>
             )}
             {lineName && (
-              <p className="text-xs lg:text-sm text-muted-foreground">{lineName}</p>
+              <p className="text-xs lg:text-sm text-muted-foreground">
+                {lineName}
+              </p>
             )}
           </div>
         )}

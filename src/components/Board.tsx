@@ -475,17 +475,33 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     return (
       <div className="relative">
         <div
-          className="w-full h-full rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
+          className="w-full aspect-square rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
           data-testid="board"
           onClick={(e) => {
-            const rect = (
-              e.currentTarget as HTMLElement
-            ).getBoundingClientRect();
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            const squareSize = rect.width / 8;
-            let file = Math.floor(x / squareSize);
-            let rank = 7 - Math.floor(y / squareSize); // Invert rank (top = 8, bottom = 1)
+
+            // Use the smaller of width/height to determine the board square
+            const boardSize = Math.min(rect.width, rect.height);
+            const squareSize = boardSize / 8;
+
+            // Compute offsets to account for centered square if container isn't perfectly square
+            const leftOffset = (rect.width - boardSize) / 2;
+            const topOffset = (rect.height - boardSize) / 2;
+
+            // If click is outside the actual square board area, ignore
+            if (
+              x < leftOffset ||
+              x > leftOffset + boardSize ||
+              y < topOffset ||
+              y > topOffset + boardSize
+            ) {
+              return;
+            }
+
+            let file = Math.floor((x - leftOffset) / squareSize);
+            let rank = 7 - Math.floor((y - topOffset) / squareSize); // Invert rank (top = 8, bottom = 1)
 
             // Adjust for board orientation
             if (playerColor === "black") {

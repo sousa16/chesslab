@@ -130,6 +130,7 @@ export default function HomeClient() {
         />
       )}
 
+      {/* Main board area */}
       <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-screen lg:h-screen pt-14 lg:pt-0 pb-4 lg:pb-6 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo
@@ -139,12 +140,20 @@ export default function HomeClient() {
           />
         </div>
 
-        <div className="w-full max-w-2xl flex flex-col items-center gap-3 lg:gap-4 min-h-0 pt-4 pb-3 lg:py-4 justify-center">
-          <div className="h-8 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
+        {/* Inner column — desktop: fills height and centres content; mobile: stacks naturally */}
+        <div className="w-full max-w-2xl h-full flex flex-col items-center gap-2 lg:gap-4 min-h-0 justify-center lg:py-4">
+          {/* Opponent label */}
+          <div className="h-8 lg:h-14 flex items-center gap-3 lg:gap-4 px-1 flex-shrink-0">
             <div
-              className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${selectedColor === "black" ? "bg-zinc-100" : "bg-zinc-800 border border-zinc-700"}`}>
+              className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
+                selectedColor === "black"
+                  ? "bg-zinc-100"
+                  : "bg-zinc-800 border border-zinc-700"
+              }`}>
               <span
-                className={`text-base lg:text-lg font-medium ${selectedColor === "black" ? "text-zinc-800" : "text-zinc-300"}`}>
+                className={`text-sm lg:text-lg font-medium ${
+                  selectedColor === "black" ? "text-zinc-800" : "text-zinc-300"
+                }`}>
                 {selectedColor === "black" ? "W" : "B"}
               </span>
             </div>
@@ -153,8 +162,9 @@ export default function HomeClient() {
             </p>
           </div>
 
-          <div className="min-h-0 w-full max-h-[min(55vw,360px)] flex items-center justify-center">
-            <div className="aspect-square h-full max-w-full w-full">
+          {/* Board — flex-1 on desktop so it fills remaining space; fixed aspect ratio cap on mobile */}
+          <div className="w-full min-h-0 flex items-center justify-center flex-none lg:flex-1">
+            <div className="w-full max-w-[min(75vw,360px)] lg:max-w-none lg:h-full aspect-square">
               <Board
                 ref={boardRef}
                 playerColor={selectedColor}
@@ -166,11 +176,18 @@ export default function HomeClient() {
             </div>
           </div>
 
-          <div className="h-8 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
+          {/* Player label */}
+          <div className="h-8 lg:h-14 flex items-center gap-3 lg:gap-4 px-1 flex-shrink-0">
             <div
-              className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${selectedColor === "white" ? "bg-zinc-100" : "bg-zinc-800 border border-zinc-700"}`}>
+              className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
+                selectedColor === "white"
+                  ? "bg-zinc-100"
+                  : "bg-zinc-800 border border-zinc-700"
+              }`}>
               <span
-                className={`text-base lg:text-lg font-medium ${selectedColor === "white" ? "text-zinc-800" : "text-zinc-300"}`}>
+                className={`text-sm lg:text-lg font-medium ${
+                  selectedColor === "white" ? "text-zinc-800" : "text-zinc-300"
+                }`}>
                 {selectedColor === "white" ? "W" : "B"}
               </span>
             </div>
@@ -179,7 +196,8 @@ export default function HomeClient() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 lg:gap-3">
+          {/* Controls row */}
+          <div className="flex items-center gap-2 lg:gap-3 flex-shrink-0">
             <BoardControls
               onFirstMove={() => boardRef.current?.goToFirst()}
               onPreviousMove={() => boardRef.current?.goToPrevious()}
@@ -197,7 +215,8 @@ export default function HomeClient() {
             </Button>
           </div>
 
-          <div className="lg:hidden w-full max-w-2xl px-4 py-2">
+          {/* Start Practice button — mobile only */}
+          <div className="lg:hidden w-full px-4 flex-shrink-0">
             <Button
               className="w-full h-12 text-sm btn-primary-gradient rounded-xl font-medium"
               onClick={handleStartPractice}>
@@ -207,8 +226,11 @@ export default function HomeClient() {
         </div>
       </div>
 
+      {/* Sidebar */}
       <aside
-        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-y-auto transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`}>
+        className={`fixed lg:relative top-14 lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-[calc(100vh-3.5rem)] lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-y-auto transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        }`}>
         {view === "home" ? (
           <HomePanel
             onSelectRepertoire={handleSelectRepertoire}

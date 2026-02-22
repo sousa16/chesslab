@@ -130,7 +130,7 @@ export default function HomeClient() {
         />
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-full pt-20 lg:pt-6 relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 min-h-screen lg:h-[calc(100vh-3.5rem)] pt-20 lg:pt-14 relative overflow-y-auto">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo
             size="xl"

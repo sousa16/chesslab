@@ -350,13 +350,13 @@ export default function TrainingClient({
       )}
 
       {/* Left Panel - Board */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 min-h-screen lg:h-[calc(100vh-3.5rem)] pt-20 lg:pt-14 relative overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-screen lg:h-screen pt-14 relative overflow-hidden">
         {/* Logo in corner - hidden on mobile */}
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" clickable={true} onLogoClick={handleBack} />
         </div>
 
-        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-2 lg:gap-4">
+        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-2 lg:gap-4 min-h-0">
           {/* Player Info - Top (Opponent) */}
           <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
             <div

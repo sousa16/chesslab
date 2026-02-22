@@ -266,7 +266,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           setMoveHistory(newHistory);
           setCurrentMoveIndex(newHistory.length - 1);
           setPosition(gameRef.current.fen());
-          
+
           // Play sound effect
           if (soundEffects) {
             if (move.captured) {
@@ -275,7 +275,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
               playMoveSound();
             }
           }
-          
+
           onBuildMove?.({ from: sourceSquare, to: targetSquare });
           onMoveMade?.({
             from: sourceSquare,
@@ -314,7 +314,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
 
         setCurrentMoveIndex(newHistory.length - 1);
         setPosition(gameRef.current.fen());
-        
+
         // Play sound effect
         if (soundEffects) {
           if (move.captured) {
@@ -323,7 +323,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
             playMoveSound();
           }
         }
-        
+
         onMoveHistoryChange?.(newHistory.length);
         onMoveMade?.({
           from: sourceSquare,
@@ -465,7 +465,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     return (
       <div className="relative">
         <div
-          className="w-full aspect-square max-w-2xl rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
+          className="w-full aspect-square max-w-2xl max-h-full rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
           data-testid="board"
           onClick={(e) => {
             const rect = (

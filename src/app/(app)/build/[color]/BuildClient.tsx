@@ -206,7 +206,7 @@ export default function BuildClient({
           <Logo size="xl" />
         </div>
 
-        <div className="w-full max-w-xl flex-1 flex flex-col items-center justify-center gap-2 lg:gap-3 min-h-0">
+        <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
           <div className="w-full px-1 flex items-center flex-shrink-0">
             {currentMove && (
               <div className="bg-surface-2 rounded-lg px-3 py-2 border border-border/50 inline-flex items-center gap-2">

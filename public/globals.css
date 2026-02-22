@@ -445,6 +445,16 @@
     margin-top: var(--mobile-nav-h);
   }
 
+  /* Reset mobile nav offsets on desktop */
+  @media (min-width: 1024px) {
+    .mt-nav {
+      margin-top: 0;
+    }
+    .h-below-nav {
+      height: 100dvh;
+    }
+  }
+
   /* Prevent iOS rubber-band scroll on fixed containers */
   .no-overscroll {
     overscroll-behavior: none;

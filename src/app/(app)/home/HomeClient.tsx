@@ -141,7 +141,7 @@ export default function HomeClient() {
         </div>
 
         {/* Inner column — fills height and centres content */}
-        <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-center">
+        <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
           {/* Opponent label */}
           <div className="flex items-center gap-3 px-1 flex-shrink-0">
             <div

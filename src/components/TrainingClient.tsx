@@ -356,7 +356,7 @@ export default function TrainingClient({
           <Logo size="xl" clickable={true} onLogoClick={handleBack} />
         </div>
 
-        <div className="w-full max-w-xl flex-1 flex flex-col items-center justify-center gap-2 lg:gap-3 min-h-0">
+        <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
           {/* Player Info - Top (Opponent) */}
           <div className="flex items-center gap-3 px-1 flex-shrink-0">
             <div

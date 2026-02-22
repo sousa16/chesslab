@@ -350,15 +350,15 @@ export default function TrainingClient({
       )}
 
       {/* Left Panel - Board */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-screen lg:h-screen pt-14 relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-screen lg:h-screen pt-14 pb-4 relative overflow-y-auto lg:overflow-hidden">
         {/* Logo in corner - hidden on mobile */}
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" clickable={true} onLogoClick={handleBack} />
         </div>
 
-        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-2 lg:gap-4 min-h-0">
+        <div className="w-full max-w-2xl flex-1 flex flex-col items-center justify-center gap-3 lg:gap-4 min-h-0 py-4 lg:py-0">
           {/* Player Info - Top (Opponent) */}
-          <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
+          <div className="flex items-center gap-3 lg:gap-4 px-1">
             <div
               className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
                 repertoireColor === "black"
@@ -392,7 +392,7 @@ export default function TrainingClient({
           />
 
           {/* Player Info - Bottom (You) */}
-          <div className="h-10 lg:h-14 flex items-center gap-3 lg:gap-4 px-1">
+          <div className="flex items-center gap-3 lg:gap-4 px-1">
             <div
               className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
                 repertoireColor === "white"
@@ -414,7 +414,7 @@ export default function TrainingClient({
           </div>
 
           {/* Status indicator */}
-          <div className="flex items-center justify-center h-10 lg:h-12">
+          <div className="flex items-center justify-center min-h-8 lg:min-h-12">
             {feedbackSquare && (
               <div
                 className={`inline-flex items-center gap-2 px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl ${
@@ -427,6 +427,67 @@ export default function TrainingClient({
                     ? "Correct!"
                     : "Try again"}
                 </span>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile-only: Show Answer / Rating Buttons inline below board */}
+          <div className="lg:hidden w-full">
+            {!showingAnswer ? (
+              <Button
+                variant="outline"
+                className="w-full h-11 text-sm rounded-xl border-border/50 hover:bg-surface-2"
+                onClick={handleShowAnswer}>
+                <Eye size={16} className="mr-2" />
+                Show Answer
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <div className="glass-card rounded-xl p-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    The move was
+                  </p>
+                  <p className="text-xl font-mono font-bold text-foreground">
+                    {getExpectedMoveDisplay()}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  How well did you know this?
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  <Button
+                    onClick={() => handleRecallRating("forgot")}
+                    disabled={isReviewing}
+                    className="h-12 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    variant="ghost">
+                    <span className="text-xs font-medium">Forgot</span>
+                    <span className="text-[10px] opacity-70">Again</span>
+                  </Button>
+                  <Button
+                    onClick={() => handleRecallRating("partial")}
+                    disabled={isReviewing}
+                    className="h-12 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    variant="ghost">
+                    <span className="text-xs font-medium">Hard</span>
+                    <span className="text-[10px] opacity-70">Struggled</span>
+                  </Button>
+                  <Button
+                    onClick={() => handleRecallRating("effort")}
+                    disabled={isReviewing}
+                    className="h-12 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    variant="ghost">
+                    <span className="text-xs font-medium">Good</span>
+                    <span className="text-[10px] opacity-70">Effort</span>
+                  </Button>
+                  <Button
+                    onClick={() => handleRecallRating("easy")}
+                    disabled={isReviewing}
+                    className="h-12 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    variant="ghost">
+                    <span className="text-xs font-medium">Easy</span>
+                    <span className="text-[10px] opacity-70">No problem</span>
+                  </Button>
+                </div>
               </div>
             )}
           </div>

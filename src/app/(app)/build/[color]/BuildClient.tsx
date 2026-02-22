@@ -201,13 +201,13 @@ export default function BuildClient({
         />
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-screen lg:h-screen pt-14 relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-screen lg:h-screen pt-14 pb-4 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" />
         </div>
 
-        <div className="w-full max-w-2xl h-full flex flex-col items-center justify-center gap-2 lg:gap-4 min-h-0">
-          <div className="w-full px-1 h-10 lg:h-14 flex items-center">
+        <div className="w-full max-w-2xl flex-1 flex flex-col items-center justify-center gap-3 lg:gap-4 min-h-0 py-4 lg:py-4">
+          <div className="w-full px-1 flex items-center">
             {currentMove && (
               <div className="bg-surface-2 rounded-lg px-3 lg:px-4 py-2 lg:py-3 border border-border/50 inline-flex items-center gap-2 lg:gap-3">
                 <span className="text-xs lg:text-sm text-muted-foreground">
@@ -230,7 +230,7 @@ export default function BuildClient({
             initialFen={initialFen}
           />
 
-          <div className="text-center h-10 lg:h-14 flex items-center justify-center w-full">
+          <div className="text-center flex items-center justify-center w-full">
             {(() => {
               const lastMove = moves[moves.length - 1];
               const isOpponentTurn = lastMove && !lastMove.black;

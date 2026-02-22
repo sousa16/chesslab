@@ -140,10 +140,10 @@ export default function HomeClient() {
           />
         </div>
 
-        {/* Inner column — desktop: fills height and centres content; mobile: stacks naturally */}
-        <div className="w-full max-w-2xl h-full flex flex-col items-center gap-2 lg:gap-4 min-h-0 justify-center lg:py-4">
+        {/* Inner column — fills height and centres content on both mobile and desktop */}
+        <div className="w-full max-w-2xl flex-1 flex flex-col items-center gap-3 lg:gap-4 min-h-0 justify-center py-4 lg:py-4">
           {/* Opponent label */}
-          <div className="h-8 lg:h-14 flex items-center gap-3 lg:gap-4 px-1 flex-shrink-0">
+          <div className="flex items-center gap-3 lg:gap-4 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "black"
@@ -177,7 +177,7 @@ export default function HomeClient() {
           </div>
 
           {/* Player label */}
-          <div className="h-8 lg:h-14 flex items-center gap-3 lg:gap-4 px-1 flex-shrink-0">
+          <div className="flex items-center gap-3 lg:gap-4 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
                 selectedColor === "white"

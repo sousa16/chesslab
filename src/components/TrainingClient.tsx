@@ -431,12 +431,12 @@ export default function TrainingClient({
             )}
           </div>
 
-          {/* Mobile-only: Show Answer / Rating Buttons inline below board */}
-          <div className="lg:hidden w-full">
+          {/* Main: Show Answer / Rating Buttons inline below board */}
+          <div className="w-full">
             {!showingAnswer ? (
               <Button
                 variant="outline"
-                className="w-full h-11 text-sm rounded-xl border-border/50 hover:bg-surface-2"
+                className="w-full h-11 lg:h-12 text-sm rounded-xl border-border/50 hover:bg-surface-2"
                 onClick={handleShowAnswer}>
                 <Eye size={16} className="mr-2" />
                 Show Answer
@@ -608,28 +608,17 @@ export default function TrainingClient({
           {/* Main Action Area */}
           <div className="flex-1 flex flex-col items-center justify-center">
             {!showingAnswer ? (
-              /* Prompt to make move or show answer */
               <div className="text-center space-y-4 lg:space-y-5 w-full">
                 <div className="relative overflow-hidden rounded-xl p-4 lg:p-5 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30">
-                  <div className="absolute top-0 right-0 w-24 lg:w-32 h-24 lg:h-32 bg-primary/10 rounded-full blur-3xl -mr-8 lg:-mr-12 -mt-8 lg:-mt-12" />
                   <div className="relative">
                     <p className="text-base lg:text-lg text-foreground font-semibold mb-1 lg:mb-2">
-                      Ready to reveal?
+                      Know the answer?
                     </p>
                     <p className="text-xs lg:text-sm text-muted-foreground">
-                      Click below to see the answer
+                      Use the "Show Answer" control
                     </p>
                   </div>
                 </div>
-
-                <Button
-                  variant="outline"
-                  className="w-full h-10 lg:h-12 text-sm lg:text-base rounded-xl border-border/50 hover:bg-surface-2"
-                  onClick={handleShowAnswer}>
-                  <Eye size={16} className="mr-2 lg:hidden" />
-                  <Eye size={18} className="mr-2 hidden lg:block" />
-                  Show Answer
-                </Button>
               </div>
             ) : (
               /* Answer revealed - show move and feedback buttons */

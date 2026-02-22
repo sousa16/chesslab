@@ -333,8 +333,8 @@ export default function TrainingClient({
     repertoires.some((r) => r.color === "Black");
 
   return (
-    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
-      {/* Mobile Navigation */}
+    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
+      {/* Mobile Navigation - sticky, above everything */}
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -350,23 +350,23 @@ export default function TrainingClient({
       )}
 
       {/* Left Panel - Board */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-screen lg:h-screen pt-14 pb-4 relative overflow-y-auto lg:overflow-hidden">
+      <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-[calc(100vh-3.5rem)] lg:h-screen mt-14 lg:mt-0 pb-2 lg:pb-6 relative overflow-hidden">
         {/* Logo in corner - hidden on mobile */}
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" clickable={true} onLogoClick={handleBack} />
         </div>
 
-        <div className="w-full max-w-2xl flex-1 flex flex-col items-center justify-center gap-3 lg:gap-4 min-h-0 py-4 lg:py-0">
+        <div className="w-full max-w-xl flex-1 flex flex-col items-center justify-center gap-2 lg:gap-3 min-h-0">
           {/* Player Info - Top (Opponent) */}
-          <div className="flex items-center gap-3 lg:gap-4 px-1">
+          <div className="flex items-center gap-3 px-1 flex-shrink-0">
             <div
-              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 repertoireColor === "black"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-base lg:text-lg font-medium ${
+                className={`text-sm font-medium ${
                   repertoireColor === "black"
                     ? "text-zinc-800"
                     : "text-zinc-300"
@@ -374,33 +374,37 @@ export default function TrainingClient({
                 {repertoireColor === "black" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-sm lg:text-base text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {repertoireColor === "black" ? "White" : "Black"}
             </p>
           </div>
 
           {/* Board */}
-          <Board
-            ref={boardRef}
-            playerColor={repertoireColor}
-            initialFen={currentEntry?.position.fen}
-            key={`${currentRepertoireIndex}-${currentCardIndex}`}
-            trainingMode={true}
-            showingAnswer={showingAnswer}
-            onTrainingMove={handleTrainingMove}
-            highlightSquare={feedbackSquare}
-          />
+          <div
+            className="flex-shrink-0 w-full"
+            style={{ maxWidth: "min(100%, calc(100dvh - 3.5rem - 280px))" }}>
+            <Board
+              ref={boardRef}
+              playerColor={repertoireColor}
+              initialFen={currentEntry?.position.fen}
+              key={`${currentRepertoireIndex}-${currentCardIndex}`}
+              trainingMode={true}
+              showingAnswer={showingAnswer}
+              onTrainingMove={handleTrainingMove}
+              highlightSquare={feedbackSquare}
+            />
+          </div>
 
           {/* Player Info - Bottom (You) */}
-          <div className="flex items-center gap-3 lg:gap-4 px-1">
+          <div className="flex items-center gap-3 px-1 flex-shrink-0">
             <div
-              className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 repertoireColor === "white"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-base lg:text-lg font-medium ${
+                className={`text-sm font-medium ${
                   repertoireColor === "white"
                     ? "text-zinc-800"
                     : "text-zinc-300"
@@ -408,21 +412,19 @@ export default function TrainingClient({
                 {repertoireColor === "white" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-sm lg:text-base text-foreground font-medium">
-              You
-            </p>
+            <p className="text-sm text-foreground font-medium">You</p>
           </div>
 
           {/* Status indicator */}
-          <div className="flex items-center justify-center min-h-8 lg:min-h-12">
+          <div className="flex items-center justify-center min-h-7 flex-shrink-0">
             {feedbackSquare && (
               <div
-                className={`inline-flex items-center gap-2 px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl ${
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl ${
                   feedbackSquare.color === "correct"
                     ? "bg-green-500/20 border border-green-500/30 text-green-400"
                     : "bg-red-500/20 border border-red-500/30 text-red-400"
                 }`}>
-                <span className="text-xs lg:text-sm font-medium">
+                <span className="text-xs font-medium">
                   {feedbackSquare.color === "correct"
                     ? "Correct!"
                     : "Try again"}
@@ -432,18 +434,18 @@ export default function TrainingClient({
           </div>
 
           {/* Main: Show Answer / Rating Buttons inline below board */}
-          <div className="w-full">
+          <div className="w-full flex-shrink-0">
             {!showingAnswer ? (
               <Button
                 variant="outline"
-                className="w-full h-11 lg:h-12 text-sm rounded-xl border-border/50 hover:bg-surface-2"
+                className="w-full h-11 text-sm rounded-xl border-border/50 hover:bg-surface-2"
                 onClick={handleShowAnswer}>
                 <Eye size={16} className="mr-2" />
                 Show Answer
               </Button>
             ) : (
-              <div className="space-y-3">
-                <div className="glass-card rounded-xl p-3 text-center">
+              <div className="space-y-2">
+                <div className="glass-card rounded-xl p-2.5 text-center">
                   <p className="text-xs text-muted-foreground mb-1">
                     The move was
                   </p>
@@ -458,7 +460,7 @@ export default function TrainingClient({
                   <Button
                     onClick={() => handleRecallRating("forgot")}
                     disabled={isReviewing}
-                    className="h-12 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    className="h-11 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                     variant="ghost">
                     <span className="text-xs font-medium">Forgot</span>
                     <span className="text-[10px] opacity-70">Again</span>
@@ -466,7 +468,7 @@ export default function TrainingClient({
                   <Button
                     onClick={() => handleRecallRating("partial")}
                     disabled={isReviewing}
-                    className="h-12 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    className="h-11 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                     variant="ghost">
                     <span className="text-xs font-medium">Hard</span>
                     <span className="text-[10px] opacity-70">Struggled</span>
@@ -474,7 +476,7 @@ export default function TrainingClient({
                   <Button
                     onClick={() => handleRecallRating("effort")}
                     disabled={isReviewing}
-                    className="h-12 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    className="h-11 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                     variant="ghost">
                     <span className="text-xs font-medium">Good</span>
                     <span className="text-[10px] opacity-70">Effort</span>
@@ -482,7 +484,7 @@ export default function TrainingClient({
                   <Button
                     onClick={() => handleRecallRating("easy")}
                     disabled={isReviewing}
-                    className="h-12 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    className="h-11 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                     variant="ghost">
                     <span className="text-xs font-medium">Easy</span>
                     <span className="text-[10px] opacity-70">No problem</span>

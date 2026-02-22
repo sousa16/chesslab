@@ -187,7 +187,7 @@ export default function BuildClient({
   const currentMove = moves[currentMoveIndex - 1];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -201,19 +201,19 @@ export default function BuildClient({
         />
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-w-0 h-screen lg:h-screen pt-14 pb-4 relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-[calc(100vh-3.5rem)] lg:h-screen mt-14 lg:mt-0 pb-2 lg:pb-6 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" />
         </div>
 
-        <div className="w-full max-w-2xl flex-1 flex flex-col items-center justify-center gap-3 lg:gap-4 min-h-0 py-4 lg:py-4">
-          <div className="w-full px-1 flex items-center">
+        <div className="w-full max-w-xl flex-1 flex flex-col items-center justify-center gap-2 lg:gap-3 min-h-0">
+          <div className="w-full px-1 flex items-center flex-shrink-0">
             {currentMove && (
-              <div className="bg-surface-2 rounded-lg px-3 lg:px-4 py-2 lg:py-3 border border-border/50 inline-flex items-center gap-2 lg:gap-3">
-                <span className="text-xs lg:text-sm text-muted-foreground">
+              <div className="bg-surface-2 rounded-lg px-3 py-2 border border-border/50 inline-flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
                   Position after
                 </span>
-                <span className="text-sm lg:text-base font-mono text-foreground">
+                <span className="text-sm font-mono text-foreground">
                   {currentMoveIndex}. {currentMove.white}
                   {currentMove.black && ` ${currentMove.black}`}
                 </span>
@@ -221,16 +221,21 @@ export default function BuildClient({
             )}
           </div>
 
-          <Board
-            ref={boardRef}
-            playerColor={color}
-            buildMode={true}
-            onMovesUpdated={handleMovesUpdated}
-            initialMoves={initialMoves}
-            initialFen={initialFen}
-          />
+          {/* Board */}
+          <div
+            className="flex-shrink-0 w-full"
+            style={{ maxWidth: "min(100%, calc(100dvh - 3.5rem - 180px))" }}>
+            <Board
+              ref={boardRef}
+              playerColor={color}
+              buildMode={true}
+              onMovesUpdated={handleMovesUpdated}
+              initialMoves={initialMoves}
+              initialFen={initialFen}
+            />
+          </div>
 
-          <div className="text-center flex items-center justify-center w-full">
+          <div className="text-center flex items-center justify-center w-full flex-shrink-0">
             {(() => {
               const lastMove = moves[moves.length - 1];
               const isOpponentTurn = lastMove && !lastMove.black;
@@ -275,21 +280,9 @@ export default function BuildClient({
             })()}
           </div>
 
-          <div className="hidden lg:flex items-center gap-3 invisible">
-            <div className="flex items-center justify-center gap-3">
-              <button className="h-14 w-14 p-0" />
-              <button className="h-14 w-14 p-0" />
-              <button className="h-14 w-14 p-0" />
-              <button className="h-14 w-14 p-0" />
-              <div className="w-px h-10 bg-border mx-3" />
-              <button className="h-14 w-14 p-0" />
-            </div>
-            <button className="h-12 w-12 p-0" />
-          </div>
-
-          <div className="lg:hidden w-full max-w-2xl px-4">
+          <div className="lg:hidden w-full max-w-2xl px-4 flex-shrink-0 mt-3">
             <Button
-              className="w-full h-12 text-sm btn-primary-gradient rounded-xl font-medium gap-2"
+              className="w-full h-11 text-sm btn-primary-gradient rounded-xl font-medium gap-2"
               onClick={() => handleAddMove()}
               disabled={moves.length === 0 || isSavingLine}>
               <Save size={18} />

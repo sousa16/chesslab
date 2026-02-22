@@ -131,7 +131,7 @@ export default function HomeClient() {
       )}
 
       {/* Main board area */}
-      <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-screen lg:h-screen pt-14 lg:pt-0 pb-4 lg:pb-6 relative overflow-hidden">
+      <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-[calc(100vh-3.5rem)] lg:h-screen mt-14 lg:mt-0 pb-2 lg:pb-6 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo
             size="xl"
@@ -140,64 +140,62 @@ export default function HomeClient() {
           />
         </div>
 
-        {/* Inner column — fills height and centres content on both mobile and desktop */}
-        <div className="w-full max-w-2xl flex-1 flex flex-col items-center gap-3 lg:gap-4 min-h-0 justify-center py-4 lg:py-4">
+        {/* Inner column — fills height and centres content */}
+        <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-center">
           {/* Opponent label */}
-          <div className="flex items-center gap-3 lg:gap-4 px-1 flex-shrink-0">
+          <div className="flex items-center gap-3 px-1 flex-shrink-0">
             <div
-              className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 selectedColor === "black"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-sm lg:text-lg font-medium ${
+                className={`text-sm font-medium ${
                   selectedColor === "black" ? "text-zinc-800" : "text-zinc-300"
                 }`}>
                 {selectedColor === "black" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-sm lg:text-base text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {selectedColor === "black" ? "White" : "Black"}
             </p>
           </div>
 
-          {/* Board — flex-1 on desktop so it fills remaining space; fixed aspect ratio cap on mobile */}
-          <div className="w-full min-h-0 flex items-center justify-center flex-none lg:flex-1">
-            <div className="w-full max-w-[min(75vw,360px)] lg:max-w-none lg:h-full aspect-square">
-              <Board
-                ref={boardRef}
-                playerColor={selectedColor}
-                buildMode={true}
-                onMoveMade={handleMoveMade}
-                initialMoves={initialMoves}
-                initialFen={initialFen}
-              />
-            </div>
+          {/* Board — width = min(full column width, available height minus all other elements) */}
+          <div
+            className="flex-shrink-0 w-full"
+            style={{ maxWidth: "min(100%, calc(100dvh - 3.5rem - 220px))" }}>
+            <Board
+              ref={boardRef}
+              playerColor={selectedColor}
+              buildMode={true}
+              onMoveMade={handleMoveMade}
+              initialMoves={initialMoves}
+              initialFen={initialFen}
+            />
           </div>
 
           {/* Player label */}
-          <div className="flex items-center gap-3 lg:gap-4 px-1 flex-shrink-0">
+          <div className="flex items-center gap-3 px-1 flex-shrink-0">
             <div
-              className={`w-8 h-8 lg:w-12 lg:h-12 rounded-full flex items-center justify-center ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 selectedColor === "white"
                   ? "bg-zinc-100"
                   : "bg-zinc-800 border border-zinc-700"
               }`}>
               <span
-                className={`text-sm lg:text-lg font-medium ${
+                className={`text-sm font-medium ${
                   selectedColor === "white" ? "text-zinc-800" : "text-zinc-300"
                 }`}>
                 {selectedColor === "white" ? "W" : "B"}
               </span>
             </div>
-            <p className="text-sm lg:text-base text-foreground font-medium">
-              You
-            </p>
+            <p className="text-sm text-foreground font-medium">You</p>
           </div>
 
           {/* Controls row */}
-          <div className="flex items-center gap-2 lg:gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <BoardControls
               onFirstMove={() => boardRef.current?.goToFirst()}
               onPreviousMove={() => boardRef.current?.goToPrevious()}
@@ -207,18 +205,17 @@ export default function HomeClient() {
             />
             <Button
               variant="ghost"
-              className="h-10 w-10 lg:h-12 lg:w-12 p-0 text-muted-foreground hover:text-foreground [&_svg]:size-auto"
+              className="h-10 w-10 p-0 text-muted-foreground hover:text-foreground [&_svg]:size-auto"
               title="Rotate board"
               onClick={handleRotateBoard}>
-              <ArrowLeftRight size={22} className="lg:hidden" />
-              <ArrowLeftRight size={26} className="hidden lg:block" />
+              <ArrowLeftRight size={22} />
             </Button>
           </div>
 
           {/* Start Practice button — mobile only */}
-          <div className="lg:hidden w-full px-4 flex-shrink-0">
+          <div className="lg:hidden w-full px-4 flex-shrink-0 mt-3">
             <Button
-              className="w-full h-12 text-sm btn-primary-gradient rounded-xl font-medium"
+              className="w-full h-11 text-sm btn-primary-gradient rounded-xl font-medium"
               onClick={handleStartPractice}>
               Start Practice
             </Button>

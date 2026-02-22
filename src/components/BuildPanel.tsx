@@ -216,11 +216,7 @@ export function BuildPanel({
           <Save size={18} className="hidden lg:block" />
           {isSavingLine ? "Saving..." : "Save Line"}
         </Button>
-        {moves.length > 0 && (
-          <p className="hidden md:block text-[10px] lg:text-xs text-muted-foreground text-center mt-2 lg:mt-3">
-            This will add {moves.length} positions to your repertoire
-          </p>
-        )}
+        {/* Removed brief positions summary per request */}
       </div>
     </div>
   );

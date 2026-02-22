@@ -478,7 +478,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           className="w-full aspect-square rounded-2xl overflow-hidden elevated cursor-pointer ring-1 ring-white/5"
           data-testid="board"
           onClick={(e) => {
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const rect = (
+              e.currentTarget as HTMLElement
+            ).getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 

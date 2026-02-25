@@ -157,8 +157,6 @@
   html {
     font-family: var(--font-geist-sans, "Inter"), system-ui, sans-serif;
     letter-spacing: -0.01em;
-    height: 100%;
-    overflow: hidden;
     /* CSS variable for mobile nav height — accounts for iOS status bar */
     --mobile-nav-h: calc(3.5rem + env(safe-area-inset-top, 0px));
   }
@@ -169,9 +167,17 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Lock scroll only inside the app shell (home, build, practice).
+     Applied via a class on the (app) layout wrapper. */
+  html.app-shell,
+  html.app-shell body {
     height: 100%;
     overflow: hidden;
-    /* Prevent iOS bounce/overscroll */
+  }
+
+  html.app-shell body {
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
     position: fixed;

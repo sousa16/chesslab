@@ -66,7 +66,7 @@ export default function LandingClient() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-amber-50/40 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">
+    <div className="min-h-dvh bg-amber-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300">
       <nav className="fixed top-0 w-full z-50 border-b border-stone-200/80 dark:border-slate-800/50 bg-stone-50/80 dark:bg-slate-950/80 backdrop-blur-md transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex-shrink-0">
@@ -93,7 +93,7 @@ export default function LandingClient() {
         </div>
       </nav>
 
-      <section className="pt-24 sm:pt-28 md:pt-32 pb-12 sm:pb-16 md:pb-20 px-4 sm:px-6 bg-gradient-to-b from-amber-50/40 via-stone-50 to-amber-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 transition-colors duration-300">
+      <section className="pt-24 sm:pt-28 md:pt-32 pb-12 sm:pb-16 md:pb-20 px-4 sm:px-6 bg-gradient-to-b from-amber-50 via-stone-50 to-amber-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 transition-colors duration-300">
         <div className="max-w-6xl mx-auto">
           <div className="text-center space-y-6 sm:space-y-8 max-w-4xl mx-auto">
             <div className="space-y-4 sm:space-y-6">
@@ -122,7 +122,7 @@ export default function LandingClient() {
         </div>
       </section>
 
-      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-stone-100/60 dark:bg-slate-900/50 transition-colors duration-300">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-stone-100 dark:bg-slate-900 transition-colors duration-300">
         <div className="max-w-6xl mx-auto">
           <div className="text-center space-y-3 sm:space-y-4 mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
@@ -189,7 +189,7 @@ export default function LandingClient() {
         </div>
       </section>
 
-      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-gradient-to-b from-stone-50 to-amber-50/40 dark:from-slate-900 dark:to-slate-950 transition-colors duration-300">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-gradient-to-b from-stone-50 to-amber-50 dark:from-slate-900 dark:to-slate-950 transition-colors duration-300">
         <div className="max-w-6xl mx-auto">
           <div className="text-center space-y-3 sm:space-y-4 mb-8 sm:mb-10 md:mb-12">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
@@ -314,7 +314,7 @@ export default function LandingClient() {
         </div>
       </section>
 
-      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-gradient-to-b from-amber-50/40 to-stone-50 dark:from-slate-950 dark:to-slate-900 transition-colors duration-300">
+      <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 bg-gradient-to-b from-amber-50 to-stone-50 dark:from-slate-950 dark:to-slate-900 transition-colors duration-300">
         <div className="max-w-4xl mx-auto text-center space-y-6 sm:space-y-8">
           <div className="space-y-3 sm:space-y-4 px-2">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white">

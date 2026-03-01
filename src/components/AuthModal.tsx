@@ -188,6 +188,8 @@ export function AuthModal({
           if (!isMobile) e.preventDefault();
         }}>
         <DialogHeader className="text-center">
+          {/* Absorbs Radix auto-focus so the keyboard doesn't open on mobile */}
+          <span tabIndex={0} aria-hidden className="sr-only" />
           <div className="flex justify-center mb-2">
             <Logo size="md" />
           </div>
@@ -250,6 +252,7 @@ export function AuthModal({
               <Input
                 id="email"
                 type="email"
+                autoFocus={false}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
@@ -279,6 +282,7 @@ export function AuthModal({
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  autoFocus={false}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -364,6 +368,8 @@ export function AuthModal({
               if (!isMobile) e.preventDefault();
             }}>
             <DialogHeader className="text-center">
+              {/* Absorbs Radix auto-focus so the keyboard doesn't open on mobile */}
+              <span tabIndex={0} aria-hidden className="sr-only" />
               <DialogTitle className="text-2xl font-semibold text-white">
                 Reset Password
               </DialogTitle>
@@ -383,6 +389,7 @@ export function AuthModal({
                 <Input
                   id="forgotEmail"
                   type="email"
+                  autoFocus={false}
                   value={forgotPasswordEmail}
                   onChange={(e) => setForgotPasswordEmail(e.target.value)}
                   placeholder="you@example.com"

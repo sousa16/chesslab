@@ -1,8 +1,7 @@
 "use client";
 
-import { ChevronLeft, Plus, X, Save, Sparkles } from "lucide-react";
+import { ChevronLeft, X, Save, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
 
 interface Move {
   number: number;
@@ -17,11 +16,16 @@ interface BuildPanelProps {
   onBack: () => void;
   moves: Move[];
   currentMoveIndex: number;
-  openingName?: string;
+  // Server-resolved opening name for the moves played so far (null when no
+  // book line matches). Drives the "you're building: X" contextual hint.
+  openingName?: string | null;
   lineName?: string;
   onAddMove?: (move: string) => void;
   onDeleteMove?: (moveIndex: number) => void;
   isSavingLine?: boolean;
+  // True when the current line ends with the user's own move and can be
+  // submitted. Drives the Save button enabled state + helper text.
+  canSave?: boolean;
 }
 
 export function BuildPanel({
@@ -34,19 +38,8 @@ export function BuildPanel({
   onAddMove,
   onDeleteMove,
   isSavingLine,
+  canSave = true,
 }: BuildPanelProps) {
-  const [deletingMoveIndex, setDeletingMoveIndex] = useState<number | null>(
-    null,
-  );
-
-  const handleDeleteMove = async (moveIndex: number) => {
-    setDeletingMoveIndex(moveIndex);
-    try {
-      await onDeleteMove?.(moveIndex);
-    } finally {
-      setDeletingMoveIndex(null);
-    }
-  };
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -107,9 +100,15 @@ export function BuildPanel({
           </div>
         )}
 
-        {/* Add Move Prompt - Prominent with animation */}
-        <div className="relative overflow-hidden rounded-xl p-4 lg:p-5 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30 animate-pulse-subtle">
-          <div className="absolute top-0 right-0 w-24 lg:w-32 h-24 lg:h-32 bg-primary/10 rounded-full blur-3xl -mr-8 lg:-mr-12 -mt-8 lg:-mt-12 animate-glow" />
+        {/* Add Move Prompt — pulses only when the user hasn't started yet
+            to draw the eye; switches to a static hint once they're building. */}
+        <div
+          className={`relative overflow-hidden rounded-xl p-4 lg:p-5 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30 ${
+            moves.length === 0 ? "animate-pulse-subtle" : ""
+          }`}>
+          {moves.length === 0 && (
+            <div className="absolute top-0 right-0 w-24 lg:w-32 h-24 lg:h-32 bg-primary/10 rounded-full blur-3xl -mr-8 lg:-mr-12 -mt-8 lg:-mt-12 animate-glow" />
+          )}
           <div className="relative">
             <div className="flex items-center gap-2 lg:gap-3 mb-2 lg:mb-3">
               <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg lg:rounded-xl bg-primary/20 flex items-center justify-center">
@@ -178,11 +177,11 @@ export function BuildPanel({
                       </span>
                       <div className="flex items-center gap-1.5 lg:gap-2">
                         <span className="move-badge move-badge-white text-xs lg:text-sm">
-                          {move.whiteUci || move.white}
+                          {move.white || move.whiteUci}
                         </span>
-                        {(move.blackUci || move.black) && (
+                        {(move.black || move.blackUci) && (
                           <span className="move-badge move-badge-black text-xs lg:text-sm">
-                            {move.blackUci || move.black}
+                            {move.black || move.blackUci}
                           </span>
                         )}
                       </div>
@@ -192,8 +191,7 @@ export function BuildPanel({
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6 lg:h-7 lg:w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
-                        onClick={() => handleDeleteMove(index)}
-                        disabled={deletingMoveIndex === index}>
+                        onClick={() => onDeleteMove?.(index)}>
                         <X size={12} className="lg:hidden" />
                         <X size={14} className="hidden lg:block" />
                       </Button>
@@ -211,12 +209,16 @@ export function BuildPanel({
         <Button
           className="w-full h-10 lg:h-12 text-sm lg:text-base btn-primary-gradient rounded-xl font-medium gap-2"
           onClick={() => onAddMove?.("")}
-          disabled={moves.length === 0 || isSavingLine}>
+          disabled={moves.length === 0 || !canSave || isSavingLine}>
           <Save size={16} className="lg:hidden" />
           <Save size={18} className="hidden lg:block" />
           {isSavingLine ? "Saving..." : "Save Line"}
         </Button>
-        {/* Removed brief positions summary per request */}
+        {moves.length > 0 && !canSave && (
+          <p className="mt-2 text-xs text-muted-foreground text-center">
+            Add your {color === "white" ? "White" : "Black"} move to save
+          </p>
+        )}
       </div>
     </div>
   );

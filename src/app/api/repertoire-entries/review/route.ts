@@ -73,16 +73,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid response" }, { status: 400 });
     }
 
-    // Fetch the entry and verify ownership
+    // Fetch only the SM-2 state and the owning user id — verifying ownership
+    // doesn't need the full user row or the linked Position.
     const entry = await prisma.repertoireEntry.findUnique({
       where: { id: entryId },
-      include: {
+      select: {
+        interval: true,
+        easeFactor: true,
+        repetitions: true,
+        nextReviewDate: true,
+        phase: true,
+        learningStepIndex: true,
+        lastReviewDate: true,
         repertoire: {
-          include: {
-            user: true,
+          select: {
+            user: { select: { id: true, email: true } },
           },
         },
-        position: true,
       },
     });
 
@@ -94,50 +101,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // Process the review using SM-2 algorithm
-    const currentCardState = {
-      interval: entry.interval,
-      easeFactor: entry.easeFactor,
-      repetitions: entry.repetitions,
-      nextReviewDate: entry.nextReviewDate,
-      phase: entry.phase as "learning" | "exponential" | "relearning",
-      learningStepIndex: entry.learningStepIndex,
-      lastReviewDate: entry.lastReviewDate,
-    };
-
     const result = processReview(
-      currentCardState,
+      {
+        interval: entry.interval,
+        easeFactor: entry.easeFactor,
+        repetitions: entry.repetitions,
+        nextReviewDate: entry.nextReviewDate,
+        phase: entry.phase as "learning" | "exponential" | "relearning",
+        learningStepIndex: entry.learningStepIndex,
+        lastReviewDate: entry.lastReviewDate,
+      },
       response as ReviewResponse,
       defaultSM2Config,
       new Date(),
     );
 
-    // Update the entry with new SM-2 state
-    const updatedEntry = await prisma.repertoireEntry.update({
-      where: { id: entryId },
-      data: {
-        interval: result.newCardState.interval,
-        easeFactor: result.newCardState.easeFactor,
-        repetitions: result.newCardState.repetitions,
-        nextReviewDate: result.newCardState.nextReviewDate,
-        phase: result.newCardState.phase,
-        learningStepIndex: result.newCardState.learningStepIndex,
-        lastReviewDate: new Date(),
-        updatedAt: new Date(),
-      },
-      include: {
-        position: true,
-      },
-    });
-
-    // Record daily activity for streak/accuracy tracking
-    // "effort" and "easy" are considered correct answers
+    // Run the entry update and the daily-activity upsert in parallel —
+    // they're independent and each is a single round-trip.
     const isCorrect = response === "effort" || response === "easy";
-    await recordDailyActivity(entry.repertoire.user.id, isCorrect, timeSpentMs);
+    await Promise.all([
+      prisma.repertoireEntry.update({
+        where: { id: entryId },
+        data: {
+          interval: result.newCardState.interval,
+          easeFactor: result.newCardState.easeFactor,
+          repetitions: result.newCardState.repetitions,
+          nextReviewDate: result.newCardState.nextReviewDate,
+          phase: result.newCardState.phase,
+          learningStepIndex: result.newCardState.learningStepIndex,
+          lastReviewDate: new Date(),
+        },
+        select: { id: true },
+      }),
+      recordDailyActivity(entry.repertoire.user.id, isCorrect, timeSpentMs),
+    ]);
 
     return NextResponse.json({
       success: true,
-      entry: updatedEntry,
       result: {
         message: result.message,
         intervalDays: result.intervalDays,

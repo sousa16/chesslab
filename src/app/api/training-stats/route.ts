@@ -9,24 +9,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Check if a position is a "first move" position that shouldn't be counted for training.
- */
-function isFirstMovePosition(
-  fen: string,
-  repertoireColor: "White" | "Black",
-): boolean {
-  const parts = fen.split(" ");
-  const sideToMove = parts[1];
-  const fullmoveNumber = parseInt(parts[5], 10);
-
-  if (repertoireColor === "White") {
-    return fullmoveNumber === 1 && sideToMove === "w";
-  } else {
-    return fullmoveNumber === 1 && sideToMove === "b";
-  }
-}
-
-/**
  * Calculate streak by counting consecutive days with activity.
  * Accepts pre-fetched activities (sorted by date desc) to avoid an extra DB query.
  */
@@ -79,73 +61,40 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    // Resolve user id first (single light query); then fan out the heavy
+    // queries in parallel so we don't pay sequential round-trips.
+    const userIdRow = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: {
-        repertoires: {
-          include: {
-            entries: {
-              include: {
-                position: true,
-              },
-            },
-          },
-        },
-      },
+      select: { id: true },
     });
 
-    if (!user) {
+    if (!userIdRow) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const now = new Date();
-    let dueCount = 0;
-    let totalPositions = 0;
+    const today = new Date();
+    const todayUTC = new Date(
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+    );
 
-    // Per-color stats
-    const colorStats = {
-      white: { learned: 0, total: 0 },
-      black: { learned: 0, total: 0 },
-    };
-
-    for (const repertoire of user.repertoires) {
-      const colorKey = repertoire.color === "White" ? "white" : "black";
-
-      for (const entry of repertoire.entries) {
-        // Skip first move positions
-        if (isFirstMovePosition(entry.position.fen, repertoire.color)) {
-          continue;
-        }
-
-        totalPositions++;
-        colorStats[colorKey].total++;
-
-        // A position is "learned" if it's not due for review (next review in future)
-        if (new Date(entry.nextReviewDate) > now) {
-          colorStats[colorKey].learned++;
-        } else {
-          // Only count non-first-move positions as due
-          dueCount++;
-        }
-      }
-    }
-
-    // Get streak, accuracy, and today's stats — all from a single DB query
-    let streak = 0;
-    let accuracy = 0;
-    let timeSpentMinutes = 0;
-    let positionsReviewedToday = 0;
-
-    try {
-      const today = new Date();
-      const todayUTC = new Date(
-        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
-      );
-
-      // Single query replaces the previous three separate dailyActivity fetches:
-      // calculateStreak(), findMany() for accuracy, and findMany() for today
-      const allActivities = await prisma.dailyActivity.findMany({
-        where: { userId: user.id },
+    // Fan-out: repertoire entries (for due/total/learned counts) + daily
+    // activity (for streak/accuracy/today). The first-move filter is pushed
+    // into Postgres via the fullmove counter at the end of the FEN.
+    const [repertoires, allActivities] = await Promise.all([
+      prisma.repertoire.findMany({
+        where: { userId: userIdRow.id },
+        select: {
+          color: true,
+          entries: {
+            where: {
+              position: { NOT: { fen: { endsWith: " 1" } } },
+            },
+            select: { nextReviewDate: true },
+          },
+        },
+      }),
+      prisma.dailyActivity.findMany({
+        where: { userId: userIdRow.id },
         orderBy: { date: "desc" },
         select: {
           date: true,
@@ -154,37 +103,54 @@ export async function GET() {
           timeSpentMs: true,
           positionsReviewed: true,
         },
-      });
+      }),
+    ]);
 
-      streak = calculateStreakFromActivities(allActivities);
+    const now = new Date();
+    let dueCount = 0;
+    let totalPositions = 0;
 
-      let totalCorrect = 0;
-      let totalIncorrect = 0;
-      let totalTimeMsToday = 0;
-      let totalPositionsReviewedToday = 0;
+    const colorStats = {
+      white: { learned: 0, total: 0 },
+      black: { learned: 0, total: 0 },
+    };
 
-      for (const activity of allActivities) {
-        totalCorrect += activity.correctCount;
-        totalIncorrect += activity.incorrectCount;
+    for (const repertoire of repertoires) {
+      const colorKey = repertoire.color === "White" ? "white" : "black";
 
-        // Accumulate today-specific stats in the same loop
-        if (new Date(activity.date).getTime() === todayUTC.getTime()) {
-          totalTimeMsToday += activity.timeSpentMs;
-          totalPositionsReviewedToday += activity.positionsReviewed ?? 0;
+      for (const entry of repertoire.entries) {
+        totalPositions++;
+        colorStats[colorKey].total++;
+
+        if (new Date(entry.nextReviewDate) > now) {
+          colorStats[colorKey].learned++;
+        } else {
+          dueCount++;
         }
       }
-
-      const totalReviews = totalCorrect + totalIncorrect;
-      accuracy =
-        totalReviews > 0 ? Math.round((totalCorrect / totalReviews) * 100) : 0;
-
-      // API returns minutes for the UI; timeSpentMinutes is "today"
-      timeSpentMinutes = Math.round(totalTimeMsToday / 60000);
-      positionsReviewedToday = totalPositionsReviewedToday;
-    } catch (activityError) {
-      // If daily activity queries fail, continue with default values
-      console.error("Error fetching daily activity:", activityError);
     }
+
+    const streak = calculateStreakFromActivities(allActivities);
+
+    let totalCorrect = 0;
+    let totalIncorrect = 0;
+    let totalTimeMsToday = 0;
+    let positionsReviewedToday = 0;
+
+    for (const activity of allActivities) {
+      totalCorrect += activity.correctCount;
+      totalIncorrect += activity.incorrectCount;
+
+      if (new Date(activity.date).getTime() === todayUTC.getTime()) {
+        totalTimeMsToday += activity.timeSpentMs;
+        positionsReviewedToday += activity.positionsReviewed ?? 0;
+      }
+    }
+
+    const totalReviews = totalCorrect + totalIncorrect;
+    const accuracy =
+      totalReviews > 0 ? Math.round((totalCorrect / totalReviews) * 100) : 0;
+    const timeSpentMinutes = Math.round(totalTimeMsToday / 60000);
 
     return NextResponse.json(
       {

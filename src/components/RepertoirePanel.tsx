@@ -15,7 +15,10 @@ interface LineNode {
   fen: string;
   expectedMove: string;
   moveNumber: number;
-  moveSequence: string;
+  displaySequence: string;
+  sanMoves: string[];
+  openingName: string | null;
+  openingEco: string | null;
   children: LineNode[];
   practiced?: boolean;
 }
@@ -27,11 +30,15 @@ interface RepertoirePanelProps {
     openingId?: string,
     lineId?: string,
     fen?: string,
-    moveSequence?: string,
+    sanMoves?: string[],
   ) => void;
   onLearn: (openingId?: string, lineId?: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
-  onLineClick?: (moves: string[], startingFen: string) => void;
+  onLineClick?: (
+    moves: string[],
+    openingName: string | null,
+    openingEco: string | null,
+  ) => void;
 }
 
 export function RepertoirePanel({
@@ -184,8 +191,8 @@ export function RepertoirePanel({
           <div className="flex-1 overflow-y-auto pr-1">
             <LineTree
               root={rootNode}
-              onBuild={(nodeId, fen, moveSequence) =>
-                onBuild(undefined, nodeId, fen, moveSequence)
+              onBuild={(nodeId, fen, sanMoves) =>
+                onBuild(undefined, nodeId, fen, sanMoves)
               }
               onLearn={(nodeId) => onLearn(undefined, nodeId)}
               onDelete={handleDeleteEntry}

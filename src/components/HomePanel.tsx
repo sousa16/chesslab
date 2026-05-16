@@ -13,8 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useState, useEffect } from "react";
-import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useState, useEffect, useTransition } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
 
 interface ColorStats {
@@ -137,6 +136,7 @@ export function HomePanel({
   const greeting = getGreeting();
   const firstName = session?.user ? getFirstName(session.user) : "there";
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isStartingPractice, startPracticeTransition] = useTransition();
 
   const [whiteStats, setWhiteStats] = useState<RepertoireStats>({
     lines: 0,
@@ -155,20 +155,12 @@ export function HomePanel({
     useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { isLoading: isStartingPractice, execute: onStartPractice } =
-    useAsyncAction(
-      async () => {
-        // Simulate brief async operation to prevent accidental double-clicks
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        onStartPracticeCallback();
-      },
-      () => {
-        // Success - callback handles navigation
-      },
-      (error) => {
-        console.error("Error starting practice:", error);
-      },
-    );
+  const onStartPractice = () => {
+    if (isStartingPractice) return;
+    startPracticeTransition(() => {
+      onStartPracticeCallback();
+    });
+  };
 
   const fetchStats = async () => {
     try {

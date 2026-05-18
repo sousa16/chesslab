@@ -80,7 +80,18 @@ export default function HomeClient() {
     setView("repertoire");
   };
 
-  const handleBack = () => setView("home");
+  // Going back to home should leave the board in a clean state: clear the
+  // saved-line preview AND drop the Board's internal move history so the
+  // "Viewing move history" overlay doesn't linger after the panel swap.
+  const handleGoHome = () => {
+    setInitialMoves([]);
+    setInitialFen("");
+    setLineOpening(null);
+    boardRef.current?.reset();
+    setView("home");
+  };
+
+  const handleBack = handleGoHome;
 
   const handleStartPractice = () => router.push("/training?mode=review");
 
@@ -144,7 +155,7 @@ export default function HomeClient() {
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        onLogoClick={() => setView("home")}
+        onLogoClick={handleGoHome}
       />
 
       {isSidebarOpen && (
@@ -157,11 +168,7 @@ export default function HomeClient() {
       {/* Main board area */}
       <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-below-nav lg:h-screen mt-nav lg:mt-0 pb-2 lg:pb-6 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
-          <Logo
-            size="xl"
-            clickable={true}
-            onLogoClick={() => setView("home")}
-          />
+          <Logo size="xl" clickable={true} onLogoClick={handleGoHome} />
         </div>
 
         {/* Inner column — fills height and centres content */}

@@ -1,76 +1,56 @@
 /**
- * Opening name lookup, backed by a bundled ECO dataset derived from the
- * Lichess chess-openings repository (~3,700 named openings).
+ * Opening name lookup, backed by a precomputed ECO dataset.
  *
- * Lookup is "longest-prefix match" against a SAN move sequence: given the
- * moves played so far, return the most-specific named opening that matches
- * a prefix of those moves. Runs server-side only — the dataset is not
- * shipped to the client; only the resolved name is sent in API responses.
+ * The source dataset (eco.json, derived from the Lichess chess-openings
+ * repository) gives us each opening's SAN move list. To support lookup
+ * both by SAN-prefix and by FEN, we need each opening's end-FEN plus the
+ * FENs of every intermediate position along its path.
+ *
+ * Previously this module computed those FENs at import time by running
+ * ~3,700 chess.js play-throughs twice — that dominated cold-start latency
+ * on every serverless invocation. The work now lives in a build-time
+ * script (scripts/precompute-eco.ts → eco.precomputed.json), and this
+ * file just deserializes the result into the same two lookup maps.
+ *
+ * Server-side only — the JSON is not shipped to the client.
  */
 
-import { Chess } from "chess.js";
-import eco from "./openings/eco.json";
+import precomputed from "./openings/eco.precomputed.json";
 
-interface EcoEntry {
+interface PrecomputedEntry {
   eco: string;
   name: string;
-  m: string[];
+  key: string;
+  endFen: string | null;
+  intermediateFens: string[];
 }
 
-const entries = eco as EcoEntry[];
+const entries = precomputed as PrecomputedEntry[];
 
 export interface OpeningMatch {
   eco: string;
   name: string;
 }
 
-// Two indices, both built once at module load:
-// - byKey: exact SAN-path lookup (used when caller has the full move history).
-// - byFen: position lookup by FEN (used when caller only has a FEN, e.g. a
-//   training card). Built in two passes so end-of-opening positions win over
-//   intermediate ones, while intermediate positions still get tagged with
-//   whatever the most-specific opening passing through them is. Dataset is
-//   pre-sorted longest-first, so "skip-if-set" naturally keeps the deepest
-//   variation on transposition collisions.
+// byKey: exact SAN-path lookup ("e4 c5 Nf3" → match).
+// endFens: positions that *end* a named opening — they win over intermediates.
+// intermediateFens: positions traversed mid-line — used when the user is on
+//   a transposition but not at the canonical end position.
 const byKey = new Map<string, OpeningMatch>();
 const endFens = new Map<string, OpeningMatch>();
 const intermediateFens = new Map<string, OpeningMatch>();
 
 for (const e of entries) {
-  byKey.set(e.m.join(" "), { eco: e.eco, name: e.name });
-
-  const game = new Chess();
-  let ok = true;
-  for (const san of e.m) {
-    try {
-      if (!game.move(san)) {
-        ok = false;
-        break;
-      }
-    } catch {
-      ok = false;
-      break;
-    }
-  }
-  if (!ok) continue;
-  const fen = game.fen();
-  if (!endFens.has(fen)) {
-    endFens.set(fen, { eco: e.eco, name: e.name });
+  byKey.set(e.key, { eco: e.eco, name: e.name });
+  if (e.endFen && !endFens.has(e.endFen)) {
+    endFens.set(e.endFen, { eco: e.eco, name: e.name });
   }
 }
 
-// Pass 2: tag every intermediate FEN along each opening's path. Skip
-// positions that are already a named endpoint (those keep the precise name).
+// "Skip if set" — dataset is pre-sorted longest-first, so collisions on a
+// shared transposition keep the more-specific variation.
 for (const e of entries) {
-  const game = new Chess();
-  const lastIdx = e.m.length - 1;
-  for (let i = 0; i < lastIdx; i++) {
-    try {
-      if (!game.move(e.m[i])) break;
-    } catch {
-      break;
-    }
-    const fen = game.fen();
+  for (const fen of e.intermediateFens) {
     if (!endFens.has(fen) && !intermediateFens.has(fen)) {
       intermediateFens.set(fen, { eco: e.eco, name: e.name });
     }
@@ -94,9 +74,8 @@ export function lookupOpening(sanMoves: string[]): OpeningMatch | null {
 }
 
 /**
- * Look up the opening that ends exactly at this FEN. Returns null when the
- * position isn't the end of any named opening (e.g. you're deeper than any
- * book line for that variation).
+ * Look up the opening that matches exactly at this FEN. Returns null when
+ * the position isn't part of any named opening's path.
  */
 export function lookupOpeningByFen(fen: string): OpeningMatch | null {
   return byFen.get(fen) ?? null;

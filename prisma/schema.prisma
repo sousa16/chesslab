@@ -37,19 +37,21 @@ model Session {
 }
 
 model User {
-  id             String          @id @default(cuid())
+  id             String           @id @default(cuid())
   name           String?
-  email          String          @unique
+  email          String           @unique
   emailVerified  DateTime?
   image          String?
   hashedPassword String?
-  dailyReminder  Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  dailyReminder  Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   accounts       Account[]
   repertoires    Repertoire[]
   sessions       Session[]
   dailyActivity  DailyActivity[]
+  puzzleReviews  PuzzleReview[]
+  puzzlePrefs    UserPuzzlePrefs?
 }
 
 model VerificationToken {
@@ -63,10 +65,15 @@ model VerificationToken {
 model Position {
   id                String            @id @default(cuid())
   fen               String            @unique
+  // Fullmove counter parsed from the FEN. Stored as a column so the
+  // training filters (`exclude first-move positions`) can use a btree
+  // index instead of a `LIKE '% 1'` predicate that forced a seq scan.
+  fullmoveNumber    Int
   createdAt         DateTime          @default(now())
   repertoireEntries RepertoireEntry[]
 
   @@index([fen])
+  @@index([fullmoveNumber])
 }
 
 model Repertoire {
@@ -137,6 +144,55 @@ model DailyActivity {
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
+}
+
+model Puzzle {
+  id         String         @id @default(cuid())
+  lichessId  String         @unique
+  fen        String
+  moves      String
+  rating     Int
+  popularity Int            @default(0)
+  themes     String[]
+  categories String[]
+  createdAt  DateTime       @default(now())
+  reviews    PuzzleReview[]
+
+  @@index([rating])
+  @@index([categories])
+}
+
+model PuzzleReview {
+  id                String    @id @default(cuid())
+  userId            String
+  puzzleId          String
+  interval          Int       @default(0)
+  easeFactor        Float     @default(2.5)
+  repetitions       Int       @default(0)
+  nextReviewDate    DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastReviewDate    DateTime?
+  learningStepIndex Int       @default(0)
+  phase             String    @default("learning")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  puzzle            Puzzle    @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, puzzleId])
+  @@index([userId])
+  @@index([puzzleId])
+  @@index([nextReviewDate])
+}
+
+model UserPuzzlePrefs {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  ratingMin         Int      @default(1200)
+  ratingMax         Int      @default(1600)
+  enabledCategories String[] @default(["Mates", "Motifs", "Middlegame", "Endgame"])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum PieceColor {

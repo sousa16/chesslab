@@ -47,7 +47,7 @@ export default async function TrainingPage({
           id: true,
           color: true,
           entries: {
-            where: { position: { NOT: { fen: { endsWith: " 1" } } } },
+            where: { position: { fullmoveNumber: { gt: 1 } } },
             orderBy: { nextReviewDate: "asc" },
             select: {
               id: true,

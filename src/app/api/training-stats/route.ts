@@ -120,7 +120,11 @@ export async function GET(request: NextRequest) {
           color: true,
           entries: {
             where: {
-              position: { NOT: { fen: { endsWith: " 1" } } },
+              // Skip first-move positions (fullmoveNumber = 1 covers the
+              // starting position + positions after White's first move).
+              // Uses the Position.fullmoveNumber btree index instead of
+              // a `LIKE '% 1'` seq scan.
+              position: { fullmoveNumber: { gt: 1 } },
             },
             select: {
               id: true,

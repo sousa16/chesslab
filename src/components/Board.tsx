@@ -34,6 +34,12 @@ interface BoardProps {
   showingAnswer?: boolean;
   onTrainingMove?: (move: { from: string; to: string; san: string }) => boolean; // returns true if correct
   highlightSquare?: { square: string; color: "correct" | "incorrect" } | null;
+  // When true, after replaying `initialMoves` the board lands at the
+  // initial (pre-first-move) position rather than the final one. The full
+  // moveHistory is still populated so the user can step forward through
+  // the line via BoardControls. Used by the line-viewer flow on Home so
+  // the user actually sees how the position was reached.
+  landAtStart?: boolean;
 }
 
 export interface BoardHandle {
@@ -68,6 +74,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       showingAnswer = false,
       onTrainingMove,
       highlightSquare,
+      landAtStart = false,
     },
     ref,
   ) => {
@@ -80,8 +87,18 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
     const { soundEffects, showCoordinates } = useSettings();
 
-    // Initialize board with any initial moves
-    useEffect(() => {
+    // Sync board state with the initial props during render (not in a
+    // useEffect). Doing this in a useEffect causes a one-render lag: the
+    // Chessboard mounts at the new key with the *old* `position` state, then
+    // updates to the new FEN — react-chessboard reads that as a position
+    // change and animates pieces flying across the board. Computing state
+    // during render is React's official pattern for "prop-derived state"
+    // and avoids the intermediate frame.
+    const initKey = `${initialFen ?? ""}|${JSON.stringify(initialMoves ?? [])}`;
+    const [lastInitKey, setLastInitKey] = useState(initKey);
+    if (lastInitKey !== initKey) {
+      setLastInitKey(initKey);
+
       const startingFen =
         initialFen ||
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -109,17 +126,25 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         setMoves(newMoves);
         setUciMoves(newUciMoves);
         setMoveHistory(newHistory);
-        setCurrentMoveIndex(newHistory.length - 1);
-        setPosition(gameRef.current.fen());
+        if (landAtStart) {
+          // Keep the history so the user can step forward, but show the
+          // pre-first-move position. Reset the live game to that state.
+          gameRef.current = new Chess(startingFen);
+          setCurrentMoveIndex(-1);
+          setPosition(gameRef.current.fen());
+        } else {
+          setCurrentMoveIndex(newHistory.length - 1);
+          setPosition(gameRef.current.fen());
+        }
       } else {
-        // Reset to initial state
         setMoves([]);
         setUciMoves([]);
         setMoveHistory([]);
         setCurrentMoveIndex(-1);
         setPosition(gameRef.current.fen());
       }
-    }, [initialFen, JSON.stringify(initialMoves)]);
+      setSelectedSquare(null);
+    }
 
     // Memoize pairing of SAN moves and UCI moves to avoid replaying the game
     const pairedMoves = useMemo(() => {
@@ -522,11 +547,27 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
             }
           }}>
           <Chessboard
+            // Remount Chessboard on programmatic position changes (initialFen
+            // or initialMoves prop change) so react-chessboard skips its
+            // piece-tweening animation — otherwise jumping between distant
+            // positions makes pieces fly across the board for ~300ms. Regular
+            // user moves keep the same key and animate smoothly.
+            key={`${initialFen ?? ""}|${initialMoves?.length ?? 0}|${
+              initialMoves?.[initialMoves.length - 1] ?? ""
+            }`}
             options={{
               position,
               boardOrientation: playerColor,
               onPieceDrop: handlePieceDrop,
               showNotation: showCoordinates,
+              // Disable piece-tweening animations whenever the parent drives
+              // the position programmatically (training-card cycling and the
+              // line-click viewer). react-chessboard's inner animation useEffect
+              // computes per-piece transforms on every position change — even
+              // a fresh mount can flicker pieces as the animation timeout
+              // fires once. With showAnimations=false the library calls
+              // setCurrentPosition directly, no transforms, no glitch.
+              showAnimations: buildMode,
               lightSquareStyle: { backgroundColor: boardColors.light },
               darkSquareStyle: { backgroundColor: boardColors.dark },
               allowDragging:

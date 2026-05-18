@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Chess } from "chess.js";
+import { lookupOpening } from "@/lib/openings";
+import { buildRepertoireTree } from "@/lib/repertoireTree";
 
 /**
  * GET /api/repertoires?color=white|black
@@ -16,19 +17,26 @@ import { Chess } from "chess.js";
 interface LineNode {
   id: string;
   fen: string;
-  expectedMove: string; // UCI format
-  moveNumber: number; // e.g., 1 for first move, continues incrementing
-  moveSequence: string; // e.g., "1. e2e4" or "1. e2e4 c7c5"
+  expectedMove: string; // UCI format — kept for training/SRS callers
+  moveNumber: number;
+  // Display string in standard algebraic notation, e.g. "1.e4 c5 2.Nf3".
+  displaySequence: string;
+  // Raw SAN moves leading to this node (e.g. ["e4","c5","Nf3"]). Used by
+  // the build flow and "Play this line on the board" interactions; the
+  // board API consumes SAN directly.
+  sanMoves: string[];
+  // Longest-prefix-matched ECO opening (e.g. "Sicilian Defense: Najdorf").
+  // Null if no named opening matches a prefix of sanMoves.
+  openingName: string | null;
+  openingEco: string | null;
   children: LineNode[];
-  opponentMove?: string; // The opponent's move that led to this position from parent
-  practiced?: boolean;
-}
-
-interface Opening {
-  id: string;
-  name: string;
-  notes?: string;
-  root: LineNode | null;
+  opponentMove?: string; // UCI — only used internally during tree construction
+  // True when SRS has graduated this entry out of the initial learning
+  // phase. "Practiced once" still leaves the card in `learning` and
+  // shouldn't count as mastered; only `exponential` means the user has
+  // hit the card right enough times in a row that the algorithm has
+  // promoted it to long-interval spaced repetition.
+  mastered?: boolean;
 }
 
 export async function GET(request: NextRequest) {
@@ -85,140 +93,63 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ openings: [] }, { status: 200 });
     }
 
-    // Build a single tree from all entries
-    const entries = repertoire.entries;
+    // Tree-build + SAN computation lives in a shared helper so that
+    // /api/repertoires and /(app)/training/page.tsx see identical paths
+    // and therefore identical opening names.
+    const { roots: builtRoots, byEntryId: builtById } = buildRepertoireTree(
+      repertoire.entries,
+      repertoire.color,
+    );
 
-    const nodesByEntryId = new Map<string, LineNode>();
-    const nodesByFen = new Map<string, LineNode[]>();
+    // Decorate the structural tree with display fields and opening matches.
+    // "Mastered" = SRS has promoted this card to the exponential phase
+    // (i.e. you've gotten it right enough times in a row that intervals
+    // are now multi-day, not initial-learning steps).
+    const masteredById = new Map<string, boolean>();
+    for (const entry of repertoire.entries) {
+      masteredById.set(entry.id, entry.phase === "exponential");
+    }
 
-    // First pass: create nodes for each position where user moves
-    for (const entry of entries) {
-      const node: LineNode = {
-        id: entry.id,
-        fen: entry.position.fen,
-        expectedMove: entry.expectedMove,
-        moveNumber: 0,
-        moveSequence: "",
-        children: [],
-        // mark whether this entry has been practiced at least once
-        practiced: (entry.repetitions ?? 0) > 0 || !!entry.lastReviewDate,
+    const decorate = (built: (typeof builtRoots)[number]): LineNode => {
+      const match = lookupOpening(built.sanMoves);
+      return {
+        id: built.id,
+        fen: built.fen,
+        expectedMove: built.expectedMove,
+        moveNumber: Math.ceil(built.sanMoves.length / 2),
+        displaySequence: formatSanSequence(built.sanMoves),
+        sanMoves: built.sanMoves,
+        openingName: match?.name ?? null,
+        openingEco: match?.eco ?? null,
+        children: built.children.map(decorate),
+        opponentMove: built.opponentMove,
+        mastered: masteredById.get(built.id) ?? false,
       };
-      nodesByEntryId.set(entry.id, node);
-
-      if (!nodesByFen.has(entry.position.fen)) {
-        nodesByFen.set(entry.position.fen, []);
-      }
-      nodesByFen.get(entry.position.fen)!.push(node);
-    }
-
-    // Second pass: build tree by finding which positions can be reached from user moves
-    for (const nodes of nodesByFen.values()) {
-      for (const parentNode of nodes) {
-        // Make user's move
-        const game = new Chess(parentNode.fen);
-        let moveResult = null;
-
-        try {
-          moveResult = game.move(parentNode.expectedMove, { strict: false });
-        } catch (e) {
-          console.warn(
-            `Could not play move "${parentNode.expectedMove}" from position`,
-          );
-          continue;
-        }
-
-        if (!moveResult) continue;
-
-        // After user's move, it's opponent's turn
-        const posAfterUserMove = game.fen();
-        const foundChildren = new Set<string>();
-
-        // Find saved positions reachable by opponent moves
-        const testGameForMoves = new Chess(posAfterUserMove);
-        const opponentMoves = testGameForMoves.moves({ verbose: true });
-
-        for (const moveObj of opponentMoves) {
-          const testGame = new Chess(posAfterUserMove);
-          testGame.move(moveObj.san);
-          const fensAfterOpponentMove = testGame.fen();
-
-          const childNodes = nodesByFen.get(fensAfterOpponentMove);
-          if (childNodes) {
-            for (const childNode of childNodes) {
-              if (!foundChildren.has(childNode.id)) {
-                childNode.opponentMove = `${moveObj.from}${moveObj.to}${
-                  moveObj.promotion || ""
-                }`;
-                parentNode.children.push(childNode);
-                foundChildren.add(childNode.id);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Third pass: identify root nodes
-    const positionsThatAreChildren = new Set<string>();
-    for (const nodes of nodesByFen.values()) {
-      for (const node of nodes) {
-        for (const child of node.children) {
-          positionsThatAreChildren.add(child.fen);
-        }
-      }
-    }
-
-    const rootNodes = Array.from(nodesByFen.values())
-      .flat()
-      .filter((node) => !positionsThatAreChildren.has(node.fen));
-
-    // Calculate move sequences
-    const calculateSequences = (
-      node: LineNode,
-      pathMoves: string[],
-      isRoot: boolean,
-    ) => {
-      const nodeMoves = [...pathMoves];
-      if (node.opponentMove) {
-        nodeMoves.push(node.opponentMove);
-      }
-      nodeMoves.push(node.expectedMove);
-
-      // Always show the full move sequence, not just the last moves
-      node.moveSequence = formatMoveSequence(nodeMoves);
-      node.moveNumber = Math.ceil(nodeMoves.length / 2);
-
-      for (const child of node.children) {
-        calculateSequences(child, nodeMoves, false);
-      }
     };
 
-    for (const rootNode of rootNodes) {
-      rootNode.moveSequence = formatMoveSequence([rootNode.expectedMove]);
-      rootNode.moveNumber = 1;
+    const rootNodes = builtRoots.map(decorate);
 
-      for (const child of rootNode.children) {
-        calculateSequences(child, [rootNode.expectedMove], false);
-      }
-    }
-
-    // If there are multiple root nodes, create a mega-root that contains them all
     let finalRoot: LineNode | null = null;
     if (rootNodes.length === 1) {
       finalRoot = rootNodes[0];
     } else if (rootNodes.length > 1) {
-      // Create a virtual root node that contains all root variations
       finalRoot = {
         id: "virtual-root-" + repertoire.id,
-        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", // Starting position
+        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         expectedMove: "",
         moveNumber: 0,
-        moveSequence: "Starting Position",
+        displaySequence: "Starting Position",
+        sanMoves: [],
+        openingName: null,
+        openingEco: null,
         children: rootNodes,
       };
     }
 
-    // Return the tree directly - the root nodes are the openings
+    // Avoid an unused-warning for `builtById` — we don't need it here, but the
+    // shared helper returns it for other callers (e.g. training enrichment).
+    void builtById;
+
     return NextResponse.json({ root: finalRoot }, { status: 200 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -234,62 +165,22 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Format a move sequence with proper move numbers
- * Takes array of moves in UCI format ["e2e4", "c7c5", "f2f4"]
- * Returns formatted string like "1.e2e4 c7c5 2.f2f4"
+ * Format an array of SAN moves with PGN-style move numbers.
+ * Input is in plain SAN, e.g. ["e4", "c5", "Nf3"] -> "1.e4 c5 2.Nf3".
  */
-function formatMoveSequence(moves: string[]): string {
+function formatSanSequence(moves: string[]): string {
   if (moves.length === 0) {
     return "Initial Position";
   }
 
-  const formatted: string[] = [];
+  const parts: string[] = [];
   for (let i = 0; i < moves.length; i++) {
-    const isWhiteMove = i % 2 === 0;
-
-    // Add move number only for white moves (even indices)
-    if (isWhiteMove) {
-      const moveNumber = Math.floor(i / 2) + 1;
-      formatted.push(`${moveNumber}.${moves[i]}`);
+    if (i % 2 === 0) {
+      parts.push(`${Math.floor(i / 2) + 1}.${moves[i]}`);
     } else {
-      formatted.push(moves[i]);
+      parts.push(moves[i]);
     }
   }
 
-  return formatted.join(" ");
-}
-
-/**
- * Format a branch move sequence showing only immediate moves
- * Takes last 2 moves (opponent move + user move) and total path length
- * Returns formatted string like "... 2.c7c5 2.g1f3"
- * where the first move is the opponent's move and second is user's move
- */
-function formatBranchMoveSequence(
-  lastTwoMoves: string[],
-  totalPathLength: number,
-): string {
-  if (lastTwoMoves.length < 2) {
-    // Fallback if we don't have both moves
-    return formatMoveSequence(lastTwoMoves);
-  }
-
-  const opponentMove = lastTwoMoves[0];
-  const userMove = lastTwoMoves[1];
-
-  // Calculate move numbers based on total path length
-  // If totalPathLength = 2: moves are at indices 0-1, move number 1
-  // If totalPathLength = 3: moves are at indices 1-2, move numbers 1 and 2
-  // If totalPathLength = 4: moves are at indices 2-3, move number 2
-  const opponentMoveIndex = totalPathLength - 2;
-  const userMoveIndex = totalPathLength - 1;
-
-  const opponentMoveNumber = Math.ceil((opponentMoveIndex + 1) / 2);
-  const userMoveNumber = Math.ceil((userMoveIndex + 1) / 2);
-
-  // Format with appropriate notation
-  const isBlackMove = opponentMoveIndex % 2 === 1;
-  const opponentMoveStr = `${opponentMoveNumber}.${opponentMove}`;
-
-  return `${opponentMoveStr} ${userMoveNumber}.${userMove}`;
+  return parts.join(" ");
 }

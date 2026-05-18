@@ -13,18 +13,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useState, useEffect } from "react";
-import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useState, useEffect, useTransition } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
 
 interface ColorStats {
-  learned: number;
+  // Counts are in LINES (= deepest saved position per branch), aligned with
+  // the repertoire panel's "Mastery Level" metric. `mastered` = SRS has
+  // promoted the leaf out of the learning phase.
+  mastered: number;
   total: number;
 }
 
 interface TrainingStats {
   dueCount: number;
-  totalPositions: number;
   colorStats: {
     white: ColorStats;
     black: ColorStats;
@@ -137,6 +138,7 @@ export function HomePanel({
   const greeting = getGreeting();
   const firstName = session?.user ? getFirstName(session.user) : "there";
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isStartingPractice, startPracticeTransition] = useTransition();
 
   const [whiteStats, setWhiteStats] = useState<RepertoireStats>({
     lines: 0,
@@ -155,20 +157,12 @@ export function HomePanel({
     useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { isLoading: isStartingPractice, execute: onStartPractice } =
-    useAsyncAction(
-      async () => {
-        // Simulate brief async operation to prevent accidental double-clicks
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        onStartPracticeCallback();
-      },
-      () => {
-        // Success - callback handles navigation
-      },
-      (error) => {
-        console.error("Error starting practice:", error);
-      },
-    );
+  const onStartPractice = () => {
+    if (isStartingPractice) return;
+    startPracticeTransition(() => {
+      onStartPracticeCallback();
+    });
+  };
 
   const fetchStats = async () => {
     try {
@@ -281,36 +275,35 @@ export function HomePanel({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
-  // Calculate percentages based on learned positions from training stats
+  // Per-color mastery percentage = mastered LINES / total LINES.
   const whitePercentage = trainingStats?.colorStats?.white?.total
     ? Math.round(
-        (trainingStats.colorStats.white.learned /
+        (trainingStats.colorStats.white.mastered /
           trainingStats.colorStats.white.total) *
           100,
       )
     : 0;
   const blackPercentage = trainingStats?.colorStats?.black?.total
     ? Math.round(
-        (trainingStats.colorStats.black.learned /
+        (trainingStats.colorStats.black.mastered /
           trainingStats.colorStats.black.total) *
           100,
       )
     : 0;
 
-  // Use training stats for position counts (more reliable than tree traversal)
-  const whitePositionCount =
+  const whiteLineCount =
     trainingStats?.colorStats?.white?.total ?? whiteStats.positions;
-  const blackPositionCount =
+  const blackLineCount =
     trainingStats?.colorStats?.black?.total ?? blackStats.positions;
 
   // Estimate practice time (roughly 15 seconds per position)
   const dueCount = trainingStats?.dueCount ?? 0;
   const estimatedMinutes = Math.max(1, Math.ceil((dueCount * 15) / 60));
 
-  // Calculate total learned positions
-  const totalLearned =
-    (trainingStats?.colorStats?.white?.learned ?? 0) +
-    (trainingStats?.colorStats?.black?.learned ?? 0);
+  // Calculate total mastered lines across both colors
+  const totalMastered =
+    (trainingStats?.colorStats?.white?.mastered ?? 0) +
+    (trainingStats?.colorStats?.black?.mastered ?? 0);
 
   // Display positions reviewed today (no overlap with "lines learned")
   const displayedPositions = (() => {
@@ -406,7 +399,7 @@ export function HomePanel({
                     </span>
                   </div>
                   <p className="text-xs lg:text-sm text-muted-foreground mt-0.5 lg:mt-1">
-                    {whitePositionCount} positions
+                    {whiteLineCount} {whiteLineCount === 1 ? "line" : "lines"}
                   </p>
                   {/* Progress bar */}
                   <div className="mt-2 lg:mt-3 h-1 lg:h-1.5 bg-zinc-700/50 rounded-full overflow-hidden w-full">
@@ -462,7 +455,7 @@ export function HomePanel({
                     </span>
                   </div>
                   <p className="text-xs lg:text-sm text-muted-foreground mt-0.5 lg:mt-1">
-                    {blackPositionCount} positions
+                    {blackLineCount} {blackLineCount === 1 ? "line" : "lines"}
                   </p>
                   {/* Progress bar */}
                   <div className="mt-2 lg:mt-3 h-1 lg:h-1.5 bg-zinc-700/50 rounded-full overflow-hidden w-full">
@@ -543,7 +536,7 @@ export function HomePanel({
                 </div>
               </div>
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
-                {totalLearned}
+                {totalMastered}
               </p>
               <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">
                 lines learned

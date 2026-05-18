@@ -38,13 +38,19 @@ export default function HomeClient() {
   );
   const [initialMoves, setInitialMoves] = useState<string[]>([]);
   const [initialFen, setInitialFen] = useState<string>("");
+  const [lineOpening, setLineOpening] = useState<{
+    name: string;
+    eco: string | null;
+  } | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const boardRef = useRef<BoardHandle>(null);
 
-  // Prefetch both build pages so navigation is instant when a piece is moved
+  // Prefetch both build pages so navigation is instant when a piece is moved.
+  // Also prefetch /training so Practice Now is instant from cold.
   useEffect(() => {
     router.prefetch("/build/white");
     router.prefetch("/build/black");
+    router.prefetch("/training?mode=review");
   }, [router]);
 
   useEffect(() => {
@@ -82,12 +88,16 @@ export default function HomeClient() {
     openingId?: string,
     lineId?: string,
     fen?: string,
-    moveSequence?: string,
+    sanMoves?: string[],
   ) => {
     if (openingId) sessionStorage.setItem("buildOpeningId", openingId);
     if (lineId) sessionStorage.setItem("buildLineId", lineId);
-    if (fen && !moveSequence) sessionStorage.setItem("buildFen", fen);
-    if (moveSequence) sessionStorage.setItem("buildMoveSequence", moveSequence);
+    if (fen && (!sanMoves || sanMoves.length === 0)) {
+      sessionStorage.setItem("buildFen", fen);
+    }
+    if (sanMoves && sanMoves.length > 0) {
+      sessionStorage.setItem("buildSanMoves", JSON.stringify(sanMoves));
+    }
     router.push(`/build/${selectedColor}`);
   };
 
@@ -97,9 +107,17 @@ export default function HomeClient() {
     router.push(`/training?mode=practice&color=${selectedColor}`);
   };
 
-  const handleLineClick = (moves: string[], startingFen: string) => {
+  const handleLineClick = (
+    moves: string[],
+    openingName: string | null,
+    openingEco: string | null,
+  ) => {
+    // node.sanMoves is the FULL path from the standard starting position, so
+    // Board needs to replay from the default start (not from node.fen, which
+    // is mid-game and would silently drop every replay).
     setInitialMoves([...moves]);
-    setInitialFen(startingFen);
+    setInitialFen("");
+    setLineOpening(openingName ? { name: openingName, eco: openingEco } : null);
   };
 
   const handleDelete = async (nodeId: string) => {
@@ -148,8 +166,19 @@ export default function HomeClient() {
 
         {/* Inner column — fills height and centres content */}
         <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
-          {/* Opponent label */}
-          <div className="flex items-center gap-3 px-1 flex-shrink-0">
+          {/* Opening name banner (shown when viewing a saved line) */}
+          {lineOpening && initialMoves.length > 0 && (
+            <div className="px-3 py-1.5 rounded-full bg-surface-2/60 border border-border/50 flex-shrink-0 max-w-full">
+              <span className="text-sm font-medium text-foreground truncate">
+                {lineOpening.name}
+              </span>
+            </div>
+          )}
+
+          {/* Opponent label — desktop only. On mobile the board orientation
+              already tells you which color the user plays, and the limited
+              vertical space is better spent on the board itself. */}
+          <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 selectedColor === "black"
@@ -181,11 +210,16 @@ export default function HomeClient() {
               onMoveMade={handleMoveMade}
               initialMoves={initialMoves}
               initialFen={initialFen}
+              // When the user clicks a saved line we want them to SEE how
+              // the position was reached, not just the final state. Land
+              // on the initial position so they can step forward through
+              // the line with the BoardControls below.
+              landAtStart={initialMoves.length > 0}
             />
           </div>
 
-          {/* Player label */}
-          <div className="flex items-center gap-3 px-1 flex-shrink-0">
+          {/* Player label — desktop only (see opponent-label note). */}
+          <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 selectedColor === "white"

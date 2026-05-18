@@ -31,9 +31,9 @@ export function ProgressCard({ label, current, total }: ProgressCardProps) {
       <div className="h-1 lg:h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-500 ${
-            isComplete 
-              ? "bg-gradient-to-r from-primary to-emerald-400" 
-              : "bg-gradient-to-r from-primary/80 to-primary"
+            isComplete
+              ? "bg-gradient-to-r from-primary to-emerald-400"
+              : "bg-primary"
           }`}
           style={{ width: `${percentage}%` }}
         />

@@ -34,6 +34,8 @@ interface RepertoireEntry {
   phase: string;
   learningStepIndex: number;
   position: Position;
+  openingName: string | null;
+  openingEco: string | null;
 }
 
 interface Repertoire {
@@ -62,7 +64,6 @@ export default function TrainingClient({
   const [currentRepertoireIndex, setCurrentRepertoireIndex] = useState(0);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [feedback, setFeedback] = useState<string>("");
-  const [isReviewing, setIsReviewing] = useState(false);
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [streak, setStreak] = useState(0);
   const [feedbackSquare, setFeedbackSquare] = useState<{
@@ -128,7 +129,7 @@ export default function TrainingClient({
   // Handle training move - validate against expected move
   const handleTrainingMove = useCallback(
     (move: { from: string; to: string; san: string }): boolean => {
-      if (!currentEntry || isReviewing || showingAnswer) return false;
+      if (!currentEntry || showingAnswer) return false;
 
       const expectedFrom = currentEntry.expectedMove.slice(0, 2);
       const expectedTo = currentEntry.expectedMove.slice(2, 4);
@@ -165,7 +166,7 @@ export default function TrainingClient({
 
       return isCorrect;
     },
-    [currentEntry, isReviewing, showingAnswer],
+    [currentEntry, showingAnswer],
   );
 
   const handleShowAnswer = () => {
@@ -207,62 +208,47 @@ export default function TrainingClient({
     resetCardTimer,
   ]);
 
-  const handleRecallRating = async (rating: ReviewResponse) => {
+  const handleRecallRating = (rating: ReviewResponse) => {
     if (!currentEntry) {
       return;
     }
 
-    setIsReviewing(true);
     setFeedbackSquare(null);
     const timeSpentMs = getTimeSpentMs();
+    const entryId = currentEntry.id;
 
-    // In practice mode, skip the API call - just move to next card
+    // Advance the UI immediately — the SRS write is server-side bookkeeping
+    // and the user shouldn't have to wait for it.
+    moveToNextCard();
+
     if (isPracticeMode) {
-      setTimeout(() => {
-        moveToNextCard();
-        setIsReviewing(false);
-      }, 300);
       return;
     }
 
-    // In review mode, call the API to update SRS
+    // Optimistically notify other UI parts (Home tile) that stats moved.
     try {
-      const result = await fetch("/api/repertoire-entries/review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entryId: currentEntry.id,
-          response: rating,
-          timeSpentMs,
+      window.dispatchEvent(
+        new CustomEvent("training-stats-updated", {
+          detail: { timeSpentMs, positionsReviewed: 1 },
         }),
-      });
+      );
+    } catch {}
 
-      const data = await result.json();
-
-      if (data.success) {
-        // Notify other UI parts (Home tile) that training stats changed
-        try {
-          window.dispatchEvent(
-            new CustomEvent("training-stats-updated", {
-              detail: { timeSpentMs, positionsReviewed: 1 },
-            }),
-          );
-        } catch (e) {
-          // ignore for server-side or older browsers
+    // Fire-and-forget the SRS update. On failure, surface a non-blocking error.
+    fetch("/api/repertoire-entries/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entryId, response: rating, timeSpentMs }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setFeedback("Error: " + (data.error ?? "review failed"));
         }
-        // Move to next card
-        setTimeout(() => {
-          moveToNextCard();
-          setIsReviewing(false);
-        }, 500);
-      } else {
-        setFeedback("Error: " + data.error);
-        setIsReviewing(false);
-      }
-    } catch (error) {
-      setFeedback("Error submitting review");
-      setIsReviewing(false);
-    }
+      })
+      .catch(() => {
+        setFeedback("Error submitting review");
+      });
   };
 
   // Calculate progress
@@ -357,8 +343,19 @@ export default function TrainingClient({
         </div>
 
         <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
-          {/* Player Info - Top (Opponent) */}
-          <div className="flex items-center gap-3 px-1 flex-shrink-0">
+          {/* Opening name banner */}
+          {currentEntry?.openingName && (
+            <div className="px-3 py-1.5 rounded-full bg-surface-2/60 border border-border/50 flex-shrink-0 max-w-full">
+              <span className="text-sm font-medium text-foreground truncate">
+                {currentEntry.openingName}
+              </span>
+            </div>
+          )}
+
+          {/* Player Info - Top (Opponent) — desktop only. Mobile keeps the
+              opening pill above the board; the opponent indicator is
+              redundant on small screens and steals vertical real estate. */}
+          <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 repertoireColor === "black"
@@ -389,7 +386,6 @@ export default function TrainingClient({
               ref={boardRef}
               playerColor={repertoireColor}
               initialFen={currentEntry?.position.fen}
-              key={`${currentRepertoireIndex}-${currentCardIndex}`}
               trainingMode={true}
               showingAnswer={showingAnswer}
               onTrainingMove={handleTrainingMove}
@@ -397,8 +393,8 @@ export default function TrainingClient({
             />
           </div>
 
-          {/* Player Info - Bottom (You) */}
-          <div className="flex items-center gap-3 px-1 flex-shrink-0">
+          {/* Player Info - Bottom (You) — desktop only. */}
+          <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 repertoireColor === "white"
@@ -435,10 +431,11 @@ export default function TrainingClient({
             )}
           </div>
 
-          {/* Main: Show Answer / Rating Buttons inline below board */}
-          {/* Show Answer button: visible on both mobile and desktop (triggers answer reveal) */}
-          {/* Answer + rating buttons: mobile only (lg:hidden) — desktop uses sidebar */}
-          <div className="w-full flex-shrink-0">
+          {/* Main: Show Answer / Rating Buttons inline below board.
+              On desktop the slot collapses to empty when the answer is shown
+              (rating UI lives in the sidebar); reserve the button's height so
+              the centered column doesn't shift the board upward. */}
+          <div className="w-full flex-shrink-0 lg:min-h-[2.75rem]">
             {!showingAnswer ? (
               <Button
                 variant="outline"
@@ -464,7 +461,6 @@ export default function TrainingClient({
                 <div className="grid grid-cols-4 gap-2">
                   <Button
                     onClick={() => handleRecallRating("forgot")}
-                    disabled={isReviewing}
                     className="h-11 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                     variant="ghost">
                     <span className="text-xs font-medium">Forgot</span>
@@ -472,7 +468,6 @@ export default function TrainingClient({
                   </Button>
                   <Button
                     onClick={() => handleRecallRating("partial")}
-                    disabled={isReviewing}
                     className="h-11 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                     variant="ghost">
                     <span className="text-xs font-medium">Hard</span>
@@ -480,7 +475,6 @@ export default function TrainingClient({
                   </Button>
                   <Button
                     onClick={() => handleRecallRating("effort")}
-                    disabled={isReviewing}
                     className="h-11 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                     variant="ghost">
                     <span className="text-xs font-medium">Good</span>
@@ -488,7 +482,6 @@ export default function TrainingClient({
                   </Button>
                   <Button
                     onClick={() => handleRecallRating("easy")}
-                    disabled={isReviewing}
                     className="h-11 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                     variant="ghost">
                     <span className="text-xs font-medium">Easy</span>
@@ -650,8 +643,7 @@ export default function TrainingClient({
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       onClick={() => handleRecallRating("forgot")}
-                      disabled={isReviewing}
-                      className="h-12 lg:h-14 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                        className="h-12 lg:h-14 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
                       <span className="text-xs lg:text-sm font-medium">
                         Forgot
@@ -662,8 +654,7 @@ export default function TrainingClient({
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("partial")}
-                      disabled={isReviewing}
-                      className="h-12 lg:h-14 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                        className="h-12 lg:h-14 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
                       <span className="text-xs lg:text-sm font-medium">
                         Hard
@@ -674,8 +665,7 @@ export default function TrainingClient({
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("effort")}
-                      disabled={isReviewing}
-                      className="h-12 lg:h-14 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                        className="h-12 lg:h-14 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
                       <span className="text-xs lg:text-sm font-medium">
                         Good
@@ -686,8 +676,7 @@ export default function TrainingClient({
                     </Button>
                     <Button
                       onClick={() => handleRecallRating("easy")}
-                      disabled={isReviewing}
-                      className="h-12 lg:h-14 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                        className="h-12 lg:h-14 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
                       variant="ghost">
                       <span className="text-xs lg:text-sm font-medium">
                         Easy

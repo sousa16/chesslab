@@ -1,6 +1,8 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { lookupOpening } from "@/lib/openings";
+import { buildRepertoireTree } from "@/lib/repertoireTree";
 import TrainingClient from "@/components/TrainingClient";
 
 interface TrainingPageProps {
@@ -9,33 +11,7 @@ interface TrainingPageProps {
     opening?: string;
     line?: string;
     mode?: string;
-    fen?: string;
   }>;
-}
-
-/**
- * Check if a position is a "first move" position that shouldn't be trained.
- * - White's first move: from starting position (fullmove 1, White to move)
- * - Black's first move: after White's first move (fullmove 1, Black to move)
- *
- * FEN format: "position w/b castling en-passant halfmove fullmove"
- * We check: fullmove === 1
- */
-function isFirstMovePosition(
-  fen: string,
-  repertoireColor: "White" | "Black",
-): boolean {
-  const parts = fen.split(" ");
-  const sideToMove = parts[1]; // 'w' or 'b'
-  const fullmoveNumber = parseInt(parts[5], 10); // fullmove counter
-
-  if (repertoireColor === "White") {
-    // White's first move is from fullmove 1 with White to move
-    return fullmoveNumber === 1 && sideToMove === "w";
-  } else {
-    // Black's first move is from fullmove 1 with Black to move
-    return fullmoveNumber === 1 && sideToMove === "b";
-  }
 }
 
 export default async function TrainingPage({
@@ -55,34 +31,34 @@ export default async function TrainingPage({
   const colorFilter =
     params.color === "white" || params.color === "black" ? params.color : null;
 
-  // Optional FEN filter for line-specific practice
-  const fenFilter = params.fen ? decodeURIComponent(params.fen) : null;
-
-  // Get user's repertoires with optional color filtering
+  // We need ALL of a repertoire's entries (not just due ones) to reconstruct
+  // the move tree — opening-name lookup relies on the SAN path from the
+  // standard starting position to each card, which we can only derive by
+  // walking the tree. Due-filtering is applied after enrichment.
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    include: {
+    select: {
+      id: true,
       repertoires: {
         where: colorFilter
-          ? {
-              color: colorFilter === "white" ? "White" : "Black",
-            }
+          ? { color: colorFilter === "white" ? "White" : "Black" }
           : undefined,
-        include: {
+        select: {
+          id: true,
+          color: true,
           entries: {
-            include: {
-              position: true,
-            },
-            where:
-              mode === "review"
-                ? {
-                    nextReviewDate: {
-                      lte: new Date(), // Due for review
-                    },
-                  }
-                : undefined, // In practice mode, get all entries
-            orderBy: {
-              nextReviewDate: "asc",
+            where: { position: { NOT: { fen: { endsWith: " 1" } } } },
+            orderBy: { nextReviewDate: "asc" },
+            select: {
+              id: true,
+              expectedMove: true,
+              interval: true,
+              easeFactor: true,
+              repetitions: true,
+              nextReviewDate: true,
+              phase: true,
+              learningStepIndex: true,
+              position: { select: { id: true, fen: true } },
             },
           },
         },
@@ -94,32 +70,50 @@ export default async function TrainingPage({
     return <div>User not found</div>;
   }
 
-  // Filter out first-move positions from training (they're predetermined choices, not recalls)
-  // Also filter by FEN if doing line-specific practice
-  const userWithFilteredEntries = {
+  const now = new Date();
+  const enriched = {
     ...user,
-    repertoires: user.repertoires.map((repertoire) => ({
-      ...repertoire,
-      entries: repertoire.entries.filter((entry) => {
-        // Skip first move positions
-        if (isFirstMovePosition(entry.position.fen, repertoire.color)) {
-          return false;
-        }
+    repertoires: user.repertoires.map((r) => {
+      const { roots, byEntryId } = buildRepertoireTree(r.entries, r.color);
+      const dueOnly = mode === "review";
+      const entriesById = new Map(r.entries.map((e) => [e.id, e]));
 
-        // If FEN filter is set, only include positions that come after that FEN in the line
-        // This is tricky - we need to check if this position is reachable from the given FEN
-        // For now, we'll use a simpler approach: the FEN filter should be the starting position
-        // and we include all positions (the tree structure will handle the rest)
-        if (fenFilter) {
-          // Include all positions for now - the line-specific filtering
-          // should be done by the API that builds the tree
-          return true;
+      // Both modes traverse each opening from its root downward (DFS preorder)
+      // so the user always drills lines from move 1, not in random SRS order.
+      // Review mode then keeps only entries currently due for review;
+      // practice mode keeps them all.
+      const ordered: typeof r.entries = [];
+      const visited = new Set<string>();
+      const walk = (node: (typeof roots)[number]) => {
+        if (visited.has(node.id)) return;
+        visited.add(node.id);
+        const entry = entriesById.get(node.id);
+        if (entry) {
+          if (!dueOnly || entry.nextReviewDate <= now) ordered.push(entry);
         }
+        for (const c of node.children) walk(c);
+      };
+      for (const root of roots) walk(root);
+      // Defensive sweep: any entry not reachable from a root still gets shown
+      // (filtered by due if applicable) so we never silently drop a card.
+      for (const e of r.entries) {
+        if (visited.has(e.id)) continue;
+        if (!dueOnly || e.nextReviewDate <= now) ordered.push(e);
+      }
 
-        return true;
-      }),
-    })),
+      const entries = ordered.map((entry) => {
+        const sans = byEntryId.get(entry.id)?.sanMoves ?? [];
+        const match = lookupOpening(sans);
+        return {
+          ...entry,
+          openingName: match?.name ?? null,
+          openingEco: match?.eco ?? null,
+        };
+      });
+
+      return { ...r, entries };
+    }),
   };
 
-  return <TrainingClient user={userWithFilteredEntries} mode={mode} />;
+  return <TrainingClient user={enriched} mode={mode} />;
 }

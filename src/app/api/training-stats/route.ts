@@ -3,28 +3,11 @@
  * Returns count of due cards, total positions, streak, all-time accuracy, and total time spent
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-/**
- * Check if a position is a "first move" position that shouldn't be counted for training.
- */
-function isFirstMovePosition(
-  fen: string,
-  repertoireColor: "White" | "Black",
-): boolean {
-  const parts = fen.split(" ");
-  const sideToMove = parts[1];
-  const fullmoveNumber = parseInt(parts[5], 10);
-
-  if (repertoireColor === "White") {
-    return fullmoveNumber === 1 && sideToMove === "w";
-  } else {
-    return fullmoveNumber === 1 && sideToMove === "b";
-  }
-}
+import { buildRepertoireTree } from "@/lib/repertoireTree";
 
 /**
  * Calculate streak by counting consecutive days with activity.
@@ -71,7 +54,10 @@ function calculateStreakFromActivities(activities: { date: Date }[]): number {
   return streak;
 }
 
-export async function GET() {
+// Cache-Control reused across 200 and 304 responses.
+const CACHE_HEADER = "private, max-age=30, stale-while-revalidate=60";
+
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -79,73 +65,75 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    const userIdRow = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: {
-        repertoires: {
-          include: {
-            entries: {
-              include: {
-                position: true,
-              },
-            },
-          },
-        },
-      },
+      select: { id: true },
     });
 
-    if (!user) {
+    if (!userIdRow) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const now = new Date();
-    let dueCount = 0;
-    let totalPositions = 0;
+    // Cheap probe: when did anything for this user last change? If the
+    // browser is sending an If-None-Match that already covers that point
+    // in time, we can skip the heavy aggregation and return 304. The
+    // 5-minute time bucket ensures purely time-based transitions
+    // ("entry just became due") still surface for idle users.
+    const [maxEntry, maxActivity] = await Promise.all([
+      prisma.repertoireEntry.findFirst({
+        where: { repertoire: { userId: userIdRow.id } },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.dailyActivity.findFirst({
+        where: { userId: userIdRow.id },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
+    const lastChanged = Math.max(
+      maxEntry?.updatedAt.getTime() ?? 0,
+      maxActivity?.updatedAt.getTime() ?? 0,
+    );
+    const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+    const etag = `W/"${lastChanged}-${timeBucket}"`;
 
-    // Per-color stats
-    const colorStats = {
-      white: { learned: 0, total: 0 },
-      black: { learned: 0, total: 0 },
-    };
-
-    for (const repertoire of user.repertoires) {
-      const colorKey = repertoire.color === "White" ? "white" : "black";
-
-      for (const entry of repertoire.entries) {
-        // Skip first move positions
-        if (isFirstMovePosition(entry.position.fen, repertoire.color)) {
-          continue;
-        }
-
-        totalPositions++;
-        colorStats[colorKey].total++;
-
-        // A position is "learned" if it's not due for review (next review in future)
-        if (new Date(entry.nextReviewDate) > now) {
-          colorStats[colorKey].learned++;
-        } else {
-          // Only count non-first-move positions as due
-          dueCount++;
-        }
-      }
+    if (request.headers.get("if-none-match") === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: { etag, "Cache-Control": CACHE_HEADER },
+      });
     }
 
-    // Get streak, accuracy, and today's stats — all from a single DB query
-    let streak = 0;
-    let accuracy = 0;
-    let timeSpentMinutes = 0;
-    let positionsReviewedToday = 0;
+    const today = new Date();
+    const todayUTC = new Date(
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+    );
 
-    try {
-      const today = new Date();
-      const todayUTC = new Date(
-        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
-      );
-
-      // Single query replaces the previous three separate dailyActivity fetches:
-      // calculateStreak(), findMany() for accuracy, and findMany() for today
-      const allActivities = await prisma.dailyActivity.findMany({
-        where: { userId: user.id },
+    // Fan-out: full repertoires (needed for tree-build so we can count
+    // LINES not individual positions) + daily activity for streak/accuracy.
+    // First-move positions are stripped at the SQL layer.
+    const [repertoires, allActivities] = await Promise.all([
+      prisma.repertoire.findMany({
+        where: { userId: userIdRow.id },
+        select: {
+          color: true,
+          entries: {
+            where: {
+              position: { NOT: { fen: { endsWith: " 1" } } },
+            },
+            select: {
+              id: true,
+              expectedMove: true,
+              phase: true,
+              nextReviewDate: true,
+              position: { select: { fen: true } },
+            },
+          },
+        },
+      }),
+      prisma.dailyActivity.findMany({
+        where: { userId: userIdRow.id },
         orderBy: { date: "desc" },
         select: {
           date: true,
@@ -154,54 +142,81 @@ export async function GET() {
           timeSpentMs: true,
           positionsReviewed: true,
         },
-      });
+      }),
+    ]);
 
-      streak = calculateStreakFromActivities(allActivities);
+    const now = new Date();
+    let dueCount = 0;
 
-      let totalCorrect = 0;
-      let totalIncorrect = 0;
-      let totalTimeMsToday = 0;
-      let totalPositionsReviewedToday = 0;
+    // colorStats now counts LINES (= tree leaves = deepest saved position
+    // per branch), aligning with how the repertoire panel counts.
+    // "mastered" = SRS has promoted the leaf out of the learning phase.
+    const colorStats = {
+      white: { mastered: 0, total: 0 },
+      black: { mastered: 0, total: 0 },
+    };
 
-      for (const activity of allActivities) {
-        totalCorrect += activity.correctCount;
-        totalIncorrect += activity.incorrectCount;
+    for (const repertoire of repertoires) {
+      const colorKey = repertoire.color === "White" ? "white" : "black";
 
-        // Accumulate today-specific stats in the same loop
-        if (new Date(activity.date).getTime() === todayUTC.getTime()) {
-          totalTimeMsToday += activity.timeSpentMs;
-          totalPositionsReviewedToday += activity.positionsReviewed ?? 0;
-        }
+      // Count due cards across ALL positions (the practice queue is per
+      // position, not per line — that's still position-based by design).
+      for (const entry of repertoire.entries) {
+        if (new Date(entry.nextReviewDate) <= now) dueCount++;
       }
 
-      const totalReviews = totalCorrect + totalIncorrect;
-      accuracy =
-        totalReviews > 0 ? Math.round((totalCorrect / totalReviews) * 100) : 0;
-
-      // API returns minutes for the UI; timeSpentMinutes is "today"
-      timeSpentMinutes = Math.round(totalTimeMsToday / 60000);
-      positionsReviewedToday = totalPositionsReviewedToday;
-    } catch (activityError) {
-      // If daily activity queries fail, continue with default values
-      console.error("Error fetching daily activity:", activityError);
+      // Build the tree to find leaves (= lines). Each leaf counts as one
+      // line; a leaf in `exponential` phase counts as a mastered line.
+      const { roots } = buildRepertoireTree(repertoire.entries, repertoire.color);
+      const entriesById = new Map(repertoire.entries.map((e) => [e.id, e]));
+      const visited = new Set<string>();
+      const walk = (node: (typeof roots)[number]) => {
+        if (visited.has(node.id)) return;
+        visited.add(node.id);
+        if (node.children.length === 0) {
+          const e = entriesById.get(node.id);
+          if (e) {
+            colorStats[colorKey].total++;
+            if (e.phase === "exponential") colorStats[colorKey].mastered++;
+          }
+        }
+        for (const c of node.children) walk(c);
+      };
+      for (const root of roots) walk(root);
     }
+
+    const streak = calculateStreakFromActivities(allActivities);
+
+    let totalCorrect = 0;
+    let totalIncorrect = 0;
+    let totalTimeMsToday = 0;
+    let positionsReviewedToday = 0;
+
+    for (const activity of allActivities) {
+      totalCorrect += activity.correctCount;
+      totalIncorrect += activity.incorrectCount;
+
+      if (new Date(activity.date).getTime() === todayUTC.getTime()) {
+        totalTimeMsToday += activity.timeSpentMs;
+        positionsReviewedToday += activity.positionsReviewed ?? 0;
+      }
+    }
+
+    const totalReviews = totalCorrect + totalIncorrect;
+    const accuracy =
+      totalReviews > 0 ? Math.round((totalCorrect / totalReviews) * 100) : 0;
+    const timeSpentMinutes = Math.round(totalTimeMsToday / 60000);
 
     return NextResponse.json(
       {
         dueCount,
-        totalPositions,
         colorStats,
         streak,
         accuracy,
         timeSpentMinutes,
         positionsReviewedToday,
       },
-      {
-        headers: {
-          // Cache per-user in the browser for 30s; serve stale for up to 60s while revalidating
-          "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
-        },
-      },
+      { headers: { etag, "Cache-Control": CACHE_HEADER } },
     );
   } catch (error) {
     console.error("Error fetching training stats:", error);

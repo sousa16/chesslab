@@ -175,8 +175,10 @@ export default function HomeClient() {
             </div>
           )}
 
-          {/* Opponent label */}
-          <div className="flex items-center gap-3 px-1 flex-shrink-0">
+          {/* Opponent label — desktop only. On mobile the board orientation
+              already tells you which color the user plays, and the limited
+              vertical space is better spent on the board itself. */}
+          <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 selectedColor === "black"
@@ -208,11 +210,16 @@ export default function HomeClient() {
               onMoveMade={handleMoveMade}
               initialMoves={initialMoves}
               initialFen={initialFen}
+              // When the user clicks a saved line we want them to SEE how
+              // the position was reached, not just the final state. Land
+              // on the initial position so they can step forward through
+              // the line with the BoardControls below.
+              landAtStart={initialMoves.length > 0}
             />
           </div>
 
-          {/* Player label */}
-          <div className="flex items-center gap-3 px-1 flex-shrink-0">
+          {/* Player label — desktop only (see opponent-label note). */}
+          <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 selectedColor === "white"

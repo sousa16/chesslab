@@ -352,8 +352,10 @@ export default function TrainingClient({
             </div>
           )}
 
-          {/* Player Info - Top (Opponent) */}
-          <div className="flex items-center gap-3 px-1 flex-shrink-0">
+          {/* Player Info - Top (Opponent) — desktop only. Mobile keeps the
+              opening pill above the board; the opponent indicator is
+              redundant on small screens and steals vertical real estate. */}
+          <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 repertoireColor === "black"
@@ -391,8 +393,8 @@ export default function TrainingClient({
             />
           </div>
 
-          {/* Player Info - Bottom (You) */}
-          <div className="flex items-center gap-3 px-1 flex-shrink-0">
+          {/* Player Info - Bottom (You) — desktop only. */}
+          <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 repertoireColor === "white"

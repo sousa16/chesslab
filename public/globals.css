@@ -1,6 +1,12 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 
+/* Tailwind v4 ignores v3-style tailwind.config.ts unless explicitly pointed
+ * at it. Without this, utilities derived from the config's `colors` block
+ * (bg-primary, from-primary, text-primary, bg-surface-2, etc.) don't get
+ * generated, so they silently render with no styling. */
+@config "../tailwind.config.ts";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*

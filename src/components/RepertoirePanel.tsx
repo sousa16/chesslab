@@ -20,7 +20,7 @@ interface LineNode {
   openingName: string | null;
   openingEco: string | null;
   children: LineNode[];
-  practiced?: boolean;
+  mastered?: boolean;
 }
 
 interface RepertoirePanelProps {
@@ -84,49 +84,24 @@ export function RepertoirePanel({
     }
   };
 
-  // Count total positions from root
-  const countNodes = (node: LineNode | null): number => {
-    if (!node) return 0;
-    return 1 + node.children.reduce((sum, child) => sum + countNodes(child), 0);
-  };
-
-  const totalPositions = countNodes(rootNode);
-
-  // Exclude first moves (moveNumber === 1) from mastery calculation
-  const countNodesMatching = (
+  // Count by SAVED LINES, not individual positions. A "line" is a leaf of
+  // the repertoire tree — the deepest saved position along that branch.
+  // Counting positions is misleading: a single saved 6-move line produces
+  // ~3 positions which doesn't match how players think about "lines I know".
+  const countLeaves = (
     node: LineNode | null,
     predicate: (n: LineNode) => boolean,
   ): number => {
     if (!node) return 0;
-    let count = predicate(node) ? 1 : 0;
-    for (const child of node.children) {
-      count += countNodesMatching(child, predicate);
-    }
-    return count;
+    if (node.children.length === 0) return predicate(node) ? 1 : 0;
+    return node.children.reduce(
+      (sum, c) => sum + countLeaves(c, predicate),
+      0,
+    );
   };
 
-  const firstMoveCount = countNodesMatching(
-    rootNode,
-    (n) => n.moveNumber === 1,
-  );
-  const totalPositionsExcludingFirst = totalPositions - firstMoveCount;
-
-  const masteredPositions = countNodesMatching(
-    rootNode,
-    (n) => (n.practiced ?? false) && n.moveNumber !== 1,
-  );
-
-  const masteryPercentage =
-    totalPositionsExcludingFirst > 0
-      ? Math.round((masteredPositions / totalPositionsExcludingFirst) * 100)
-      : 0;
-
-  const getMasteryStatus = (percentage: number): string => {
-    if (percentage === 0) return "Not started yet!";
-    if (percentage < 50) return "Keep practicing!";
-    if (percentage < 100) return "Almost there!";
-    return "Complete!";
-  };
+  const totalLines = countLeaves(rootNode, () => true);
+  const masteredLines = countLeaves(rootNode, (n) => n.mastered ?? false);
 
   return (
     <div className="h-full flex flex-col">
@@ -137,8 +112,8 @@ export function RepertoirePanel({
         <div className="p-3 lg:p-4 pt-0">
           <ProgressCard
             label="Mastery Level"
-            current={masteredPositions}
-            total={totalPositionsExcludingFirst}
+            current={masteredLines}
+            total={totalLines}
           />
         </div>
       </PanelHeader>

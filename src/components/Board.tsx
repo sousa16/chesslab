@@ -34,6 +34,12 @@ interface BoardProps {
   showingAnswer?: boolean;
   onTrainingMove?: (move: { from: string; to: string; san: string }) => boolean; // returns true if correct
   highlightSquare?: { square: string; color: "correct" | "incorrect" } | null;
+  // When true, after replaying `initialMoves` the board lands at the
+  // initial (pre-first-move) position rather than the final one. The full
+  // moveHistory is still populated so the user can step forward through
+  // the line via BoardControls. Used by the line-viewer flow on Home so
+  // the user actually sees how the position was reached.
+  landAtStart?: boolean;
 }
 
 export interface BoardHandle {
@@ -68,6 +74,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       showingAnswer = false,
       onTrainingMove,
       highlightSquare,
+      landAtStart = false,
     },
     ref,
   ) => {
@@ -119,8 +126,16 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         setMoves(newMoves);
         setUciMoves(newUciMoves);
         setMoveHistory(newHistory);
-        setCurrentMoveIndex(newHistory.length - 1);
-        setPosition(gameRef.current.fen());
+        if (landAtStart) {
+          // Keep the history so the user can step forward, but show the
+          // pre-first-move position. Reset the live game to that state.
+          gameRef.current = new Chess(startingFen);
+          setCurrentMoveIndex(-1);
+          setPosition(gameRef.current.fen());
+        } else {
+          setCurrentMoveIndex(newHistory.length - 1);
+          setPosition(gameRef.current.fen());
+        }
       } else {
         setMoves([]);
         setUciMoves([]);

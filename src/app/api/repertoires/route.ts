@@ -31,7 +31,12 @@ interface LineNode {
   openingEco: string | null;
   children: LineNode[];
   opponentMove?: string; // UCI — only used internally during tree construction
-  practiced?: boolean;
+  // True when SRS has graduated this entry out of the initial learning
+  // phase. "Practiced once" still leaves the card in `learning` and
+  // shouldn't count as mastered; only `exponential` means the user has
+  // hit the card right enough times in a row that the algorithm has
+  // promoted it to long-interval spaced repetition.
+  mastered?: boolean;
 }
 
 export async function GET(request: NextRequest) {
@@ -97,12 +102,12 @@ export async function GET(request: NextRequest) {
     );
 
     // Decorate the structural tree with display fields and opening matches.
-    const practicedById = new Map<string, boolean>();
+    // "Mastered" = SRS has promoted this card to the exponential phase
+    // (i.e. you've gotten it right enough times in a row that intervals
+    // are now multi-day, not initial-learning steps).
+    const masteredById = new Map<string, boolean>();
     for (const entry of repertoire.entries) {
-      practicedById.set(
-        entry.id,
-        (entry.repetitions ?? 0) > 0 || !!entry.lastReviewDate,
-      );
+      masteredById.set(entry.id, entry.phase === "exponential");
     }
 
     const decorate = (built: (typeof builtRoots)[number]): LineNode => {
@@ -118,7 +123,7 @@ export async function GET(request: NextRequest) {
         openingEco: match?.eco ?? null,
         children: built.children.map(decorate),
         opponentMove: built.opponentMove,
-        practiced: practicedById.get(built.id) ?? false,
+        mastered: masteredById.get(built.id) ?? false,
       };
     };
 

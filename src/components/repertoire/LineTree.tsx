@@ -143,6 +143,30 @@ function FamilyGroup({
   // Single-line families auto-expand; multi-line families default collapsed.
   const [expanded, setExpanded] = useState(lines.length <= 1);
 
+  // Sub-group by exact opening name within this family. Many leaf lines
+  // resolve to the SAME named opening (different deeper moves), so showing
+  // them as flat siblings makes the panel look like a wall of duplicates.
+  // Bucketing them under one heading per opening name restores hierarchy.
+  // `null` bucket holds lines whose full opening name equals the family
+  // (no sub-variation distinction); they render with no extra header.
+  const subgroups: { name: string | null; lines: LineNode[] }[] = (() => {
+    const map = new Map<string, LineNode[]>();
+    const order: string[] = [];
+    for (const line of lines) {
+      const sub = subVariationOf(line.openingName, family);
+      const key = sub ?? "";
+      if (!map.has(key)) {
+        map.set(key, []);
+        order.push(key);
+      }
+      map.get(key)!.push(line);
+    }
+    return order.map((key) => ({
+      name: key === "" ? null : key,
+      lines: map.get(key)!,
+    }));
+  })();
+
   return (
     <div className="glass-card rounded-xl overflow-hidden">
       <button
@@ -164,18 +188,35 @@ function FamilyGroup({
       </button>
 
       {expanded && (
-        <div className="px-2 pb-2 space-y-0.5 border-t border-border/30 pt-1">
-          {lines.map((line) => (
-            <LineItem
-              key={line.id}
-              node={line}
-              family={family}
-              onBuild={onBuild}
-              onLearn={onLearn}
-              onDelete={onDelete}
-              onLineClick={onLineClick}
-              onRefresh={onRefresh}
-            />
+        <div className="px-2 pb-2 border-t border-border/30 pt-1">
+          {subgroups.map((group, idx) => (
+            <div
+              key={group.name ?? "__base__"}
+              className={idx > 0 ? "mt-2" : ""}>
+              {group.name && (
+                <p className="px-2 pb-1 pt-1 text-[11px] font-medium text-foreground/80 truncate">
+                  {group.name}
+                  {group.lines.length > 1 && (
+                    <span className="ml-1.5 text-muted-foreground font-normal tabular-nums">
+                      · {group.lines.length}
+                    </span>
+                  )}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {group.lines.map((line) => (
+                  <LineItem
+                    key={line.id}
+                    node={line}
+                    onBuild={onBuild}
+                    onLearn={onLearn}
+                    onDelete={onDelete}
+                    onLineClick={onLineClick}
+                    onRefresh={onRefresh}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -185,7 +226,6 @@ function FamilyGroup({
 
 interface LineItemProps {
   node: LineNode;
-  family: string;
   onBuild: (nodeId: string, fen?: string, sanMoves?: string[]) => void;
   onLearn: (nodeId: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
@@ -199,15 +239,12 @@ interface LineItemProps {
 
 function LineItem({
   node,
-  family,
   onBuild,
   onLearn,
   onDelete,
   onLineClick,
   onRefresh,
 }: LineItemProps) {
-  const subtitle = subVariationOf(node.openingName, family);
-
   return (
     <div className="relative flex items-center gap-2 p-2 rounded-lg hover:bg-surface-2/60 transition-colors text-left group">
       <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
@@ -219,15 +256,8 @@ function LineItem({
           onLineClick?.(node.sanMoves, node.openingName, node.openingEco)
         }
         className="flex-1 min-w-0 cursor-pointer">
-        {subtitle && (
-          <p className="text-xs font-medium text-foreground/80 truncate hover:text-primary transition-colors mb-0.5">
-            {subtitle}
-          </p>
-        )}
         <div
-          className={`font-mono text-xs ${
-            subtitle ? "text-muted-foreground" : "text-foreground hover:text-primary transition-colors"
-          } truncate whitespace-nowrap overflow-hidden`}
+          className="font-mono text-xs text-foreground hover:text-primary transition-colors truncate whitespace-nowrap overflow-hidden"
           title={node.displaySequence}>
           {node.displaySequence}
         </div>

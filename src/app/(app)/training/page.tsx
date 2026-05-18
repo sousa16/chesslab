@@ -74,20 +74,42 @@ export default async function TrainingPage({
   const enriched = {
     ...user,
     repertoires: user.repertoires.map((r) => {
-      const { byEntryId } = buildRepertoireTree(r.entries, r.color);
+      const { roots, byEntryId } = buildRepertoireTree(r.entries, r.color);
       const dueOnly = mode === "review";
+      const entriesById = new Map(r.entries.map((e) => [e.id, e]));
 
-      const entries = r.entries
-        .filter((e) => !dueOnly || e.nextReviewDate <= now)
-        .map((entry) => {
-          const sans = byEntryId.get(entry.id)?.sanMoves ?? [];
-          const match = lookupOpening(sans);
-          return {
-            ...entry,
-            openingName: match?.name ?? null,
-            openingEco: match?.eco ?? null,
-          };
-        });
+      // Both modes traverse each opening from its root downward (DFS preorder)
+      // so the user always drills lines from move 1, not in random SRS order.
+      // Review mode then keeps only entries currently due for review;
+      // practice mode keeps them all.
+      const ordered: typeof r.entries = [];
+      const visited = new Set<string>();
+      const walk = (node: (typeof roots)[number]) => {
+        if (visited.has(node.id)) return;
+        visited.add(node.id);
+        const entry = entriesById.get(node.id);
+        if (entry) {
+          if (!dueOnly || entry.nextReviewDate <= now) ordered.push(entry);
+        }
+        for (const c of node.children) walk(c);
+      };
+      for (const root of roots) walk(root);
+      // Defensive sweep: any entry not reachable from a root still gets shown
+      // (filtered by due if applicable) so we never silently drop a card.
+      for (const e of r.entries) {
+        if (visited.has(e.id)) continue;
+        if (!dueOnly || e.nextReviewDate <= now) ordered.push(e);
+      }
+
+      const entries = ordered.map((entry) => {
+        const sans = byEntryId.get(entry.id)?.sanMoves ?? [];
+        const match = lookupOpening(sans);
+        return {
+          ...entry,
+          openingName: match?.name ?? null,
+          openingEco: match?.eco ?? null,
+        };
+      });
 
       return { ...r, entries };
     }),

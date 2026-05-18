@@ -2,6 +2,16 @@ import { prisma } from "./prisma";
 import { Chess } from "chess.js";
 
 /**
+ * Extract the fullmove counter (last whitespace-separated token) from a FEN.
+ * Defaults to 1 if the FEN is malformed, matching the backfill fallback.
+ */
+function parseFullmove(fen: string): number {
+  const tail = fen.trim().split(/\s+/).pop();
+  const n = tail ? parseInt(tail, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+/**
  * Ensure a user has repertoires for both colors.
  * Creates them if they don't exist.
  */
@@ -130,7 +140,7 @@ export async function saveRepertoireLine(
         tx.position.upsert({
           where: { fen },
           update: {},
-          create: { fen },
+          create: { fen, fullmoveNumber: parseFullmove(fen) },
         }),
       ),
     );

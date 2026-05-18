@@ -65,10 +65,15 @@ model VerificationToken {
 model Position {
   id                String            @id @default(cuid())
   fen               String            @unique
+  // Fullmove counter parsed from the FEN. Stored as a column so the
+  // training filters (`exclude first-move positions`) can use a btree
+  // index instead of a `LIKE '% 1'` predicate that forced a seq scan.
+  fullmoveNumber    Int
   createdAt         DateTime          @default(now())
   repertoireEntries RepertoireEntry[]
 
   @@index([fen])
+  @@index([fullmoveNumber])
 }
 
 model Repertoire {

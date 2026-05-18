@@ -68,8 +68,17 @@ export async function GET() {
       });
     }
 
-    // 2) new puzzle — random from filtered pool, excluding ones already reviewed
-    // `$queryRaw` because Prisma has no first-class RANDOM() ordering.
+    // 2) new puzzle — rating-anchored random pick.
+    //
+    // `ORDER BY RANDOM() LIMIT 1` does a seq scan of the whole puzzle
+    // catalog on every fetch. Instead pick a random target rating inside
+    // the user's band and ask Postgres for the puzzle closest to it via
+    // the rating btree index. Randomness comes from the target, not from
+    // sorting — the index does ~all the work.
+    const targetRating =
+      prefs.ratingMin +
+      Math.floor(Math.random() * (prefs.ratingMax - prefs.ratingMin + 1));
+
     const rows = await prisma.$queryRaw<
       Array<{
         id: string;
@@ -89,7 +98,7 @@ export async function GET() {
           SELECT 1 FROM "PuzzleReview" r
           WHERE r."puzzleId" = p.id AND r."userId" = ${user.id}
         )
-      ORDER BY RANDOM()
+      ORDER BY ABS(p.rating - ${targetRating}) ASC, p.id ASC
       LIMIT 1
     `;
 

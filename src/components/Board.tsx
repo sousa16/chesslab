@@ -126,12 +126,15 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         setMoves(newMoves);
         setUciMoves(newUciMoves);
         setMoveHistory(newHistory);
-        if (landAtStart) {
-          // Keep the history so the user can step forward, but show the
-          // pre-first-move position. Reset the live game to that state.
-          gameRef.current = new Chess(startingFen);
-          setCurrentMoveIndex(-1);
-          setPosition(gameRef.current.fen());
+        if (landAtStart && newHistory.length > 0) {
+          // Keep the full history so the user can step forward, but show
+          // the position after the FIRST move — clicking a saved line
+          // should already display that line beginning, not the empty
+          // starting position. Subsequent moves are driven by the
+          // BoardControls "Next move" button.
+          gameRef.current = new Chess(newHistory[0]);
+          setCurrentMoveIndex(0);
+          setPosition(newHistory[0]);
         } else {
           setCurrentMoveIndex(newHistory.length - 1);
           setPosition(gameRef.current.fen());

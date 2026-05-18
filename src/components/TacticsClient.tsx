@@ -7,7 +7,11 @@ import { ChevronLeft, Eye, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
-import { PuzzleBoard } from "@/components/PuzzleBoard";
+import { BoardControls } from "@/components/BoardControls";
+import {
+  PuzzleBoard,
+  type PuzzleBoardHandle,
+} from "@/components/PuzzleBoard";
 import { PUZZLE_CATEGORIES, type PuzzleCategory } from "@/lib/puzzleCategories";
 import type { ReviewResponse } from "@/lib/sm2";
 
@@ -76,6 +80,7 @@ export default function TacticsClient() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const cardStartRef = useRef<number>(Date.now());
+  const boardRef = useRef<PuzzleBoardHandle | null>(null);
 
   const handleBack = () => {
     router.push("/home");
@@ -277,6 +282,7 @@ export default function TacticsClient() {
               maxWidth: "min(100%, calc(100dvh - var(--mobile-nav-h) - 280px))",
             }}>
             <PuzzleBoard
+              ref={boardRef}
               key={puzzle.id}
               initialFen={puzzle.fen}
               moves={movesArr}
@@ -284,6 +290,20 @@ export default function TacticsClient() {
               orientation={orientation}
             />
           </div>
+
+          {revealed && (
+            <div className="flex items-center justify-center flex-shrink-0">
+              <BoardControls
+                onFirstMove={() => boardRef.current?.goToFirst()}
+                onPreviousMove={() => boardRef.current?.goToPrevious()}
+                onNextMove={() => boardRef.current?.goToNext()}
+                onLastMove={() => boardRef.current?.goToLast()}
+                // Reset = jump back to the puzzle position (before any
+                // solution move) — same as goToFirst for this view.
+                onReset={() => boardRef.current?.goToFirst()}
+              />
+            </div>
+          )}
 
           <div className="w-full flex-shrink-0 lg:min-h-[2.75rem]">
             {!revealed ? (

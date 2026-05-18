@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -16,81 +22,118 @@ interface PuzzleBoardProps {
   orientation: "white" | "black";
 }
 
+export interface PuzzleBoardHandle {
+  goToFirst: () => void;
+  goToPrevious: () => void;
+  goToNext: () => void;
+  goToLast: () => void;
+}
+
 const SOLUTION_STEP_MS = 600;
 
 /**
  * Read-only puzzle board.
  *
- * Renders the puzzle position immediately (i.e. with moves[0] already
- * applied) and, when `revealSolution` flips on, walks through moves[1..]
- * one at a time. No move sounds — the user is calculating, and the steady
- * click of solution moves was reported as distracting.
+ * Initial state shows the puzzle position (moves[0] applied to initialFen).
+ * After `revealSolution` flips on, the component:
+ *   1. Pre-computes the FEN of every solution position.
+ *   2. Animates by advancing currentMoveIndex on a timer.
+ *   3. Once animation finishes, the parent can step back and forth via
+ *      the imperative handle (driven by BoardControls).
  *
- * Parent must pass a `key` tied to the puzzle id so React fully remounts
- * this component on puzzle change.
+ * Remounts on puzzle change (parent passes `key` tied to puzzle id), so
+ * no reset logic lives here.
  */
-export function PuzzleBoard({
-  initialFen,
-  moves,
-  revealSolution,
-  orientation,
-}: PuzzleBoardProps) {
-  const { showCoordinates } = useSettings();
+export const PuzzleBoard = forwardRef<PuzzleBoardHandle, PuzzleBoardProps>(
+  function PuzzleBoard(
+    { initialFen, moves, revealSolution, orientation },
+    ref,
+  ) {
+    const { showCoordinates } = useSettings();
 
-  // Initialize the chess.js game and the displayed FEN lazily, once per mount.
-  // useState's initializer runs once; the `game` object reference is stable
-  // across renders, so we can mutate it in the reveal effect without ever
-  // recreating it.
-  const [game] = useState(() => {
-    const g = new Chess(initialFen);
-    const setupUci = moves[0];
-    if (setupUci) applyUci(g, setupUci);
-    return g;
-  });
-  const [fen, setFen] = useState(() => game.fen());
+    // Compute the puzzle position (after Lichess' moves[0]) and the FENs
+    // of every subsequent solution move. Lazily, once per mount, so a
+    // child remount on puzzle change starts clean.
+    const [{ puzzleFen, solutionFens }] = useState(() => {
+      const g = new Chess(initialFen);
+      const setupUci = moves[0];
+      if (setupUci) applyUci(g, setupUci);
+      const start = g.fen();
+      const fens: string[] = [];
+      for (let i = 1; i < moves.length; i++) {
+        const move = applyUci(g, moves[i]);
+        if (!move) break;
+        fens.push(g.fen());
+      }
+      return { puzzleFen: start, solutionFens: fens };
+    });
 
-  // Play through the solution when reveal toggles on.
-  useEffect(() => {
-    if (!revealSolution) return;
-    const solution = moves.slice(1);
-    let delay = 0;
-    const ts: ReturnType<typeof setTimeout>[] = [];
-    for (const uci of solution) {
-      delay += SOLUTION_STEP_MS;
-      const t = setTimeout(() => {
-        const move = applyUci(game, uci);
-        if (move) setFen(game.fen());
-      }, delay);
-      ts.push(t);
-    }
-    return () => ts.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealSolution]);
+    // currentIndex semantics:
+    //   -1                       → puzzle position (before any solution move)
+    //    0..solutionFens.length-1 → after that solution move
+    const [currentIndex, setCurrentIndex] = useState(-1);
 
-  const boardColors = {
-    light: "#c8c4bc",
-    dark: "#5c6370",
-  };
+    // After the parent toggles `revealSolution`, walk the board through the
+    // solution one move per tick. setState lives in the setTimeout callback
+    // so the lint rule about setState-in-effect-body doesn't fire.
+    const ticking = useRef(false);
+    useEffect(() => {
+      if (!revealSolution || ticking.current) return;
+      ticking.current = true;
+      const ts: ReturnType<typeof setTimeout>[] = [];
+      for (let step = 0; step < solutionFens.length; step++) {
+        const t = setTimeout(
+          () => setCurrentIndex(step),
+          SOLUTION_STEP_MS * (step + 1),
+        );
+        ts.push(t);
+      }
+      return () => ts.forEach(clearTimeout);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [revealSolution]);
 
-  return (
-    <div className="relative">
-      <div
-        className="w-full aspect-square rounded-2xl overflow-hidden elevated ring-1 ring-white/5"
-        data-testid="puzzle-board">
-        <Chessboard
-          options={{
-            position: fen,
-            boardOrientation: orientation,
-            showNotation: showCoordinates,
-            allowDragging: false,
-            lightSquareStyle: { backgroundColor: boardColors.light },
-            darkSquareStyle: { backgroundColor: boardColors.dark },
-          }}
-        />
+    useImperativeHandle(
+      ref,
+      () => ({
+        goToFirst: () => setCurrentIndex(-1),
+        goToPrevious: () =>
+          setCurrentIndex((i) => (i > -1 ? i - 1 : -1)),
+        goToNext: () =>
+          setCurrentIndex((i) =>
+            i < solutionFens.length - 1 ? i + 1 : i,
+          ),
+        goToLast: () => setCurrentIndex(solutionFens.length - 1),
+      }),
+      [solutionFens.length],
+    );
+
+    const fen = currentIndex < 0 ? puzzleFen : solutionFens[currentIndex];
+
+    const boardColors = {
+      light: "#c8c4bc",
+      dark: "#5c6370",
+    };
+
+    return (
+      <div className="relative">
+        <div
+          className="w-full aspect-square rounded-2xl overflow-hidden elevated ring-1 ring-white/5"
+          data-testid="puzzle-board">
+          <Chessboard
+            options={{
+              position: fen,
+              boardOrientation: orientation,
+              showNotation: showCoordinates,
+              allowDragging: false,
+              lightSquareStyle: { backgroundColor: boardColors.light },
+              darkSquareStyle: { backgroundColor: boardColors.dark },
+            }}
+          />
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+);
 
 function applyUci(game: Chess, uci: string) {
   if (uci.length < 4) return null;

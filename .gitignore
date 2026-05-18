@@ -42,6 +42,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# bulk data dumps (Lichess puzzle CSV, etc.) — ingested by scripts/, never committed
+/data
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

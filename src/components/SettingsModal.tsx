@@ -14,11 +14,12 @@ import {
   Trash2,
   Volume2,
   Grid3x3,
+  Target,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
@@ -46,6 +47,31 @@ interface SettingsModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+type TacticsBand = "beginner" | "intermediate" | "advanced" | "custom";
+
+const TACTICS_BANDS: Record<
+  Exclude<TacticsBand, "custom">,
+  { label: string; ratingMin: number; ratingMax: number }
+> = {
+  beginner: { label: "Beginner (800–1399)", ratingMin: 800, ratingMax: 1399 },
+  intermediate: {
+    label: "Intermediate (1400–1799)",
+    ratingMin: 1400,
+    ratingMax: 1799,
+  },
+  advanced: { label: "Advanced (1800–2400)", ratingMin: 1800, ratingMax: 2400 },
+};
+
+function bandForRange(min: number, max: number): TacticsBand {
+  for (const key of Object.keys(TACTICS_BANDS) as Array<
+    keyof typeof TACTICS_BANDS
+  >) {
+    const b = TACTICS_BANDS[key];
+    if (min === b.ratingMin && max === b.ratingMax) return key;
+  }
+  return "custom";
+}
+
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -68,6 +94,50 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Tactics difficulty band — synced lazily with /api/puzzle-prefs the first
+  // time the modal opens.
+  const [tacticsBand, setTacticsBand] = useState<TacticsBand>("intermediate");
+  const [tacticsBandLoaded, setTacticsBandLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!open || tacticsBandLoaded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/puzzle-prefs");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          ratingMin: number;
+          ratingMax: number;
+        };
+        if (cancelled) return;
+        setTacticsBand(bandForRange(data.ratingMin, data.ratingMax));
+      } catch {
+        // non-fatal — keep default
+      } finally {
+        if (!cancelled) setTacticsBandLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, tacticsBandLoaded]);
+
+  const handleTacticsBandChange = async (band: TacticsBand) => {
+    if (band === "custom") return;
+    const b = TACTICS_BANDS[band];
+    setTacticsBand(band);
+    try {
+      await fetch("/api/puzzle-prefs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ratingMin: b.ratingMin, ratingMax: b.ratingMax }),
+      });
+    } catch {
+      showError("Failed to update tactics difficulty");
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut({ redirect: false });
@@ -397,6 +467,48 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       checked={showCoordinates}
                       onCheckedChange={setShowCoordinates}
                     />
+                  </div>
+                </div>
+              </section>
+
+              {/* Tactics */}
+              <section>
+                <h2 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                  Tactics
+                </h2>
+                <div className="bg-background rounded-lg border border-border">
+                  <div className="p-3 sm:p-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Target size={20} className="text-muted-foreground flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm sm:text-base font-medium text-foreground">
+                          Puzzle difficulty
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">
+                          Rating range for new puzzles
+                        </p>
+                      </div>
+                    </div>
+                    <select
+                      value={tacticsBand}
+                      onChange={(e) =>
+                        handleTacticsBandChange(e.target.value as TacticsBand)
+                      }
+                      disabled={!tacticsBandLoaded}
+                      className="h-9 px-3 rounded-lg bg-surface-2 border border-border/50 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 max-w-[60%]">
+                      {(
+                        Object.keys(TACTICS_BANDS) as Array<
+                          keyof typeof TACTICS_BANDS
+                        >
+                      ).map((k) => (
+                        <option key={k} value={k}>
+                          {TACTICS_BANDS[k].label}
+                        </option>
+                      ))}
+                      {tacticsBand === "custom" && (
+                        <option value="custom">Custom</option>
+                      )}
+                    </select>
                   </div>
                 </div>
               </section>

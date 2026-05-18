@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
+import { PieceColor, Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { lookupOpening } from "@/lib/openings";
@@ -9,41 +10,35 @@ import { buildRepertoireTree } from "@/lib/repertoireTree";
  * GET /api/repertoires?color=white|black
  *
  * Fetches all openings for a user's repertoire of a specific color.
- * Returns opening lines as hierarchical trees with move numbers and full sequences.
+ * Returns opening lines as a hierarchical tree with move numbers and full
+ * SAN sequences.
  *
- * Response: { openings: Opening[] }
+ * Caching: the repertoire structure only changes when the user adds, edits
+ * or reviews an entry, so the response carries an ETag keyed on
+ * (max(updatedAt), count) of this color's entries. Revisits return 304
+ * with no body and skip the tree-build entirely.
  */
 
 interface LineNode {
   id: string;
   fen: string;
-  expectedMove: string; // UCI format — kept for training/SRS callers
+  expectedMove: string;
   moveNumber: number;
-  // Display string in standard algebraic notation, e.g. "1.e4 c5 2.Nf3".
   displaySequence: string;
-  // Raw SAN moves leading to this node (e.g. ["e4","c5","Nf3"]). Used by
-  // the build flow and "Play this line on the board" interactions; the
-  // board API consumes SAN directly.
   sanMoves: string[];
-  // Longest-prefix-matched ECO opening (e.g. "Sicilian Defense: Najdorf").
-  // Null if no named opening matches a prefix of sanMoves.
   openingName: string | null;
   openingEco: string | null;
   children: LineNode[];
-  opponentMove?: string; // UCI — only used internally during tree construction
-  // True when SRS has graduated this entry out of the initial learning
-  // phase. "Practiced once" still leaves the card in `learning` and
-  // shouldn't count as mastered; only `exponential` means the user has
-  // hit the card right enough times in a row that the algorithm has
-  // promoted it to long-interval spaced repetition.
+  opponentMove?: string;
   mastered?: boolean;
 }
+
+const CACHE_HEADER = "private, max-age=30, stale-while-revalidate=60";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    // Support both session.user.id and session.user.email for auth
     const userId = session?.user?.id;
     const userEmail = session?.user?.email;
 
@@ -60,7 +55,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // If we have user ID, use it directly; otherwise look up by email
     let actualUserId = userId;
     if (!actualUserId && userEmail) {
       const user = await prisma.user.findUnique({
@@ -73,38 +67,68 @@ export async function GET(request: NextRequest) {
       actualUserId = user.id;
     }
 
-    // Get the user's repertoire for this color with ALL entries
+    const prismaColor: PieceColor =
+      color === "white" ? PieceColor.White : PieceColor.Black;
+    const entryFilter: Prisma.RepertoireEntryWhereInput = {
+      repertoire: { userId: actualUserId!, color: prismaColor },
+    };
+
+    // Cheap conditional-request probe. Two indexed lookups on
+    // RepertoireEntry — far cheaper than the tree-build and full payload.
+    // Including the entry count covers deletions, which don't bump
+    // updatedAt on the surviving rows.
+    const [latest, count] = await Promise.all([
+      prisma.repertoireEntry.findFirst({
+        where: entryFilter,
+        select: { updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.repertoireEntry.count({ where: entryFilter }),
+    ]);
+    const etag = `W/"${latest?.updatedAt.getTime() ?? 0}-${count}"`;
+
+    if (request.headers.get("if-none-match") === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: { etag, "Cache-Control": CACHE_HEADER },
+      });
+    }
+
+    // Trimmed select: the tree-build needs id, expectedMove, position.fen;
+    // the route itself needs phase to compute the "mastered" flag. Pulling
+    // the full Position row was shipping createdAt + id over the wire on
+    // every entry for no consumer.
     const repertoire = await prisma.repertoire.findUnique({
       where: {
-        userId_color: {
-          userId: actualUserId!,
-          color: color === "white" ? "White" : "Black",
-        },
+        userId_color: { userId: actualUserId!, color: prismaColor },
       },
-      include: {
+      select: {
+        id: true,
+        color: true,
         entries: {
-          include: { position: true },
+          select: {
+            id: true,
+            expectedMove: true,
+            phase: true,
+            position: { select: { fen: true } },
+          },
           orderBy: { createdAt: "asc" },
         },
       },
     });
 
     if (!repertoire || repertoire.entries.length === 0) {
-      return NextResponse.json({ openings: [] }, { status: 200 });
+      return NextResponse.json(
+        { openings: [] },
+        { status: 200, headers: { etag, "Cache-Control": CACHE_HEADER } },
+      );
     }
 
-    // Tree-build + SAN computation lives in a shared helper so that
-    // /api/repertoires and /(app)/training/page.tsx see identical paths
-    // and therefore identical opening names.
     const { roots: builtRoots, byEntryId: builtById } = buildRepertoireTree(
       repertoire.entries,
       repertoire.color,
     );
 
-    // Decorate the structural tree with display fields and opening matches.
-    // "Mastered" = SRS has promoted this card to the exponential phase
-    // (i.e. you've gotten it right enough times in a row that intervals
-    // are now multi-day, not initial-learning steps).
     const masteredById = new Map<string, boolean>();
     for (const entry of repertoire.entries) {
       masteredById.set(entry.id, entry.phase === "exponential");
@@ -146,11 +170,12 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Avoid an unused-warning for `builtById` — we don't need it here, but the
-    // shared helper returns it for other callers (e.g. training enrichment).
     void builtById;
 
-    return NextResponse.json({ root: finalRoot }, { status: 200 });
+    return NextResponse.json(
+      { root: finalRoot },
+      { status: 200, headers: { etag, "Cache-Control": CACHE_HEADER } },
+    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : "";
@@ -164,10 +189,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * Format an array of SAN moves with PGN-style move numbers.
- * Input is in plain SAN, e.g. ["e4", "c5", "Nf3"] -> "1.e4 c5 2.Nf3".
- */
 function formatSanSequence(moves: string[]): string {
   if (moves.length === 0) {
     return "Initial Position";

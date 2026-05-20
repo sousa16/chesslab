@@ -86,9 +86,12 @@ export default function TacticsClient() {
     router.push("/home");
   };
 
-  const loadNext = useCallback(async () => {
+  const loadNext = useCallback(async (excludeId?: string) => {
     try {
-      const res = await fetch("/api/puzzles/next");
+      const url = excludeId
+        ? `/api/puzzles/next?exclude=${encodeURIComponent(excludeId)}`
+        : "/api/puzzles/next";
+      const res = await fetch(url);
       if (!res.ok) {
         console.error("Failed to fetch next puzzle");
         return;
@@ -143,7 +146,10 @@ export default function TacticsClient() {
     } catch {}
 
     // Fire-and-forget: don't make the user wait for the SRS write to finish
-    // before the next puzzle appears.
+    // before the next puzzle appears. To avoid the GET racing ahead of the
+    // PuzzleReview commit and serving the same puzzle back, pass the
+    // just-rated id as an exclude.
+    const ratedId = puzzle.id;
     fetch("/api/puzzles/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -155,7 +161,7 @@ export default function TacticsClient() {
       }),
     }).catch((err) => console.error(err));
 
-    loadNext();
+    loadNext(ratedId);
   };
 
   const updatePrefs = async (patch: Partial<Prefs>) => {

@@ -7,11 +7,15 @@
  *  2. A new puzzle from the user's rating band whose categories overlap
  *     the user's enabled set.
  *
- * Also returns due/new counts so the client can show progress.
+ * Accepts `?exclude=<puzzleId>` so the client can guarantee the just-rated
+ * puzzle isn't served again. Necessary because the review POST is
+ * fire-and-forget, so the GET can race ahead of the PuzzleReview commit
+ * and the catalog query would otherwise still pick the same puzzle.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PUZZLE_CATEGORIES } from "@/lib/puzzleCategories";
@@ -22,7 +26,7 @@ const DEFAULT_PREFS = {
   enabledCategories: [...PUZZLE_CATEGORIES],
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -39,24 +43,24 @@ export async function GET() {
 
     const prefs = user.puzzlePrefs ?? DEFAULT_PREFS;
     const now = new Date();
+    const exclude = request.nextUrl.searchParams.get("exclude");
 
     // 1) due review
+    const dueReviewWhere = {
+      userId: user.id,
+      nextReviewDate: { lte: now },
+      puzzle: { categories: { hasSome: prefs.enabledCategories } },
+      ...(exclude ? { puzzleId: { not: exclude } } : {}),
+    } satisfies Prisma.PuzzleReviewWhereInput;
+
     const dueReview = await prisma.puzzleReview.findFirst({
-      where: {
-        userId: user.id,
-        nextReviewDate: { lte: now },
-        puzzle: { categories: { hasSome: prefs.enabledCategories } },
-      },
+      where: dueReviewWhere,
       orderBy: { nextReviewDate: "asc" },
       include: { puzzle: true },
     });
 
     const dueCount = await prisma.puzzleReview.count({
-      where: {
-        userId: user.id,
-        nextReviewDate: { lte: now },
-        puzzle: { categories: { hasSome: prefs.enabledCategories } },
-      },
+      where: dueReviewWhere,
     });
 
     if (dueReview) {
@@ -94,6 +98,7 @@ export async function GET() {
       FROM "Puzzle" p
       WHERE p.rating BETWEEN ${prefs.ratingMin} AND ${prefs.ratingMax}
         AND p.categories && ${prefs.enabledCategories}::text[]
+        AND (${exclude}::text IS NULL OR p.id <> ${exclude})
         AND NOT EXISTS (
           SELECT 1 FROM "PuzzleReview" r
           WHERE r."puzzleId" = p.id AND r."userId" = ${user.id}

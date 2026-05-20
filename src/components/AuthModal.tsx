@@ -41,6 +41,9 @@ export function AuthModal({
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  // Default to remembered — matches what most users expect when they
+  // bother creating a password-based account on a personal device.
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Update error/success when props change
   useEffect(() => {
@@ -89,6 +92,7 @@ export function AuthModal({
         email,
         password,
         action: isLogin ? "login" : "register",
+        rememberMe: rememberMe ? "true" : "false",
         redirect: false,
       });
 
@@ -304,6 +308,21 @@ export function AuthModal({
                 </button>
               </div>
             </div>
+
+            {isLogin && (
+              <label className="flex items-center gap-2 cursor-pointer select-none -mt-1">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={isLoading}
+                  className="w-4 h-4 rounded border-stone-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/50 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <span className="text-sm text-slate-600 dark:text-slate-300">
+                  Remember me
+                </span>
+              </label>
+            )}
 
             <Button
               type="submit"

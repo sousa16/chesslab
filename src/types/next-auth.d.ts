@@ -27,5 +27,9 @@ declare module "next-auth/jwt" {
     id: string;
     emailVerified?: Date | null;
     createdAt?: Date;
+    // Transient signal from the login form: when false, the jwt callback
+    // overrides token.exp to a short window even if the cookie has a
+    // 30-day lifetime.
+    rememberMe?: boolean;
   }
 }

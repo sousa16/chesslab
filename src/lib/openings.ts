@@ -32,34 +32,16 @@ export interface OpeningMatch {
   name: string;
 }
 
-// byKey: exact SAN-path lookup ("e4 c5 Nf3" → match).
-// endFens: positions that *end* a named opening — they win over intermediates.
-// intermediateFens: positions traversed mid-line — used when the user is on
-//   a transposition but not at the canonical end position.
+// Only the SAN-prefix lookup is used by callers. The previous version also
+// built per-FEN end/intermediate maps (~3700 entries × ~10 intermediate
+// FENs each), which dominated module-load CPU on cold serverless
+// invocations for endpoints that import this file — and nothing consumed
+// them. If a by-FEN lookup is reintroduced, rebuild from `entries` lazily
+// behind a memo rather than at module load.
 const byKey = new Map<string, OpeningMatch>();
-const endFens = new Map<string, OpeningMatch>();
-const intermediateFens = new Map<string, OpeningMatch>();
-
 for (const e of entries) {
   byKey.set(e.key, { eco: e.eco, name: e.name });
-  if (e.endFen && !endFens.has(e.endFen)) {
-    endFens.set(e.endFen, { eco: e.eco, name: e.name });
-  }
 }
-
-// "Skip if set" — dataset is pre-sorted longest-first, so collisions on a
-// shared transposition keep the more-specific variation.
-for (const e of entries) {
-  for (const fen of e.intermediateFens) {
-    if (!endFens.has(fen) && !intermediateFens.has(fen)) {
-      intermediateFens.set(fen, { eco: e.eco, name: e.name });
-    }
-  }
-}
-
-// Compose: ends take precedence over intermediates.
-const byFen = new Map<string, OpeningMatch>(intermediateFens);
-for (const [k, v] of endFens) byFen.set(k, v);
 
 /**
  * Look up the longest matching opening for a SAN move sequence.
@@ -71,12 +53,4 @@ export function lookupOpening(sanMoves: string[]): OpeningMatch | null {
     if (hit) return hit;
   }
   return null;
-}
-
-/**
- * Look up the opening that matches exactly at this FEN. Returns null when
- * the position isn't part of any named opening's path.
- */
-export function lookupOpeningByFen(fen: string): OpeningMatch | null {
-  return byFen.get(fen) ?? null;
 }

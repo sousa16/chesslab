@@ -20,6 +20,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         action: { label: "Action", type: "text" },
+        rememberMe: { label: "Remember me", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -140,7 +141,12 @@ export const authOptions: NextAuthOptions = {
             image: user.image,
             emailVerified: user.emailVerified,
             createdAt: user.createdAt,
-          };
+            // Carry the form's "remember me" choice through to the jwt
+            // callback, which uses it to decide whether to shorten the
+            // JWT's exp. Treated as a transient signal — not persisted in
+            // the token after the first sign-in.
+            rememberMe: credentials?.rememberMe === "true",
+          } as typeof user & { rememberMe: boolean };
         }
       },
     }),
@@ -151,7 +157,11 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 24 * 60 * 60, // 24 hours
+    // Upper bound for the session cookie itself. Per-session JWT expiry
+    // is shortened in the jwt callback when the user didn't tick "remember
+    // me", which effectively logs them out after SHORT_SESSION_SECONDS
+    // even though the cookie lingers.
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
     async jwt({ token, user, trigger, account }) {
@@ -159,6 +169,16 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.createdAt = user.createdAt;
+
+        // Capture the remember-me preference once, on initial sign-in.
+        // Credentials carries it explicitly; OAuth sign-ins default to a
+        // remembered (long) session — that matches the typical OAuth UX.
+        if (account?.provider === "credentials") {
+          token.rememberMe =
+            (user as { rememberMe?: boolean }).rememberMe !== false;
+        } else {
+          token.rememberMe = true;
+        }
 
         // For OAuth providers, ensure emailVerified is set
         if (account?.provider && account.provider !== "credentials") {
@@ -193,6 +213,16 @@ export const authOptions: NextAuthOptions = {
         if (dbUser) {
           token.emailVerified = dbUser.emailVerified;
         }
+      }
+
+      // Non-remembered sessions: cap the JWT's exp at a short window
+      // regardless of the cookie's lifetime. Applied on every token
+      // refresh so the timeout keeps sliding forward only while the user
+      // is active. Once they're idle past SHORT_SESSION_SECONDS, the next
+      // session() call sees an expired token and signs them out.
+      if (token.rememberMe === false) {
+        const SHORT_SESSION_SECONDS = 24 * 60 * 60; // 24 hours
+        token.exp = Math.floor(Date.now() / 1000) + SHORT_SESSION_SECONDS;
       }
 
       return token;

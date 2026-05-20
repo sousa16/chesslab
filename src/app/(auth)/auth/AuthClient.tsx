@@ -21,6 +21,7 @@ export default function AuthClient() {
   const [showResendButton, setShowResendButton] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   useEffect(() => {
     if (searchParams.get("verified") === "true") {
@@ -42,6 +43,7 @@ export default function AuthClient() {
         email,
         password,
         action: isLogin ? "login" : "register",
+        rememberMe: rememberMe ? "true" : "false",
         redirect: false,
       });
 
@@ -217,6 +219,19 @@ export default function AuthClient() {
                 </button>
               </div>
             </div>
+
+            {isLogin && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={isLoading}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-800/50 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <span className="text-sm text-slate-300">Remember me</span>
+              </label>
+            )}
 
             <Button
               type="submit"

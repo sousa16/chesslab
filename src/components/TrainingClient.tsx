@@ -479,11 +479,12 @@ export default function TrainingClient({
           <div className="text-center space-y-4">
             <Trophy className="w-12 h-12 lg:w-16 lg:h-16 text-primary mx-auto" />
             <h2 className="text-xl lg:text-2xl font-semibold text-foreground">
-              All caught up!
+              {isPracticeMode ? "Nothing to practice" : "All caught up!"}
             </h2>
             <p className="text-sm lg:text-base text-muted-foreground max-w-md">
-              No cards to review right now. Add new positions to your repertoire
-              or come back later.
+              {isPracticeMode
+                ? "No positions match this selection. Add lines to your repertoire and try again."
+                : "No cards to review right now. Add new positions to your repertoire or come back later."}
             </p>
             <Button onClick={handleBack} className="mt-4 btn-primary-gradient">
               Back to Home

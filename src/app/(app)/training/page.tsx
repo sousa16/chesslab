@@ -1,9 +1,8 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { lookupOpening, sanPathToFen } from "@/lib/openings";
-import { Chess } from "chess.js";
-import { buildRepertoireTree } from "@/lib/repertoireTree";
+import { lookupOpening } from "@/lib/openings";
+import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
 import TrainingClient from "@/components/TrainingClient";
 
 interface TrainingPageProps {
@@ -26,73 +25,6 @@ function familyOf(openingName: string | null): string | null {
   return colon === -1 ? openingName : openingName.slice(0, colon).trim();
 }
 
-// Compare FENs ignoring the halfmove clock and fullmove number — those
-// fields can drift between the repertoire-tree replay and the entry's
-// stored FEN even when the actual position is identical.
-function fenKey(fen: string | null | undefined): string {
-  if (!fen) return "";
-  return fen.split(" ").slice(0, 4).join(" ");
-}
-
-// Try to replay a SAN sequence from a given start FEN. Returns the prefix
-// of moves that brings us to `targetFen`, or null if we never reach it.
-function replayToTarget(
-  startFen: string | undefined,
-  sans: string[],
-  targetFen: string,
-): string[] | null {
-  try {
-    const g = startFen ? new Chess(startFen) : new Chess();
-    const targetKey = fenKey(targetFen);
-    if (fenKey(g.fen()) === targetKey) return [];
-    const played: string[] = [];
-    for (const san of sans) {
-      const move = g.move(san);
-      if (!move) return null;
-      played.push(san);
-      if (fenKey(g.fen()) === targetKey) return played;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-// Best-effort prior moves anchored at the standard starting position.
-//
-// Strategy:
-//   1. Replay the repertoire tree's sans from the standard start. If we
-//      reach the entry's FEN, that's our answer (covers entries whose
-//      tree is rooted at the start).
-//   2. Otherwise, look up the ECO mainline path to the tree's rootFen and
-//      prepend it. This handles entries whose tree root is mid-game
-//      (no ancestor entry at the standard start) but the root sits on a
-//      known opening line.
-//   3. As a final fallback, try ECO direct lookup of the entry's own FEN.
-//   4. If nothing anchors, return [] and the client hides navigation.
-function deriveAnchoredPriorMoves(
-  sansFromTree: string[],
-  positionFen: string,
-  rootFen: string,
-): string[] {
-  // 1. Tree sans replay from standard start
-  const fromStart = replayToTarget(undefined, sansFromTree, positionFen);
-  if (fromStart) return fromStart;
-
-  // 2. ECO path to tree root, then tree sans on top
-  const ecoToRoot = sanPathToFen(rootFen);
-  if (ecoToRoot && ecoToRoot.length > 0) {
-    const combined = [...ecoToRoot, ...sansFromTree];
-    const fromStartWithEco = replayToTarget(undefined, combined, positionFen);
-    if (fromStartWithEco) return fromStartWithEco;
-  }
-
-  // 3. ECO direct lookup of the entry's own FEN
-  const ecoDirect = sanPathToFen(positionFen);
-  if (ecoDirect) return ecoDirect;
-
-  return [];
-}
 
 export default async function TrainingPage({
   searchParams,
@@ -186,20 +118,19 @@ export default async function TrainingPage({
         const node = byEntryId.get(entry.id);
         const sans = node?.sanMoves ?? [];
         const rootFen = node?.rootFen ?? entry.position.fen;
-        const match = lookupOpening(sans);
+        // Resolve the canonical line from the standard starting position
+        // first, then look up the opening name from THAT — using raw tree
+        // sans would misname mid-game-rooted entries (e.g., a Caro-Kann
+        // Advance entry would resolve to "Queen's Pawn Game" because its
+        // sans start at "d4 d5").
+        const priorMoves = anchorSansToStart(sans, entry.position.fen, rootFen);
+        const lookupSans = priorMoves.length > 0 ? priorMoves : sans;
+        const match = lookupOpening(lookupSans);
         return {
           ...entry,
           openingName: match?.name ?? null,
           openingEco: match?.eco ?? null,
-          // Moves leading from the standard starting position to this
-          // entry's FEN. We try the repertoire tree's SAN list first, and
-          // fall back to ECO-derived prefixes when the tree anchors at a
-          // mid-game root (so the tree's sans omit the opening prefix).
-          priorMoves: deriveAnchoredPriorMoves(
-            sans,
-            entry.position.fen,
-            rootFen,
-          ),
+          priorMoves,
           // In practice mode (Learn All) we still want to update SRS for
           // cards that happen to be due — otherwise a long Learn All session
           // hides them from the regular review queue without ever being

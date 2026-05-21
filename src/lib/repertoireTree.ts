@@ -31,7 +31,13 @@ export interface RepertoireTreeNode {
   expectedMove: string; // UCI
   opponentMove?: string; // UCI; the move that bridges from a parent's
   //                       post-user-move position to this node's position
-  sanMoves: string[]; // SAN path from the standard start through this node
+  sanMoves: string[]; // SAN path from this node's tree root through this node
+  // FEN of the deepest ancestor reachable from this node in the user's
+  // tree. When the tree root is the standard starting position, sanMoves
+  // is anchored at the start. When it's mid-game (the user has no entry at
+  // a shallower position), callers can derive a full-from-start path by
+  // prepending the canonical moves leading to rootFen.
+  rootFen: string;
   children: RepertoireTreeNode[];
 }
 
@@ -60,6 +66,7 @@ export function buildRepertoireTree(
       fen: entry.position.fen,
       expectedMove: entry.expectedMove,
       sanMoves: [],
+      rootFen: entry.position.fen,
       children: [],
     };
     byEntryId.set(entry.id, node);
@@ -120,6 +127,7 @@ export function buildRepertoireTree(
     node: RepertoireTreeNode,
     parentSans: string[],
     parentGame: Chess,
+    rootFen: string,
   ) => {
     const game = new Chess(parentGame.fen());
     const sans = [...parentSans];
@@ -148,7 +156,8 @@ export function buildRepertoireTree(
     }
 
     node.sanMoves = sans;
-    for (const child of node.children) walk(child, sans, game);
+    node.rootFen = rootFen;
+    for (const child of node.children) walk(child, sans, game, rootFen);
   };
 
   const findOpeningWhiteMove = (targetFen: string): string | null => {
@@ -182,7 +191,8 @@ export function buildRepertoireTree(
     }
 
     root.sanMoves = sans;
-    for (const child of root.children) walk(child, sans, game);
+    root.rootFen = root.fen;
+    for (const child of root.children) walk(child, sans, game, root.fen);
   }
 
   return { roots, byEntryId };

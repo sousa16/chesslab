@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Chess } from "chess.js";
-import { ChevronLeft, Eye, Target, Trophy } from "lucide-react";
+import { ChevronLeft, Eye, Flame, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
@@ -79,6 +79,7 @@ export default function TacticsClient() {
   const [empty, setEmpty] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [streak, setStreak] = useState(0);
   const cardStartRef = useRef<number>(Date.now());
   const boardRef = useRef<PuzzleBoardHandle | null>(null);
 
@@ -132,9 +133,57 @@ export default function TacticsClient() {
     setRevealed(true);
   };
 
+  // Keyboard shortcuts: Enter = Show Answer, 1-4 = recall rating after reveal.
+  useEffect(() => {
+    if (empty || !puzzle) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (!revealed) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleShowAnswer();
+        }
+        return;
+      }
+      if (submitting) return;
+      const ratings: Record<string, ReviewResponse> = {
+        "1": "forgot",
+        "2": "partial",
+        "3": "effort",
+        "4": "easy",
+      };
+      const rating = ratings[e.key];
+      if (rating) {
+        e.preventDefault();
+        handleRate(rating);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealed, submitting, empty, puzzle?.id]);
+
   const handleRate = (response: ReviewResponse) => {
     if (!puzzle || submitting) return;
     setSubmitting(true);
+    // Session-only streak: Good/Easy keep it growing, Hard/Forgot break it.
+    // Same semantics as opening practice.
+    if (response === "easy" || response === "effort") {
+      setStreak((s) => s + 1);
+    } else {
+      setStreak(0);
+    }
     const timeSpentMs = Date.now() - cardStartRef.current;
 
     try {
@@ -374,9 +423,24 @@ export default function TacticsClient() {
         </div>
 
         <div className="flex-1 p-4 lg:p-5 flex flex-col overflow-y-auto gap-4 lg:gap-5">
-          <div className="glass-card rounded-xl p-3 lg:p-4">
-            <p className="text-xs text-muted-foreground mb-1">Due reviews</p>
-            <p className="text-2xl font-semibold text-foreground">{dueCount}</p>
+          <div className="grid grid-cols-2 gap-3 lg:gap-4">
+            <div className="glass-card rounded-xl p-3 lg:p-4">
+              <p className="text-xs text-muted-foreground mb-1">Due reviews</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {dueCount}
+              </p>
+            </div>
+            <div className="glass-card rounded-xl p-3 lg:p-4">
+              <p className="text-xs text-muted-foreground mb-1">Streak</p>
+              <div className="flex items-center gap-2">
+                <Flame
+                  className={`w-5 h-5 ${streak > 0 ? "text-orange-500" : "text-muted-foreground"}`}
+                />
+                <p className="text-2xl font-semibold text-foreground">
+                  {streak}
+                </p>
+              </div>
+            </div>
           </div>
 
           {prefs && (

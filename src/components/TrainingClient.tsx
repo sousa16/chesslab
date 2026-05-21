@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Chess, Square } from "chess.js";
 import {
   ChevronLeft,
+  ChevronRight,
   Eye,
   Flame,
+  RotateCcw,
   Trophy,
   GraduationCap,
   Dumbbell,
@@ -36,6 +38,14 @@ interface RepertoireEntry {
   position: Position;
   openingName: string | null;
   openingEco: string | null;
+  // SAN moves from the standard starting position up to the position the
+  // user is being asked to play from. Used to render a "previous moves"
+  // strip so the user can step back through the line.
+  priorMoves: string[];
+  // Whether this card was due for review at page-load time. In practice
+  // mode (Learn All) we only fire SRS writes for due cards — non-due cards
+  // stay a pure refresher.
+  isDue: boolean;
 }
 
 interface Repertoire {
@@ -52,6 +62,19 @@ interface User {
 interface TrainingClientProps {
   user: User;
   mode?: "review" | "practice"; // review = SRS updates, practice = no SRS updates
+}
+
+/**
+ * Normalize a FEN for equality comparison. chess.js's FEN includes the
+ * halfmove clock and fullmove number, which can disagree between the
+ * repertoire-tree replay and the entry's stored FEN even when the actual
+ * position (pieces, castling, en passant) is identical. Stripping those
+ * trailing fields gives a stable identity for position comparisons.
+ */
+function fenKey(fen: string | undefined | null): string {
+  if (!fen) return "";
+  const parts = fen.split(" ");
+  return parts.slice(0, 4).join(" ");
 }
 
 export default function TrainingClient({
@@ -84,6 +107,49 @@ export default function TrainingClient({
     }
   }, [user.repertoires]);
 
+  // Keyboard shortcuts: Enter = Show Answer, 1-4 = recall rating after reveal.
+  // Mapping mirrors the on-screen button order (Forgot, Hard, Good, Easy) so
+  // pressing 1 always means the harshest rating and 4 the most lenient.
+  useEffect(() => {
+    if (sessionComplete) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Don't hijack typing in inputs or content-editable areas.
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (!showingAnswer) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleShowAnswer();
+        }
+        return;
+      }
+      const ratings: Record<string, ReviewResponse> = {
+        "1": "forgot",
+        "2": "partial",
+        "3": "effort",
+        "4": "easy",
+      };
+      const rating = ratings[e.key];
+      if (rating) {
+        e.preventDefault();
+        handleRecallRating(rating);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showingAnswer, sessionComplete]);
+
   // Reset timer when card changes
   const resetCardTimer = useCallback(() => {
     cardStartTimeRef.current = Date.now();
@@ -109,6 +175,116 @@ export default function TrainingClient({
 
   const currentEntry = currentRepertoire?.entries[currentCardIndex];
 
+  // Preview navigation state: which ply of the line leading up to the live
+  // position should the board show? `null` means "live position" — the card
+  // the user is being asked to recall. Otherwise it's a 0-based index into
+  // `currentEntry.priorMoves` showing the position right after that move.
+  const [previewPly, setPreviewPly] = useState<number | null>(null);
+  const priorMoves = currentEntry?.priorMoves ?? [];
+
+  // FENs for each step of the line leading to the live position. Replays
+  // priorMoves from the standard starting position and stops as soon as we
+  // either hit the entry's actual FEN (= live position) or a move fails to
+  // apply. The slice up to the live FEN is what the prev/next arrows step
+  // through; anything past it (which would be the user's expectedMove
+  // applied) is discarded.
+  const precedingFens = useMemo(() => {
+    const livePositionFen = currentEntry?.position.fen;
+    const fens: string[] = [];
+    try {
+      const g = new Chess();
+      fens.push(g.fen());
+      if (fenKey(g.fen()) === fenKey(livePositionFen)) return fens;
+      for (const san of priorMoves) {
+        const move = g.move(san);
+        if (!move) break;
+        fens.push(g.fen());
+        if (fenKey(g.fen()) === fenKey(livePositionFen)) break;
+      }
+    } catch {
+      // Fall back to whatever we collected so far.
+    }
+    return fens;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentEntry?.id, currentEntry?.position.fen]);
+
+  // Whether the replayed line actually reaches the entry's position. If
+  // not (transposition or out-of-tree root), the line we have is misleading
+  // — pressing back would jump to an unrelated position — so navigation is
+  // hidden in that case.
+  const chainReachesLive =
+    precedingFens.length > 0 &&
+    fenKey(precedingFens[precedingFens.length - 1]) ===
+      fenKey(currentEntry?.position.fen);
+
+  // Reset preview when card changes so each new card starts at its live
+  // position, not at a leftover history ply.
+  useEffect(() => {
+    setPreviewPly(null);
+  }, [currentEntry?.id]);
+
+  const isPreviewing = previewPly !== null;
+  const viewFen = isPreviewing
+    ? precedingFens[previewPly] ?? currentEntry?.position.fen
+    : currentEntry?.position.fen;
+
+  // Render the prior moves as numbered pairs for the move list in the
+  // sidebar, with each ply clickable to jump there. `ply` here means
+  // "number of moves applied from the starting position", so clicking move
+  // i lands the board on the position *after* that move (= ply i+1).
+  // Cap at precedingFens.length-1 so SANs that didn't replay cleanly aren't
+  // surfaced as clickable rows that map to undefined positions.
+  const moveListPairs = useMemo(() => {
+    const pairs: {
+      number: number;
+      whitePly: number | null;
+      whiteSan: string | null;
+      blackPly: number | null;
+      blackSan: string | null;
+    }[] = [];
+    const limit = Math.min(priorMoves.length, precedingFens.length - 1);
+    for (let i = 0; i < limit; i++) {
+      const moveNumber = Math.floor(i / 2) + 1;
+      const isWhite = i % 2 === 0;
+      const plyAfter = i + 1;
+      if (isWhite) {
+        pairs.push({
+          number: moveNumber,
+          whitePly: plyAfter,
+          whiteSan: priorMoves[i],
+          blackPly: null,
+          blackSan: null,
+        });
+      } else {
+        const last = pairs[pairs.length - 1];
+        if (last) {
+          last.blackPly = plyAfter;
+          last.blackSan = priorMoves[i];
+        }
+      }
+    }
+    return pairs;
+  }, [priorMoves, precedingFens.length]);
+
+  // Helpers used by the prev/next arrows and the move list. Use the
+  // number of plies that actually replayed cleanly — not priorMoves.length —
+  // so transpositions or unreachable SANs in the saved line can't push
+  // previewPly past the end of precedingFens.
+  const totalPlies = Math.max(0, precedingFens.length - 1);
+  // `displayedPly` always reflects what the board is showing — even when
+  // previewPly is null (live), so highlighting logic can compare uniformly.
+  const displayedPly = previewPly ?? totalPlies;
+  const canStepBack = displayedPly > 0;
+  const canStepForward = isPreviewing; // forward returns to live when at last ply
+  const jumpToPly = (ply: number) => {
+    if (ply >= totalPlies) setPreviewPly(null);
+    else if (ply <= 0) setPreviewPly(0);
+    else setPreviewPly(ply);
+  };
+  const stepBack = () => jumpToPly(displayedPly - 1);
+  const stepForward = () => jumpToPly(displayedPly + 1);
+  const returnToLive = () => setPreviewPly(null);
+
   // Get the expected move in a readable format
   const getExpectedMoveDisplay = () => {
     if (!currentEntry) return "";
@@ -126,6 +302,37 @@ export default function TrainingClient({
     }
   };
 
+  // Fire-and-forget SRS write. Used by both the auto-correct path
+  // (handleTrainingMove) and the manual-rating path (handleRecallRating)
+  // so they share the exact same payload + error handling.
+  const submitReview = useCallback(
+    (entryId: string, rating: ReviewResponse, timeSpentMs: number) => {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("training-stats-updated", {
+            detail: { timeSpentMs, positionsReviewed: 1 },
+          }),
+        );
+      } catch {}
+
+      fetch("/api/repertoire-entries/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId, response: rating, timeSpentMs }),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            setFeedback("Error: " + (data.error ?? "review failed"));
+          }
+        })
+        .catch(() => {
+          setFeedback("Error submitting review");
+        });
+    },
+    [],
+  );
+
   // Handle training move - validate against expected move
   const handleTrainingMove = useCallback(
     (move: { from: string; to: string; san: string }): boolean => {
@@ -142,6 +349,16 @@ export default function TrainingClient({
         // Play correct sound
         if (soundEffects) {
           playCorrectSound();
+        }
+
+        // Auto-rate "effort" (Good) for correct plays without Show Answer.
+        // In review mode this finally closes the previously-missing SRS
+        // write for cards the user nailed; in practice mode we still write
+        // for cards that are due so Learn All counts toward SRS. Non-due
+        // practice cards stay a pure refresher.
+        const shouldWriteSRS = !isPracticeMode || currentEntry.isDue;
+        if (shouldWriteSRS) {
+          submitReview(currentEntry.id, "effort", getTimeSpentMs());
         }
 
         // Clear feedback and move to next after delay
@@ -166,12 +383,15 @@ export default function TrainingClient({
 
       return isCorrect;
     },
-    [currentEntry, showingAnswer],
+    [currentEntry, showingAnswer, isPracticeMode, submitReview, getTimeSpentMs],
   );
 
   const handleShowAnswer = () => {
+    // If user was browsing prior moves, snap back to the live position so
+    // the revealed answer is shown on the position they're actually meant
+    // to recall.
+    setPreviewPly(null);
     setShowingAnswer(true);
-    setStreak(0);
 
     // Show the correct move on the board
     if (currentEntry && boardRef.current) {
@@ -214,41 +434,30 @@ export default function TrainingClient({
     }
 
     setFeedbackSquare(null);
+    // Streak counts "remembered well enough" — Good/Easy keep it growing,
+    // Hard/Forgot break it. Show Answer no longer resets on its own; the
+    // rating is the source of truth for whether the user knew the position.
+    if (rating === "easy" || rating === "effort") {
+      setStreak((s) => s + 1);
+    } else {
+      setStreak(0);
+    }
     const timeSpentMs = getTimeSpentMs();
     const entryId = currentEntry.id;
+    const isDue = currentEntry.isDue;
 
     // Advance the UI immediately — the SRS write is server-side bookkeeping
     // and the user shouldn't have to wait for it.
     moveToNextCard();
 
-    if (isPracticeMode) {
+    // Review mode always writes; practice mode writes only for cards that
+    // were due at page load (Learn All shouldn't bump intervals on cards
+    // that weren't yet due — that would defeat the schedule).
+    if (isPracticeMode && !isDue) {
       return;
     }
 
-    // Optimistically notify other UI parts (Home tile) that stats moved.
-    try {
-      window.dispatchEvent(
-        new CustomEvent("training-stats-updated", {
-          detail: { timeSpentMs, positionsReviewed: 1 },
-        }),
-      );
-    } catch {}
-
-    // Fire-and-forget the SRS update. On failure, surface a non-blocking error.
-    fetch("/api/repertoire-entries/review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entryId, response: rating, timeSpentMs }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          setFeedback("Error: " + (data.error ?? "review failed"));
-        }
-      })
-      .catch(() => {
-        setFeedback("Error submitting review");
-      });
+    submitReview(entryId, rating, timeSpentMs);
   };
 
   // Calculate progress
@@ -385,13 +594,57 @@ export default function TrainingClient({
             <Board
               ref={boardRef}
               playerColor={repertoireColor}
-              initialFen={currentEntry?.position.fen}
-              trainingMode={true}
-              showingAnswer={showingAnswer}
+              initialFen={viewFen}
+              trainingMode={!isPreviewing}
+              showingAnswer={showingAnswer && !isPreviewing}
               onTrainingMove={handleTrainingMove}
-              highlightSquare={feedbackSquare}
+              highlightSquare={isPreviewing ? null : feedbackSquare}
             />
           </div>
+
+          {/* Prior-moves navigation arrows. Only shown when the replayed
+              line actually reaches the live position — otherwise the
+              priorMoves we have wouldn't trace back from the entry, and
+              "back" would jump to an unrelated position. */}
+          {chainReachesLive && totalPlies > 0 && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg disabled:opacity-30"
+                onClick={stepBack}
+                disabled={!canStepBack}
+                title="Previous move">
+                <ChevronLeft size={16} />
+              </Button>
+              <span className="text-[11px] text-muted-foreground tabular-nums w-[5rem] text-center">
+                {!isPreviewing
+                  ? "Current"
+                  : previewPly === 0
+                    ? "Start"
+                    : `${previewPly} / ${totalPlies}`}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg disabled:opacity-30"
+                onClick={stepForward}
+                disabled={!canStepForward}
+                title="Next move">
+                <ChevronRight size={16} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-[11px] rounded-lg disabled:opacity-30"
+                onClick={returnToLive}
+                disabled={!isPreviewing}
+                title="Return to current position">
+                <RotateCcw size={12} className="mr-1" />
+                Current
+              </Button>
+            </div>
+          )}
 
           {/* Player Info - Bottom (You) — desktop only. */}
           <div className="hidden lg:flex items-center gap-3 px-1 flex-shrink-0">
@@ -604,6 +857,49 @@ export default function TrainingClient({
               </span>
             </div>
           </div>
+
+          {/* Prior moves — clickable list so the user can jump directly to
+              any ply that led to the current card. Only shown when the
+              line traces all the way to the live position (otherwise the
+              SAN list is partial and misleading). */}
+          {chainReachesLive && totalPlies > 0 && (
+            <div className="glass-card rounded-xl p-3 lg:p-4 mb-4 lg:mb-5 hidden lg:block">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Line so far
+              </p>
+              <div className="font-mono text-xs leading-relaxed max-h-32 overflow-y-auto">
+                {moveListPairs.map((pair) => (
+                  <span key={pair.number} className="mr-2">
+                    <span className="text-muted-foreground">{pair.number}.</span>{" "}
+                    {pair.whiteSan && pair.whitePly !== null && (
+                      <button
+                        type="button"
+                        onClick={() => jumpToPly(pair.whitePly!)}
+                        className={`px-1 rounded hover:bg-primary/15 transition-colors ${
+                          displayedPly === pair.whitePly
+                            ? "bg-primary/25 text-primary"
+                            : "text-foreground"
+                        }`}>
+                        {pair.whiteSan}
+                      </button>
+                    )}{" "}
+                    {pair.blackSan && pair.blackPly !== null && (
+                      <button
+                        type="button"
+                        onClick={() => jumpToPly(pair.blackPly!)}
+                        className={`px-1 rounded hover:bg-primary/15 transition-colors ${
+                          displayedPly === pair.blackPly
+                            ? "bg-primary/25 text-primary"
+                            : "text-foreground"
+                        }`}>
+                        {pair.blackSan}
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Main Action Area — desktop only (mobile uses inline below board) */}
           <div className="hidden lg:flex flex-1 flex-col items-center justify-center">

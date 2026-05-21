@@ -61,6 +61,27 @@ for (const e of entries) {
 const byFen = new Map<string, OpeningMatch>(intermediateFens);
 for (const [k, v] of endFens) byFen.set(k, v);
 
+// FEN → SAN sequence from the standard starting position to that FEN.
+// Built once at module init. The first writer wins, matching how byFen is
+// composed (more-specific openings come first in the dataset), so a
+// transposition resolves to its longest known path. Used by the training
+// page to recover a "line so far" when the repertoire-tree walker's
+// sanMoves don't anchor at the standard start.
+const sanPathByFen = new Map<string, string[]>();
+for (const e of entries) {
+  const moves = e.key ? e.key.split(" ").filter(Boolean) : [];
+  // intermediateFens[i] corresponds to the position after moves[0..i].
+  for (let i = 0; i < e.intermediateFens.length && i < moves.length; i++) {
+    const fen = e.intermediateFens[i];
+    if (!sanPathByFen.has(fen)) {
+      sanPathByFen.set(fen, moves.slice(0, i + 1));
+    }
+  }
+  if (e.endFen && !sanPathByFen.has(e.endFen)) {
+    sanPathByFen.set(e.endFen, moves.slice());
+  }
+}
+
 /**
  * Look up the longest matching opening for a SAN move sequence.
  * Returns null if no prefix matches.
@@ -79,4 +100,14 @@ export function lookupOpening(sanMoves: string[]): OpeningMatch | null {
  */
 export function lookupOpeningByFen(fen: string): OpeningMatch | null {
   return byFen.get(fen) ?? null;
+}
+
+/**
+ * Return the SAN sequence from the standard starting position to the given
+ * FEN, or null when the position isn't on any known opening's path. The
+ * sequence is the canonical mainline from the ECO dataset; transpositions
+ * resolve to the longest stored prefix.
+ */
+export function sanPathToFen(fen: string): string[] | null {
+  return sanPathByFen.get(fen) ?? null;
 }

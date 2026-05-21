@@ -103,12 +103,12 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     // change and animates pieces flying across the board. Computing state
     // during render is React's official pattern for "prop-derived state"
     // and avoids the intermediate frame.
+    //
+    // `lastInitKey` starts as `null` so the very first render always falls
+    // into the sync block — otherwise mounting with non-empty `initialMoves`
+    // (e.g. after Home pushes a buildMove via sessionStorage) silently
+    // skipped the replay and the move was lost.
     const initKey = `${initialFen ?? ""}|${JSON.stringify(initialMoves ?? [])}`;
-    // Sentinel initial value so the sync block fires on the *first* render
-    // too, not only when initialFen later changes. Without this, a Board
-    // mounted with a non-empty initialFen would stay pinned to the standard
-    // starting position because the useState initializer captured the same
-    // initKey we'd be comparing against.
     const [lastInitKey, setLastInitKey] = useState<string | null>(null);
     if (lastInitKey !== initKey) {
       setLastInitKey(initKey);

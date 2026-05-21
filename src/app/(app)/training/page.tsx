@@ -44,10 +44,13 @@ export default async function TrainingPage({
     params.color === "white" || params.color === "black" ? params.color : null;
   const familyFilter = params.family?.trim() ? params.family.trim() : null;
 
-  // We need ALL of a repertoire's entries (not just due ones) to reconstruct
-  // the move tree — opening-name lookup relies on the SAN path from the
-  // standard starting position to each card, which we can only derive by
-  // walking the tree. Due-filtering is applied after enrichment.
+  // We need ALL of a repertoire's entries (including first-move ones) to
+  // reconstruct the move tree — opening-name lookup relies on the SAN path
+  // from the standard starting position to each card, and the SAN of the
+  // parent first-move entry is required to compute the path for its
+  // children. The first-move entries are filtered out *after* the tree is
+  // built (see below) so they don't appear as training cards, but their
+  // SAN contribution is preserved.
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
     select: {
@@ -60,7 +63,6 @@ export default async function TrainingPage({
           id: true,
           color: true,
           entries: {
-            where: { position: { fullmoveNumber: { gt: 1 } } },
             orderBy: { nextReviewDate: "asc" },
             select: {
               id: true,
@@ -71,7 +73,9 @@ export default async function TrainingPage({
               nextReviewDate: true,
               phase: true,
               learningStepIndex: true,
-              position: { select: { id: true, fen: true } },
+              position: {
+                select: { id: true, fen: true, fullmoveNumber: true },
+              },
             },
           },
         },
@@ -95,23 +99,31 @@ export default async function TrainingPage({
       // so the user always drills lines from move 1, not in random SRS order.
       // Review mode then keeps only entries currently due for review;
       // practice mode keeps them all.
+      //
+      // First-move entries (fullmoveNumber=1) are skipped at display time
+      // — they're kept in the tree so child SAN paths include the opener,
+      // but the user shouldn't drill "make your first move from the
+      // standard starting position" as a flash-card.
       const ordered: typeof r.entries = [];
       const visited = new Set<string>();
+      const include = (entry: (typeof r.entries)[number]) => {
+        if (entry.position.fullmoveNumber <= 1) return false;
+        if (dueOnly && entry.nextReviewDate > now) return false;
+        return true;
+      };
       const walk = (node: (typeof roots)[number]) => {
         if (visited.has(node.id)) return;
         visited.add(node.id);
         const entry = entriesById.get(node.id);
-        if (entry) {
-          if (!dueOnly || entry.nextReviewDate <= now) ordered.push(entry);
-        }
+        if (entry && include(entry)) ordered.push(entry);
         for (const c of node.children) walk(c);
       };
       for (const root of roots) walk(root);
       // Defensive sweep: any entry not reachable from a root still gets shown
-      // (filtered by due if applicable) so we never silently drop a card.
+      // (filtered the same way) so we never silently drop a card.
       for (const e of r.entries) {
         if (visited.has(e.id)) continue;
-        if (!dueOnly || e.nextReviewDate <= now) ordered.push(e);
+        if (include(e)) ordered.push(e);
       }
 
       const enrichedEntries = ordered.map((entry) => {

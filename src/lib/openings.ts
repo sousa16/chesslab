@@ -32,54 +32,41 @@ export interface OpeningMatch {
   name: string;
 }
 
-// byKey: exact SAN-path lookup ("e4 c5 Nf3" → match).
-// endFens: positions that *end* a named opening — they win over intermediates.
-// intermediateFens: positions traversed mid-line — used when the user is on
-//   a transposition but not at the canonical end position.
+// Only the SAN-prefix lookup is used by callers. The previous version also
+// built per-FEN end/intermediate maps (~3700 entries × ~10 intermediate
+// FENs each), which dominated module-load CPU on cold serverless
+// invocations for endpoints that import this file — and nothing consumed
+// them. If a by-FEN lookup is reintroduced, rebuild from `entries` lazily
+// behind a memo rather than at module load.
 const byKey = new Map<string, OpeningMatch>();
-const endFens = new Map<string, OpeningMatch>();
-const intermediateFens = new Map<string, OpeningMatch>();
-
 for (const e of entries) {
   byKey.set(e.key, { eco: e.eco, name: e.name });
-  if (e.endFen && !endFens.has(e.endFen)) {
-    endFens.set(e.endFen, { eco: e.eco, name: e.name });
-  }
 }
-
-// "Skip if set" — dataset is pre-sorted longest-first, so collisions on a
-// shared transposition keep the more-specific variation.
-for (const e of entries) {
-  for (const fen of e.intermediateFens) {
-    if (!endFens.has(fen) && !intermediateFens.has(fen)) {
-      intermediateFens.set(fen, { eco: e.eco, name: e.name });
-    }
-  }
-}
-
-// Compose: ends take precedence over intermediates.
-const byFen = new Map<string, OpeningMatch>(intermediateFens);
-for (const [k, v] of endFens) byFen.set(k, v);
 
 // FEN → SAN sequence from the standard starting position to that FEN.
-// Built once at module init. The first writer wins, matching how byFen is
-// composed (more-specific openings come first in the dataset), so a
-// transposition resolves to its longest known path. Used by the training
-// page to recover a "line so far" when the repertoire-tree walker's
-// sanMoves don't anchor at the standard start.
-const sanPathByFen = new Map<string, string[]>();
-for (const e of entries) {
-  const moves = e.key ? e.key.split(" ").filter(Boolean) : [];
-  // intermediateFens[i] corresponds to the position after moves[0..i].
-  for (let i = 0; i < e.intermediateFens.length && i < moves.length; i++) {
-    const fen = e.intermediateFens[i];
-    if (!sanPathByFen.has(fen)) {
-      sanPathByFen.set(fen, moves.slice(0, i + 1));
+// Built lazily on first use so callers that only need byKey don't pay the
+// ~30k-entry Map build at cold start. Used by the training page +
+// repertoireTree to recover a "line so far" when the user's tree root is
+// mid-game (and so the tree's own sans omit the opening prefix).
+let sanPathByFen: Map<string, string[]> | null = null;
+function getSanPathByFen(): Map<string, string[]> {
+  if (sanPathByFen) return sanPathByFen;
+  const map = new Map<string, string[]>();
+  for (const e of entries) {
+    const moves = e.key ? e.key.split(" ").filter(Boolean) : [];
+    // intermediateFens[i] is the position after moves[0..i] is played.
+    for (let i = 0; i < e.intermediateFens.length && i < moves.length; i++) {
+      const fen = e.intermediateFens[i];
+      if (!map.has(fen)) {
+        map.set(fen, moves.slice(0, i + 1));
+      }
+    }
+    if (e.endFen && !map.has(e.endFen)) {
+      map.set(e.endFen, moves.slice());
     }
   }
-  if (e.endFen && !sanPathByFen.has(e.endFen)) {
-    sanPathByFen.set(e.endFen, moves.slice());
-  }
+  sanPathByFen = map;
+  return map;
 }
 
 /**
@@ -95,19 +82,11 @@ export function lookupOpening(sanMoves: string[]): OpeningMatch | null {
 }
 
 /**
- * Look up the opening that matches exactly at this FEN. Returns null when
- * the position isn't part of any named opening's path.
- */
-export function lookupOpeningByFen(fen: string): OpeningMatch | null {
-  return byFen.get(fen) ?? null;
-}
-
-/**
  * Return the SAN sequence from the standard starting position to the given
  * FEN, or null when the position isn't on any known opening's path. The
  * sequence is the canonical mainline from the ECO dataset; transpositions
  * resolve to the longest stored prefix.
  */
 export function sanPathToFen(fen: string): string[] | null {
-  return sanPathByFen.get(fen) ?? null;
+  return getSanPathByFen().get(fen) ?? null;
 }

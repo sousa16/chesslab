@@ -145,7 +145,11 @@ export function buildRepertoireTree(
   }
 
   // Link parents to children by playing the user's move and then enumerating
-  // every legal opponent reply that lands on a saved position.
+  // every legal opponent reply that lands on a saved position. The probe
+  // game is reused across replies via play/undo so we don't allocate a
+  // fresh Chess instance for each of the ~30 legal moves per entry —
+  // matters for users with large repertoires because this loop dominates
+  // endpoint latency for both /api/repertoires and /api/training-stats.
   for (const list of nodesByFen.values()) {
     for (const parent of list) {
       let postUserFen: string;
@@ -159,11 +163,13 @@ export function buildRepertoireTree(
       }
 
       const probe = new Chess(postUserFen);
+      const replies = probe.moves({ verbose: true });
       const seen = new Set<string>();
-      for (const reply of probe.moves({ verbose: true })) {
-        const next = new Chess(postUserFen);
-        next.move(reply.san);
-        const childList = nodesByFen.get(next.fen());
+      for (const reply of replies) {
+        probe.move(reply.san);
+        const childFen = probe.fen();
+        probe.undo();
+        const childList = nodesByFen.get(childFen);
         if (!childList) continue;
         for (const child of childList) {
           if (seen.has(child.id)) continue;
@@ -230,10 +236,12 @@ export function buildRepertoireTree(
 
   const findOpeningWhiteMove = (targetFen: string): string | null => {
     const probe = new Chess(STARTING_FEN);
-    for (const mv of probe.moves({ verbose: true })) {
-      const t = new Chess(STARTING_FEN);
-      t.move(mv.san);
-      if (t.fen() === targetFen) return mv.san;
+    const moves = probe.moves({ verbose: true });
+    for (const mv of moves) {
+      probe.move(mv.san);
+      const fen = probe.fen();
+      probe.undo();
+      if (fen === targetFen) return mv.san;
     }
     return null;
   };

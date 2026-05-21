@@ -15,6 +15,74 @@
  */
 
 import { Chess } from "chess.js";
+import { sanPathToFen } from "./openings";
+
+// Compare FENs ignoring halfmove clock and fullmove number — those fields
+// can drift between repertoire-tree replay and stored FEN even when the
+// position itself is identical.
+function fenKey(fen: string | null | undefined): string {
+  if (!fen) return "";
+  return fen.split(" ").slice(0, 4).join(" ");
+}
+
+function replayToTarget(
+  startFen: string | undefined,
+  sans: string[],
+  targetFen: string,
+): string[] | null {
+  try {
+    const g = startFen ? new Chess(startFen) : new Chess();
+    const targetKey = fenKey(targetFen);
+    if (fenKey(g.fen()) === targetKey) return [];
+    const played: string[] = [];
+    for (const san of sans) {
+      const move = g.move(san);
+      if (!move) return null;
+      played.push(san);
+      if (fenKey(g.fen()) === targetKey) return played;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Resolve the SAN move sequence from the standard starting position to a
+ * given repertoire-tree entry. Tries three sources in order:
+ *
+ *   1. Replay the tree's own `sanMoves` from the start — works when the
+ *      user's tree extends all the way back to move 0.
+ *   2. Prepend the ECO mainline path to the tree's `rootFen`, then layer
+ *      the tree's sans — works when the tree root sits mid-game on a
+ *      known opening line (e.g., a Caro-Kann entry whose tree starts at
+ *      "after 1.e4 c6" because there's no earlier entry).
+ *   3. ECO direct lookup of the position FEN — last-resort match for
+ *      positions that happen to sit exactly on a named opening's path.
+ *
+ * Returns [] when nothing anchors cleanly so callers can hide navigation
+ * and avoid showing a misleading partial line.
+ */
+export function anchorSansToStart(
+  treeSans: string[],
+  positionFen: string,
+  rootFen: string,
+): string[] {
+  const fromStart = replayToTarget(undefined, treeSans, positionFen);
+  if (fromStart) return fromStart;
+
+  const ecoToRoot = sanPathToFen(rootFen);
+  if (ecoToRoot && ecoToRoot.length > 0) {
+    const combined = [...ecoToRoot, ...treeSans];
+    const fromStartWithEco = replayToTarget(undefined, combined, positionFen);
+    if (fromStartWithEco) return fromStartWithEco;
+  }
+
+  const ecoDirect = sanPathToFen(positionFen);
+  if (ecoDirect) return ecoDirect;
+
+  return [];
+}
 
 const STARTING_FEN =
   "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -31,7 +99,13 @@ export interface RepertoireTreeNode {
   expectedMove: string; // UCI
   opponentMove?: string; // UCI; the move that bridges from a parent's
   //                       post-user-move position to this node's position
-  sanMoves: string[]; // SAN path from the standard start through this node
+  sanMoves: string[]; // SAN path from this node's tree root through this node
+  // FEN of the deepest ancestor reachable from this node in the user's
+  // tree. When the tree root is the standard starting position, sanMoves
+  // is anchored at the start. When it's mid-game (the user has no entry at
+  // a shallower position), callers can derive a full-from-start path by
+  // prepending the canonical moves leading to rootFen.
+  rootFen: string;
   children: RepertoireTreeNode[];
 }
 
@@ -60,6 +134,7 @@ export function buildRepertoireTree(
       fen: entry.position.fen,
       expectedMove: entry.expectedMove,
       sanMoves: [],
+      rootFen: entry.position.fen,
       children: [],
     };
     byEntryId.set(entry.id, node);
@@ -126,6 +201,7 @@ export function buildRepertoireTree(
     node: RepertoireTreeNode,
     parentSans: string[],
     parentGame: Chess,
+    rootFen: string,
   ) => {
     const game = new Chess(parentGame.fen());
     const sans = [...parentSans];
@@ -154,7 +230,8 @@ export function buildRepertoireTree(
     }
 
     node.sanMoves = sans;
-    for (const child of node.children) walk(child, sans, game);
+    node.rootFen = rootFen;
+    for (const child of node.children) walk(child, sans, game, rootFen);
   };
 
   const findOpeningWhiteMove = (targetFen: string): string | null => {
@@ -190,7 +267,8 @@ export function buildRepertoireTree(
     }
 
     root.sanMoves = sans;
-    for (const child of root.children) walk(child, sans, game);
+    root.rootFen = root.fen;
+    for (const child of root.children) walk(child, sans, game, root.fen);
   }
 
   return { roots, byEntryId };

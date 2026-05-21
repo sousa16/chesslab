@@ -9,6 +9,8 @@ import {
   BookOpen,
   Flame,
   Zap,
+  Compass,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -511,6 +513,70 @@ export function HomePanel({
                 </div>
                 <p className="text-xs lg:text-sm text-muted-foreground mt-0.5 lg:mt-1">
                   Mates, motifs, middlegame & endgame puzzles
+                </p>
+              </div>
+              <ChevronRight
+                size={16}
+                className="text-muted-foreground group-hover:translate-x-1 transition-transform duration-200 flex-shrink-0"
+              />
+            </div>
+          </button>
+        </section>
+
+        {/* Explorer */}
+        <section>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 lg:mb-3">
+            Explorer
+          </h3>
+          <button
+            onClick={() => router.push("/explorer")}
+            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
+            <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="relative flex items-center gap-3 lg:gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-emerald-500/30 rounded-lg lg:rounded-xl blur-lg group-hover:bg-emerald-500/40 transition-all duration-300" />
+                <div className="relative w-12 h-12 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 flex items-center justify-center shadow-lg border border-emerald-400/50">
+                  <Compass size={22} className="text-white drop-shadow-sm" />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm lg:text-base font-semibold text-foreground">
+                  Repertoire Explorer
+                </p>
+                <p className="text-xs lg:text-sm text-muted-foreground mt-0.5 lg:mt-1">
+                  Replay games and see where lines leave your repertoire
+                </p>
+              </div>
+              <ChevronRight
+                size={16}
+                className="text-muted-foreground group-hover:translate-x-1 transition-transform duration-200 flex-shrink-0"
+              />
+            </div>
+          </button>
+        </section>
+
+        {/* Stats */}
+        <section>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 lg:mb-3">
+            Stats
+          </h3>
+          <button
+            onClick={() => router.push("/stats")}
+            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
+            <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-amber-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="relative flex items-center gap-3 lg:gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-amber-500/30 rounded-lg lg:rounded-xl blur-lg group-hover:bg-amber-500/40 transition-all duration-300" />
+                <div className="relative w-12 h-12 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 flex items-center justify-center shadow-lg border border-amber-400/50">
+                  <BarChart3 size={22} className="text-white drop-shadow-sm" />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm lg:text-base font-semibold text-foreground">
+                  Stats
+                </p>
+                <p className="text-xs lg:text-sm text-muted-foreground mt-0.5 lg:mt-1">
+                  Mastery and weak spots, per opening and tactics theme
                 </p>
               </div>
               <ChevronRight

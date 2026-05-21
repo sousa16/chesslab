@@ -28,6 +28,10 @@ interface BoardProps {
   ) => void;
   buildMode?: boolean;
   onBuildMove?: (move: { from: string; to: string }) => void;
+  // Fires when the displayed move index changes (history navigation or
+  // playing a new move). Pass a memoized callback to avoid re-render
+  // loops; the prop is read inside a useEffect that depends on it.
+  onMoveIndexChange?: (index: number) => void;
   initialMoves?: string[];
   initialFen?: string;
   trainingMode?: boolean;
@@ -47,6 +51,10 @@ export interface BoardHandle {
   goToPrevious: () => void;
   goToNext: () => void;
   goToLast: () => void;
+  // Jump to a specific ply. -1 = starting position (before any move),
+  // 0..moveHistory.length-1 = position after that many moves. Used by
+  // the explorer's clickable move list.
+  goToMove: (index: number) => void;
   reset: () => void;
   getMoveHistory: () => {
     number: number;
@@ -68,6 +76,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       onMovesUpdated,
       buildMode = false,
       onBuildMove,
+      onMoveIndexChange,
       initialMoves = [],
       initialFen,
       trainingMode = false,
@@ -185,6 +194,10 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     useEffect(() => {
       onMovesUpdated?.(pairedMoves);
     }, [pairedMoves, onMovesUpdated]);
+
+    useEffect(() => {
+      onMoveIndexChange?.(currentMoveIndex);
+    }, [currentMoveIndex, onMoveIndexChange]);
 
     const handleSquareClick = (square: string) => {
       // Disable square selection outside of training or build mode
@@ -490,6 +503,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       goToPrevious,
       goToNext,
       goToLast,
+      goToMove,
       reset,
       getMoveHistory,
       deleteToMove,

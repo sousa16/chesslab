@@ -4,7 +4,7 @@ import { PieceColor, Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { lookupOpening } from "@/lib/openings";
-import { buildRepertoireTree } from "@/lib/repertoireTree";
+import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
 
 /**
  * GET /api/repertoires?color=white|black
@@ -135,14 +135,25 @@ export async function GET(request: NextRequest) {
     }
 
     const decorate = (built: (typeof builtRoots)[number]): LineNode => {
-      const match = lookupOpening(built.sanMoves);
+      // Anchor the SAN list at the standard starting position before
+      // looking up the opening name, so a mid-game-rooted tree (e.g., a
+      // Caro-Kann sub-tree without an entry at "after 1.e4 c6") gets
+      // named "Caro-Kann Defense" rather than "Queen's Pawn Game".
+      const anchoredSans = anchorSansToStart(
+        built.sanMoves,
+        built.fen,
+        built.rootFen,
+      );
+      const displaySans =
+        anchoredSans.length > 0 ? anchoredSans : built.sanMoves;
+      const match = lookupOpening(displaySans);
       return {
         id: built.id,
         fen: built.fen,
         expectedMove: built.expectedMove,
-        moveNumber: Math.ceil(built.sanMoves.length / 2),
-        displaySequence: formatSanSequence(built.sanMoves),
-        sanMoves: built.sanMoves,
+        moveNumber: Math.ceil(displaySans.length / 2),
+        displaySequence: formatSanSequence(displaySans),
+        sanMoves: displaySans,
         openingName: match?.name ?? null,
         openingEco: match?.eco ?? null,
         children: built.children.map(decorate),

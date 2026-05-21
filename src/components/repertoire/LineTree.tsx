@@ -31,6 +31,7 @@ interface LineTreeProps {
   root: LineNode;
   onBuild: (nodeId: string, fen?: string, sanMoves?: string[]) => void;
   onLearn: (nodeId: string) => void;
+  onLearnFamily?: (family: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (
     moves: string[],
@@ -71,6 +72,7 @@ export function LineTree({
   root,
   onBuild,
   onLearn,
+  onLearnFamily,
   onDelete,
   onLineClick,
   onRefresh,
@@ -108,6 +110,7 @@ export function LineTree({
           lines={lines}
           onBuild={onBuild}
           onLearn={onLearn}
+          onLearnFamily={onLearnFamily}
           onDelete={onDelete}
           onLineClick={onLineClick}
           onRefresh={onRefresh}
@@ -122,6 +125,7 @@ interface FamilyGroupProps {
   lines: LineNode[];
   onBuild: (nodeId: string, fen?: string, sanMoves?: string[]) => void;
   onLearn: (nodeId: string) => void;
+  onLearnFamily?: (family: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (
     moves: string[],
@@ -136,6 +140,7 @@ function FamilyGroup({
   lines,
   onBuild,
   onLearn,
+  onLearnFamily,
   onDelete,
   onLineClick,
   onRefresh,
@@ -169,23 +174,39 @@ function FamilyGroup({
 
   return (
     <div className="glass-card rounded-xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-2 p-3 text-left hover:bg-surface-2/40 transition-colors"
+      <div
+        className="w-full flex items-center gap-2 p-3 text-left hover:bg-surface-2/40 transition-colors group"
         aria-expanded={expanded}>
-        {expanded ? (
-          <ChevronDown size={14} className="text-muted-foreground flex-shrink-0" />
-        ) : (
-          <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
-        )}
-        <p className="text-sm font-semibold text-foreground flex-1 truncate">
-          {family}
-        </p>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer">
+          {expanded ? (
+            <ChevronDown size={14} className="text-muted-foreground flex-shrink-0" />
+          ) : (
+            <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
+          )}
+          <p className="text-sm font-semibold text-foreground flex-1 truncate">
+            {family}
+          </p>
+        </button>
         <span className="flex-shrink-0 text-xs text-muted-foreground tabular-nums">
           {lines.length} {lines.length === 1 ? "line" : "lines"}
         </span>
-      </button>
+        {onLearnFamily && family !== UNFAMILIED_LABEL && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 rounded-lg hover:bg-primary/15 hover:text-primary flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              onLearnFamily(family);
+            }}
+            title={`Practice ${family}`}>
+            <GraduationCap size={13} />
+          </Button>
+        )}
+      </div>
 
       {expanded && (
         <div className="px-2 pb-2 border-t border-border/30 pt-1">

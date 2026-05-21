@@ -33,6 +33,7 @@ interface RepertoirePanelProps {
     sanMoves?: string[],
   ) => void;
   onLearn: (openingId?: string, lineId?: string) => void;
+  onLearnFamily?: (family: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
   onLineClick?: (
     moves: string[],
@@ -46,6 +47,7 @@ export function RepertoirePanel({
   onBack,
   onBuild,
   onLearn,
+  onLearnFamily,
   onDelete,
   onLineClick,
 }: RepertoirePanelProps) {
@@ -170,6 +172,7 @@ export function RepertoirePanel({
                 onBuild(undefined, nodeId, fen, sanMoves)
               }
               onLearn={(nodeId) => onLearn(undefined, nodeId)}
+              onLearnFamily={onLearnFamily}
               onDelete={handleDeleteEntry}
               onLineClick={onLineClick}
               onRefresh={fetchRepertoire}

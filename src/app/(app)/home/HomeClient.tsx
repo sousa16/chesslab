@@ -118,6 +118,12 @@ export default function HomeClient() {
     router.push(`/training?mode=practice&color=${selectedColor}`);
   };
 
+  const handleLearnFamily = (family: string) => {
+    router.push(
+      `/training?mode=practice&color=${selectedColor}&family=${encodeURIComponent(family)}`,
+    );
+  };
+
   const handleLineClick = (
     moves: string[],
     openingName: string | null,
@@ -288,6 +294,7 @@ export default function HomeClient() {
             onBack={handleBack}
             onBuild={handleBuild}
             onLearn={handleLearn}
+            onLearnFamily={handleLearnFamily}
             onDelete={handleDelete}
             onLineClick={handleLineClick}
           />

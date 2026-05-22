@@ -82,37 +82,59 @@ export default function TacticsClient() {
   const [streak, setStreak] = useState(0);
   const cardStartRef = useRef<number>(Date.now());
   const boardRef = useRef<PuzzleBoardHandle | null>(null);
+  // Holds an in-flight fetch for the puzzle the user will see *after* the
+  // one currently on screen. Populated by the effect below whenever a new
+  // puzzle lands; consumed (or cleared) in handleRate and updatePrefs.
+  const prefetchRef = useRef<Promise<NextPuzzleResponse | null> | null>(null);
 
   const handleBack = () => {
     router.push("/home");
   };
 
-  const loadNext = useCallback(async (excludeId?: string) => {
-    try {
-      const url = excludeId
-        ? `/api/puzzles/next?exclude=${encodeURIComponent(excludeId)}`
-        : "/api/puzzles/next";
-      const res = await fetch(url);
-      if (!res.ok) {
-        console.error("Failed to fetch next puzzle");
-        return;
+  const fetchNext = useCallback(
+    async (excludeId?: string): Promise<NextPuzzleResponse | null> => {
+      try {
+        const url = excludeId
+          ? `/api/puzzles/next?exclude=${encodeURIComponent(excludeId)}`
+          : "/api/puzzles/next";
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        return (await res.json()) as NextPuzzleResponse;
+      } catch (err) {
+        console.error(err);
+        return null;
       }
-      const data: NextPuzzleResponse = await res.json();
-      // Swap puzzle + reset reveal atomically. Flipping `revealed` before
-      // the new puzzle is in state would briefly show the previous puzzle's
-      // (already-played) board paired with the "Show Answer" button.
-      setPuzzle(data.puzzle);
-      setReview(data.review);
-      setDueCount(data.dueCount);
-      setEmpty(data.puzzle === null);
-      setRevealed(false);
-      cardStartRef.current = Date.now();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
+    },
+    [],
+  );
+
+  const applyNext = useCallback((data: NextPuzzleResponse | null) => {
+    if (!data) return;
+    // Swap puzzle + reset reveal atomically. Flipping `revealed` before
+    // the new puzzle is in state would briefly show the previous puzzle's
+    // (already-played) board paired with the "Show Answer" button.
+    setPuzzle(data.puzzle);
+    setReview(data.review);
+    setDueCount(data.dueCount);
+    setEmpty(data.puzzle === null);
+    setRevealed(false);
+    cardStartRef.current = Date.now();
   }, []);
+
+  const loadNext = useCallback(
+    async (excludeId?: string) => {
+      // Any in-flight prefetch is now stale — the caller wants a fresh
+      // pull (filters changed, initial load, etc.).
+      prefetchRef.current = null;
+      try {
+        const data = await fetchNext(excludeId);
+        applyNext(data);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [fetchNext, applyNext],
+  );
 
   // Initial fetch: prefs + first puzzle in parallel.
   useEffect(() => {
@@ -128,6 +150,19 @@ export default function TacticsClient() {
       }
     })();
   }, [loadNext]);
+
+  // Prefetch the next puzzle in the background as soon as the current one
+  // lands, so that when the user rates we can swap to it instantly instead
+  // of awaiting the GET. The exclude is the current puzzle id — the server
+  // already filters that out, so the prefetched response is still valid
+  // after we commit the review.
+  useEffect(() => {
+    if (!puzzle || empty) {
+      prefetchRef.current = null;
+      return;
+    }
+    prefetchRef.current = fetchNext(puzzle.id);
+  }, [puzzle?.id, empty, fetchNext]);
 
   const handleShowAnswer = () => {
     setRevealed(true);
@@ -195,9 +230,7 @@ export default function TacticsClient() {
     } catch {}
 
     // Fire-and-forget: don't make the user wait for the SRS write to finish
-    // before the next puzzle appears. To avoid the GET racing ahead of the
-    // PuzzleReview commit and serving the same puzzle back, pass the
-    // just-rated id as an exclude.
+    // before the next puzzle appears.
     const ratedId = puzzle.id;
     fetch("/api/puzzles/review", {
       method: "POST",
@@ -210,7 +243,20 @@ export default function TacticsClient() {
       }),
     }).catch((err) => console.error(err));
 
-    loadNext(ratedId);
+    // Consume the prefetched next puzzle if it's ready (or about to be).
+    // When the GET races ahead of the review commit the `exclude=ratedId`
+    // we sent on prefetch keeps the same puzzle from being served back.
+    const pending = prefetchRef.current;
+    prefetchRef.current = null;
+    if (pending) {
+      pending
+        .then((data) => {
+          applyNext(data);
+        })
+        .finally(() => setSubmitting(false));
+    } else {
+      loadNext(ratedId);
+    }
   };
 
   const updatePrefs = async (patch: Partial<Prefs>) => {

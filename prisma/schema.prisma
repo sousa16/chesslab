@@ -72,7 +72,6 @@ model Position {
   createdAt         DateTime          @default(now())
   repertoireEntries RepertoireEntry[]
 
-  @@index([fen])
   @@index([fullmoveNumber])
 }
 
@@ -127,6 +126,7 @@ model RepertoireEntry {
   @@index([openingId])
   @@index([positionId])
   @@index([nextReviewDate])
+  @@index([repertoireId, nextReviewDate])
 }
 
 model DailyActivity {
@@ -144,6 +144,7 @@ model DailyActivity {
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
+  @@index([userId, date])
 }
 
 model Puzzle {
@@ -159,7 +160,8 @@ model Puzzle {
   reviews    PuzzleReview[]
 
   @@index([rating])
-  @@index([categories])
+  @@index([categories(ops: ArrayOps)], type: Gin)
+  @@index([themes(ops: ArrayOps)], type: Gin)
 }
 
 model PuzzleReview {
@@ -182,6 +184,7 @@ model PuzzleReview {
   @@index([userId])
   @@index([puzzleId])
   @@index([nextReviewDate])
+  @@index([userId, nextReviewDate])
 }
 
 model UserPuzzlePrefs {

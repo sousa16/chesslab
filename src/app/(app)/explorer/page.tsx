@@ -6,7 +6,7 @@ import ExplorerClient from "@/components/ExplorerClient";
 export default async function ExplorerPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     return <div>Please sign in to access the explorer</div>;
   }
 
@@ -14,29 +14,20 @@ export default async function ExplorerPage() {
   // builds a fen → expectedMove map locally and looks up each ply as the
   // game is replayed, so we ship the minimal projection: color + positionFen
   // + expectedMove. No SRS columns are needed here.
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+  const repertoiresRaw = await prisma.repertoire.findMany({
+    where: { userId: session.user.id },
     select: {
-      id: true,
-      repertoires: {
+      color: true,
+      entries: {
         select: {
-          color: true,
-          entries: {
-            select: {
-              expectedMove: true,
-              position: { select: { fen: true } },
-            },
-          },
+          expectedMove: true,
+          position: { select: { fen: true } },
         },
       },
     },
   });
 
-  if (!user) {
-    return <div>User not found</div>;
-  }
-
-  const repertoires = user.repertoires.map((r) => ({
+  const repertoires = repertoiresRaw.map((r) => ({
     color: r.color === "White" ? ("white" as const) : ("black" as const),
     entries: r.entries.map((e) => ({
       fen: e.position.fen,

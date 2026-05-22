@@ -22,17 +22,10 @@ async function getOrCreatePrefs(userId: string) {
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-    const prefs = await getOrCreatePrefs(user.id);
+    const prefs = await getOrCreatePrefs(session.user.id);
     return NextResponse.json({
       ratingMin: prefs.ratingMin,
       ratingMax: prefs.ratingMax,
@@ -47,16 +40,10 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    const userId = session.user.id;
 
     const body = await request.json();
     const data: {
@@ -94,9 +81,9 @@ export async function PATCH(request: NextRequest) {
       data.enabledCategories = valid;
     }
 
-    await getOrCreatePrefs(user.id);
+    await getOrCreatePrefs(userId);
     const prefs = await prisma.userPuzzlePrefs.update({
-      where: { userId: user.id },
+      where: { userId },
       data,
     });
     return NextResponse.json({

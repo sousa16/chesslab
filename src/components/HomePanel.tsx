@@ -18,6 +18,8 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useTransition } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
+import { getCachedStats, setCachedStats } from "@/lib/statsCache";
+import type { TrainingStats as ServerTrainingStats } from "@/lib/trainingStats";
 
 interface ColorStats {
   // Counts are in LINES (= deepest saved position per branch), aligned with
@@ -153,12 +155,17 @@ export function HomePanel({
     positions: 0,
     percentage: 0,
   });
+  // Seed from the cross-route cache so coming back to /home from /tactics
+  // (etc.) renders real numbers immediately while a background fetch
+  // revalidates. The cache is populated by every successful fetchStats.
+  const cachedInitial = getCachedStats();
   const [trainingStats, setTrainingStats] = useState<TrainingStats | null>(
-    null,
+    cachedInitial,
   );
-  const [positionsReviewedToday, setPositionsReviewedToday] =
-    useState<number>(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [positionsReviewedToday, setPositionsReviewedToday] = useState<number>(
+    cachedInitial?.positionsReviewedToday ?? 0,
+  );
+  const [isLoading, setIsLoading] = useState(!cachedInitial);
 
   const onStartPractice = () => {
     if (isStartingPractice) return;
@@ -172,10 +179,13 @@ export function HomePanel({
       // Fetch training stats (due cards, total positions, learned count)
       const trainingRes = await fetch("/api/training-stats");
       if (trainingRes.ok) {
-        const trainingData = await trainingRes.json();
+        const trainingData = (await trainingRes.json()) as ServerTrainingStats;
         setTrainingStats(trainingData);
+        setCachedStats(trainingData);
         // Initialize positions reviewed counter from API
         setPositionsReviewedToday(trainingData.positionsReviewedToday ?? 0);
+      } else if (trainingRes.status === 304) {
+        // Etag match — the existing state is still valid.
       } else {
         console.error("Training stats fetch failed:", trainingRes.status);
       }
@@ -235,48 +245,18 @@ export function HomePanel({
       );
   }, []);
 
-  // Periodically poll while the user is signed in and page is visible
+  // Refetch when the tab becomes visible again (e.g. after returning from
+  // practice). The `training-stats-updated` event already covers the hot
+  // path of "just finished a review", so we don't poll on a timer.
   useEffect(() => {
     if (!session?.user) return;
-
-    let intervalId: number | undefined;
-
-    const startPolling = () => {
-      // Poll every 60 seconds; the training-stats-updated event handles immediate
-      // updates after a session ends, so high-frequency polling isn't needed
-      intervalId = window.setInterval(() => {
-        if (document.visibilityState === "visible") {
-          fetchStats();
-        }
-      }, 60_000);
-    };
-
-    startPolling();
-
     const handleVisibility = () => {
       if (document.visibilityState === "visible") fetchStats();
     };
-
     document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      if (intervalId) window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [session?.user]);
-
-  // Refetch stats when page becomes visible (after returning from practice)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchStats();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, []);
+      document.removeEventListener("visibilitychange", handleVisibility);
+  }, [session?.user]);
 
   // Per-color mastery percentage = mastered LINES / total LINES.
   const whitePercentage = trainingStats?.colorStats?.white?.total
@@ -299,7 +279,13 @@ export function HomePanel({
   const blackLineCount =
     trainingStats?.colorStats?.black?.total ?? blackStats.positions;
 
-  // Estimate practice time (roughly 15 seconds per position)
+  // While the first stats fetch is in flight we render an ellipsis
+  // placeholder so the dashboard never flashes "0" before the real values
+  // arrive. `pending` is true on every cold load (login or back-from-
+  // tactics nav); the visibility-change refetch reuses the stale data so
+  // post-load refreshes don't blank out.
+  const pending = trainingStats === null;
+  const dash = "…";
   const dueCount = trainingStats?.dueCount ?? 0;
   const estimatedMinutes = Math.max(1, Math.ceil((dueCount * 15) / 60));
 
@@ -309,10 +295,7 @@ export function HomePanel({
     (trainingStats?.colorStats?.black?.mastered ?? 0);
 
   // Display positions reviewed today (no overlap with "lines learned")
-  const displayedPositions = (() => {
-    const count = positionsReviewedToday;
-    return count;
-  })();
+  const displayedPositions = positionsReviewedToday;
 
   return (
     <div className="h-full flex flex-col">
@@ -342,7 +325,7 @@ export function HomePanel({
           <div className="flex items-start justify-between mb-3 lg:mb-4">
             <div>
               <p className="text-3xl lg:text-4xl font-bold text-foreground tracking-tight">
-                {dueCount}
+                {pending ? dash : dueCount}
               </p>
               <p className="text-sm lg:text-base text-muted-foreground mt-1">
                 moves to practice
@@ -352,7 +335,8 @@ export function HomePanel({
               <div className="inline-flex items-center gap-1 lg:gap-1.5 px-2 lg:px-2.5 py-1 rounded-full bg-primary/15 text-primary text-xs lg:text-sm font-medium">
                 <Clock size={12} className="lg:hidden" />
                 <Clock size={14} className="hidden lg:block" />
-                {dueCount === 0 ? "0" : `~${estimatedMinutes}`} min
+                {pending ? dash : dueCount === 0 ? "0" : `~${estimatedMinutes}`}{" "}
+                min
               </div>
             </div>
           </div>
@@ -402,13 +386,15 @@ export function HomePanel({
                     </span>
                   </div>
                   <p className="text-xs lg:text-sm text-muted-foreground mt-0.5 lg:mt-1">
-                    {whiteLineCount} {whiteLineCount === 1 ? "line" : "lines"}
+                    {pending
+                      ? dash
+                      : `${whiteLineCount} ${whiteLineCount === 1 ? "line" : "lines"}`}
                   </p>
                   {/* Progress bar */}
                   <div className="mt-2 lg:mt-3 h-1 lg:h-1.5 bg-zinc-700/50 rounded-full overflow-hidden w-full">
                     <div
                       className="h-full bg-gradient-to-r from-zinc-400 to-white rounded-full transition-all duration-500"
-                      style={{ width: `${whitePercentage}%` }}
+                      style={{ width: pending ? "0%" : `${whitePercentage}%` }}
                     />
                   </div>
                 </div>
@@ -416,7 +402,7 @@ export function HomePanel({
                 {/* Percentage and arrow */}
                 <div className="flex flex-col items-end gap-0.5 lg:gap-1 flex-shrink-0 w-12 lg:w-14">
                   <span className="text-xl lg:text-2xl font-bold text-foreground whitespace-nowrap">
-                    {whitePercentage}%
+                    {pending ? dash : `${whitePercentage}%`}
                   </span>
                   <div className="flex items-center gap-1 text-[10px] lg:text-xs text-muted-foreground group-hover:text-primary transition-colors">
                     <span>Edit</span>
@@ -458,13 +444,15 @@ export function HomePanel({
                     </span>
                   </div>
                   <p className="text-xs lg:text-sm text-muted-foreground mt-0.5 lg:mt-1">
-                    {blackLineCount} {blackLineCount === 1 ? "line" : "lines"}
+                    {pending
+                      ? dash
+                      : `${blackLineCount} ${blackLineCount === 1 ? "line" : "lines"}`}
                   </p>
                   {/* Progress bar */}
                   <div className="mt-2 lg:mt-3 h-1 lg:h-1.5 bg-zinc-700/50 rounded-full overflow-hidden w-full">
                     <div
                       className="h-full bg-gradient-to-r from-zinc-600 to-zinc-400 rounded-full transition-all duration-500"
-                      style={{ width: `${blackPercentage}%` }}
+                      style={{ width: pending ? "0%" : `${blackPercentage}%` }}
                     />
                   </div>
                 </div>
@@ -472,7 +460,7 @@ export function HomePanel({
                 {/* Percentage and arrow */}
                 <div className="flex flex-col items-end gap-0.5 lg:gap-1 flex-shrink-0 w-12 lg:w-14">
                   <span className="text-xl lg:text-2xl font-bold text-foreground whitespace-nowrap">
-                    {blackPercentage}%
+                    {pending ? dash : `${blackPercentage}%`}
                   </span>
                   <div className="flex items-center gap-1 text-[10px] lg:text-xs text-muted-foreground group-hover:text-primary transition-colors">
                     <span>Edit</span>
@@ -639,7 +627,7 @@ export function HomePanel({
                 </div>
               </div>
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
-                {trainingStats?.streak ?? 0}
+                {pending ? dash : (trainingStats?.streak ?? 0)}
               </p>
               <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">
                 day streak
@@ -654,7 +642,7 @@ export function HomePanel({
                 </div>
               </div>
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
-                {trainingStats?.accuracy ?? 0}%
+                {pending ? dash : `${trainingStats?.accuracy ?? 0}%`}
               </p>
               <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">
                 accuracy
@@ -672,7 +660,7 @@ export function HomePanel({
                 </div>
               </div>
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
-                {totalMastered}
+                {pending ? dash : totalMastered}
               </p>
               <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">
                 lines learned
@@ -690,7 +678,7 @@ export function HomePanel({
                 </div>
               </div>
               <p className="text-xl lg:text-2xl font-bold text-foreground tracking-tight">
-                {displayedPositions}
+                {pending ? dash : displayedPositions}
               </p>
               <p className="text-[10px] lg:text-xs text-muted-foreground mt-0.5">
                 reviews today

@@ -9,6 +9,7 @@ import {
   ActionButton,
 } from "@/components/repertoire";
 import { LineTree } from "@/components/repertoire/LineTree";
+import { useToast } from "@/components/ui/toast";
 
 interface LineNode {
   id: string;
@@ -48,11 +49,11 @@ export function RepertoirePanel({
   onBuild,
   onLearn,
   onLearnFamily,
-  onDelete,
   onLineClick,
 }: RepertoirePanelProps) {
   const [rootNode, setRootNode] = useState<LineNode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const toast = useToast();
 
   const fetchRepertoire = useCallback(async () => {
     try {
@@ -72,6 +73,58 @@ export function RepertoirePanel({
     fetchRepertoire();
   }, [fetchRepertoire]);
 
+  // BuildClient navigates back optimistically (before the save POST
+  // commits), so the initial fetch above can race ahead of the new
+  // entries. The save handler dispatches `training-stats-updated` when
+  // its response lands; we refetch in response. The event is shared with
+  // review writes (TrainingClient), which carry a `positionsReviewed`
+  // detail — those don't change the tree shape, so we ignore them here.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ positionsReviewed?: number }>).detail;
+      if (detail && typeof detail.positionsReviewed === "number") return;
+      fetchRepertoire();
+    };
+    window.addEventListener(
+      "training-stats-updated",
+      handler as EventListener,
+    );
+    return () =>
+      window.removeEventListener(
+        "training-stats-updated",
+        handler as EventListener,
+      );
+  }, [fetchRepertoire]);
+
+  // Delete every entry under a family (e.g. "Caro-Kann Defense") in one
+  // request, then refresh so the panel reflects the new state. Mirrors
+  // the existing per-line delete but acts on a family-shaped bucket.
+  const handleDeleteFamily = async (family: string): Promise<void> => {
+    try {
+      const response = await fetch(`/api/repertoire-entries/family`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color, family }),
+      });
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const count = data?.deletedCount ?? 0;
+        toast.success(
+          count > 0
+            ? `Deleted ${count} position${count === 1 ? "" : "s"} under "${family}".`
+            : `Nothing to delete under "${family}".`,
+        );
+        fetchRepertoire();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data?.error || "Couldn't delete the family.");
+      }
+    } catch (error) {
+      console.error("Error deleting family:", error);
+      toast.error("Network error deleting the family.");
+    }
+  };
+
   // Delete an entry and refresh
   const handleDeleteEntry = async (nodeId: string): Promise<void> => {
     try {
@@ -79,10 +132,21 @@ export function RepertoirePanel({
         method: "DELETE",
       });
       if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const count = data?.deletedCount ?? 0;
+        toast.success(
+          count === 1
+            ? "Line deleted."
+            : `Deleted ${count} positions in this line.`,
+        );
         fetchRepertoire();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data?.error || "Couldn't delete the line.");
       }
     } catch (error) {
       console.error("Error deleting entry:", error);
+      toast.error("Network error deleting the line.");
     }
   };
 
@@ -174,6 +238,7 @@ export function RepertoirePanel({
               onLearn={(nodeId) => onLearn(undefined, nodeId)}
               onLearnFamily={onLearnFamily}
               onDelete={handleDeleteEntry}
+              onDeleteFamily={handleDeleteFamily}
               onLineClick={onLineClick}
               onRefresh={fetchRepertoire}
             />

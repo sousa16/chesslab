@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import {
@@ -6,6 +6,7 @@ import {
   convertSanToUci,
   ensureUserRepertoires,
 } from "@/lib/repertoire";
+import { recomputeRepertoireLeaves } from "@/lib/repertoireLeaves";
 
 /**
  * POST /api/repertoire-entries/save-line
@@ -60,13 +61,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Save the line and get how many new entries were created
-    const entriesCreated = await saveRepertoireLine(
+    const { entriesCreated, repertoireId } = await saveRepertoireLine(
       session.user.id,
       color,
       [],
       movesInSan,
       movesInUci,
     );
+
+    // Re-stamp isLeaf for every entry in this repertoire. New entries
+    // default to true; existing ones may have just become interior nodes
+    // (a new child below them was inserted). Deferred with `after()` so
+    // the response returns the moment the line is committed — the
+    // RepertoirePanel that mounts on the post-save nav doesn't have to
+    // race with this denormalization step. The backfill script can
+    // repair drift if a deferred recompute fails.
+    if (entriesCreated > 0) {
+      after(async () => {
+        try {
+          await recomputeRepertoireLeaves(repertoireId);
+        } catch (err) {
+          console.error(
+            "Failed to recompute isLeaf after save-line:",
+            err,
+          );
+        }
+      });
+    }
 
     return NextResponse.json(
       {

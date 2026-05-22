@@ -177,6 +177,16 @@ export default function BuildClient({
           return;
         }
         toast.success(`Line saved — ${data.entriesCreated} positions added.`);
+        // RepertoirePanel + HomePanel are already mounted by the time
+        // this resolves (router.back() ran synchronously above). Their
+        // initial fetches happened BEFORE the save committed, so the
+        // panel is showing stale data. Fire the existing app-wide event
+        // to make them refetch.
+        try {
+          window.dispatchEvent(new CustomEvent("training-stats-updated"));
+        } catch {
+          /* SSR or no DOM — fine to drop. */
+        }
       })
       .catch(() => {
         toast.error("Network error saving line.");

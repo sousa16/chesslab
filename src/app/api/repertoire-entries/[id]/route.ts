@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { buildRepertoireTree } from "@/lib/repertoireTree";
+import { recomputeRepertoireLeaves } from "@/lib/repertoireLeaves";
 import type { Prisma } from "@prisma/client";
 
 /**
@@ -93,61 +95,68 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // Get all entries for this repertoire to build the tree
+    // Build the full repertoire tree so we can walk both DOWN (descendants
+    // of the clicked entry — always part of this line) and UP (ancestors
+    // that exist only to feed this line, with no other forks). Without the
+    // up-walk a user has to click "delete" once per ply to remove a saved
+    // line, because each click would remove only the leaf.
     const allEntries = await prisma.repertoireEntry.findMany({
-      where: {
-        repertoireId: entry.repertoireId,
-      },
-      include: {
-        position: true,
-        repertoire: true,
+      where: { repertoireId: entry.repertoireId },
+      select: {
+        id: true,
+        expectedMove: true,
+        position: { select: { fen: true } },
       },
     });
 
-    // Build a map of FEN -> entries at that position
-    const fenToEntries = new Map<string, typeof allEntries>();
-    allEntries.forEach((e) => {
-      const entries = fenToEntries.get(e.position.fen) || [];
-      entries.push(e);
-      fenToEntries.set(e.position.fen, entries);
-    });
+    const { roots, byEntryId } = buildRepertoireTree(
+      allEntries,
+      entry.repertoire.color,
+    );
 
-    // Build the descendant tree using Chess.js
-    const entriesToDelete = new Set<string>([id]);
-    const queue = [entry];
+    const entriesToDelete = new Set<string>();
+    const startNode = byEntryId.get(id);
 
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const currentFen = current.position.fen;
+    if (!startNode) {
+      // Tree-build couldn't place this entry (e.g. orphan with no valid
+      // moves). Fall back to single-row delete; nothing else can be
+      // certainly part of "this line".
+      entriesToDelete.add(id);
+    } else {
+      // 1) DOWN walk — everything reachable from this node along the tree
+      // is deleted along with it.
+      const collectDescendants = (node: typeof startNode) => {
+        if (entriesToDelete.has(node.id)) return;
+        entriesToDelete.add(node.id);
+        for (const child of node.children) collectDescendants(child);
+      };
+      collectDescendants(startNode);
 
-      // Use chess.js to find the next position
-      const { Chess } = await import("chess.js");
-      const game = new Chess(currentFen);
-
-      // Try to make the expected move
-      try {
-        game.move(current.expectedMove);
-        
-        // Get all possible opponent responses
-        const opponentMoves = game.moves({ verbose: true });
-        
-        // For each opponent response, check if we have entries at that position
-        for (const opponentMove of opponentMoves) {
-          const afterOpponentMove = new Chess(game.fen());
-          afterOpponentMove.move(opponentMove);
-          const afterOpponentFen = afterOpponentMove.fen();
-          
-          // Find all entries at this position (after user move + opponent response)
-          const childEntries = fenToEntries.get(afterOpponentFen) || [];
-          for (const child of childEntries) {
-            if (!entriesToDelete.has(child.id)) {
-              entriesToDelete.add(child.id);
-              queue.push(child);
-            }
-          }
+      // 2) UP walk — derive parent links from the tree, then climb until
+      // we hit a fork (an ancestor whose other children survive).
+      const parentOf = new Map<string, string>();
+      const buildParentMap = (node: typeof startNode) => {
+        for (const child of node.children) {
+          parentOf.set(child.id, node.id);
+          buildParentMap(child);
         }
-      } catch {
-        // Invalid move, no children
+      };
+      for (const root of roots) buildParentMap(root);
+
+      let cursor: string = startNode.id;
+      // Bounded by tree depth — every iteration moves strictly upward.
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const parentId = parentOf.get(cursor);
+        if (!parentId) break;
+        const parentNode = byEntryId.get(parentId);
+        if (!parentNode) break;
+        const allInSet = parentNode.children.every((c) =>
+          entriesToDelete.has(c.id),
+        );
+        if (!allInSet) break;
+        entriesToDelete.add(parentId);
+        cursor = parentId;
       }
     }
 
@@ -178,6 +187,22 @@ export async function DELETE(
         },
       });
     }
+
+    // Surviving parent entries in the same repertoire may have just
+    // become leaves (the deleted subtree was their only child).
+    // Deferred with `after()` so the response returns the moment the
+    // delete is committed — the UI's post-delete refetch doesn't have
+    // to race with this denormalization step.
+    after(async () => {
+      try {
+        await recomputeRepertoireLeaves(entry.repertoireId);
+      } catch (err) {
+        console.error(
+          "Failed to recompute isLeaf after delete-entry:",
+          err,
+        );
+      }
+    });
 
     return NextResponse.json({ success: true, deletedCount: result.count });
   } catch (error) {

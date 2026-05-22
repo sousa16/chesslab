@@ -43,6 +43,10 @@ export default async function TrainingPage({
   const colorFilter =
     params.color === "white" || params.color === "black" ? params.color : null;
   const familyFilter = params.family?.trim() ? params.family.trim() : null;
+  // "Practice this line" passes the leaf entry id; we expand it server-side
+  // to the leaf + every ancestor entry on its path (= the moves the user
+  // actually plays to reach the leaf).
+  const lineLeafId = params.line?.trim() ? params.line.trim() : null;
 
   const userId = session.user.id;
 
@@ -152,9 +156,32 @@ export default async function TrainingPage({
       // When the user picked "Practice <family>", drop entries whose opening
       // family doesn't match. Applied after enrichment so we have
       // `openingName` to derive the family from.
-      const entries = familyFilter
+      let entries = familyFilter
         ? enrichedEntries.filter((e) => familyOf(e.openingName) === familyFilter)
         : enrichedEntries;
+
+      // "Practice this line": keep only the entries on the path from any
+      // root down to the leaf with id=lineLeafId. We derive the path by
+      // building a parent map over `roots` and walking up.
+      if (lineLeafId && byEntryId.has(lineLeafId)) {
+        const parentOf = new Map<string, string>();
+        const buildParentMap = (node: (typeof roots)[number]) => {
+          for (const child of node.children) {
+            parentOf.set(child.id, node.id);
+            buildParentMap(child);
+          }
+        };
+        for (const root of roots) buildParentMap(root);
+
+        const pathIds = new Set<string>([lineLeafId]);
+        let cursor: string = lineLeafId;
+        while (parentOf.has(cursor)) {
+          const pid = parentOf.get(cursor)!;
+          pathIds.add(pid);
+          cursor = pid;
+        }
+        entries = entries.filter((e) => pathIds.has(e.id));
+      }
 
       return { ...r, entries };
     }),

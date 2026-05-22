@@ -116,6 +116,14 @@ model RepertoireEntry {
   lastReviewDate    DateTime?
   learningStepIndex Int        @default(0)
   phase             String     @default("learning")
+  // Denormalized: true when no other entry in the same repertoire is a
+  // direct child of this one. Maintained by recomputeRepertoireLeaves on
+  // every save / delete so the home dashboard can count "lines" with a
+  // simple SQL filter instead of replaying the move tree in chess.js on
+  // every read. Default true because a freshly-inserted entry has no
+  // children yet — recompute will flip it if a later insertion makes it
+  // an interior node.
+  isLeaf            Boolean    @default(true)
   openingId         String?
   opening           Opening?   @relation(fields: [openingId], references: [id])
   position          Position   @relation(fields: [positionId], references: [id], onDelete: Cascade)
@@ -127,6 +135,10 @@ model RepertoireEntry {
   @@index([positionId])
   @@index([nextReviewDate])
   @@index([repertoireId, nextReviewDate])
+  // Hot path for the home dashboard: count leaves per repertoire +
+  // phase. Composite ordering lets `WHERE repertoireId = ? AND isLeaf =
+  // true` use a single index range.
+  @@index([repertoireId, isLeaf, phase])
 }
 
 model DailyActivity {

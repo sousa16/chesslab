@@ -33,6 +33,7 @@ interface LineTreeProps {
   onLearn: (nodeId: string) => void;
   onLearnFamily?: (family: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
+  onDeleteFamily?: (family: string) => Promise<void>;
   onLineClick?: (
     moves: string[],
     openingName: string | null,
@@ -74,6 +75,7 @@ export function LineTree({
   onLearn,
   onLearnFamily,
   onDelete,
+  onDeleteFamily,
   onLineClick,
   onRefresh,
 }: LineTreeProps) {
@@ -112,6 +114,7 @@ export function LineTree({
           onLearn={onLearn}
           onLearnFamily={onLearnFamily}
           onDelete={onDelete}
+          onDeleteFamily={onDeleteFamily}
           onLineClick={onLineClick}
           onRefresh={onRefresh}
         />
@@ -127,6 +130,7 @@ interface FamilyGroupProps {
   onLearn: (nodeId: string) => void;
   onLearnFamily?: (family: string) => void;
   onDelete?: (nodeId: string) => Promise<void>;
+  onDeleteFamily?: (family: string) => Promise<void>;
   onLineClick?: (
     moves: string[],
     openingName: string | null,
@@ -142,9 +146,11 @@ function FamilyGroup({
   onLearn,
   onLearnFamily,
   onDelete,
+  onDeleteFamily,
   onLineClick,
   onRefresh,
 }: FamilyGroupProps) {
+  const [deletingFamily, setDeletingFamily] = useState(false);
   // Single-line families auto-expand; multi-line families default collapsed.
   const [expanded, setExpanded] = useState(lines.length <= 1);
 
@@ -204,6 +210,36 @@ function FamilyGroup({
             }}
             title={`Practice ${family}`}>
             <GraduationCap size={13} />
+          </Button>
+        )}
+        {onDeleteFamily && family !== UNFAMILIED_LABEL && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={deletingFamily}
+            className="h-7 w-7 p-0 rounded-lg hover:bg-red-500/15 hover:text-red-500 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (deletingFamily) return;
+              if (
+                !window.confirm(
+                  `Delete every line under "${family}"? This can't be undone.`,
+                )
+              ) {
+                return;
+              }
+              setDeletingFamily(true);
+              try {
+                await onDeleteFamily(family);
+              } finally {
+                // Component usually unmounts (panel refetch), but reset the
+                // flag in case it doesn't (e.g. the delete failed and the
+                // parent left it mounted).
+                setDeletingFamily(false);
+              }
+            }}
+            title={`Delete ${family}`}>
+            <Trash2 size={13} />
           </Button>
         )}
       </div>

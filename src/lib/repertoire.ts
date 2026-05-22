@@ -62,7 +62,7 @@ export async function saveRepertoireLine(
   moveHistory: string[], // FEN positions after each move (in order)
   movesInSan: string[], // Moves in SAN notation (e.g., ["e4", "c5", "Nf3"])
   movesInUci: string[], // Moves in UCI notation (e.g., ["e2e4", "c7c5", "g1f3"])
-): Promise<number> {
+): Promise<{ entriesCreated: number; repertoireId: string }> {
   if (movesInSan.length === 0) {
     throw new Error("Cannot save empty line");
   }
@@ -178,7 +178,7 @@ export async function saveRepertoireLine(
       await tx.repertoireEntry.createMany({ data: toCreate });
     }
 
-    return toCreate.length;
+    return { entriesCreated: toCreate.length, repertoireId: repertoire.id };
   });
 }
 

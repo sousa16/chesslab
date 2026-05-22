@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Chess } from "chess.js";
 import { ChevronLeft, Plus, Radar } from "lucide-react";
@@ -24,12 +24,51 @@ interface GapResult {
   errors: string[];
 }
 
+interface PersistedState {
+  chesscomUsername: string;
+  lichessUsername: string;
+  color: "white" | "black" | "both";
+  timeClasses: string[];
+  minRating: string;
+  maxRating: string;
+  maxGames: string;
+  result: GapResult | null;
+}
+
 const TIME_CLASS_OPTIONS: { key: string; label: string }[] = [
   { key: "bullet", label: "Bullet" },
   { key: "blitz", label: "Blitz" },
   { key: "rapid", label: "Rapid" },
   { key: "classical", label: "Classical" },
 ];
+
+// Pulling games is a 10–30s round-trip we don't want to repeat every
+// time the user pops back into /gaps from another tab in the app. We
+// stash the last submitted inputs + result in sessionStorage so the
+// page rehydrates on mount and the user picks up where they left off.
+// sessionStorage (rather than localStorage) is deliberate: clears when
+// the tab closes so stale data doesn't haunt them across days.
+const SESSION_KEY = "gapAnalysisState";
+
+function readPersisted(): Partial<PersistedState> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Partial<PersistedState>;
+  } catch {
+    return null;
+  }
+}
+
+function writePersisted(state: PersistedState) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(state));
+  } catch {
+    /* quota or serialization failure — just drop the persist */
+  }
+}
 
 export default function GapAnalysisClient() {
   const router = useRouter();
@@ -47,7 +86,37 @@ export default function GapAnalysisClient() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GapResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Rehydrate inputs + last result on first mount. Guarded by a ref via
+  // dependency-less useEffect — we don't want it running again after the
+  // user has started editing.
+  useEffect(() => {
+    const persisted = readPersisted();
+    if (!persisted) return;
+    if (typeof persisted.chesscomUsername === "string")
+      setChesscomUsername(persisted.chesscomUsername);
+    if (typeof persisted.lichessUsername === "string")
+      setLichessUsername(persisted.lichessUsername);
+    if (
+      persisted.color === "white" ||
+      persisted.color === "black" ||
+      persisted.color === "both"
+    )
+      setColor(persisted.color);
+    if (Array.isArray(persisted.timeClasses))
+      setTimeClasses(
+        persisted.timeClasses.filter(
+          (t): t is string => typeof t === "string",
+        ),
+      );
+    if (typeof persisted.minRating === "string")
+      setMinRating(persisted.minRating);
+    if (typeof persisted.maxRating === "string")
+      setMaxRating(persisted.maxRating);
+    if (typeof persisted.maxGames === "string")
+      setMaxGames(persisted.maxGames);
+    if (persisted.result) setResult(persisted.result);
+  }, []);
 
   const handleBack = () => {
     router.push("/home");
@@ -86,7 +155,20 @@ export default function GapAnalysisClient() {
       if (!res.ok) {
         setError(data.error ?? "Analysis failed");
       } else {
-        setResult(data as GapResult);
+        const newResult = data as GapResult;
+        setResult(newResult);
+        // Persist on success so coming back to /gaps later in the
+        // session restores the form + results without re-fetching.
+        writePersisted({
+          chesscomUsername,
+          lichessUsername,
+          color,
+          timeClasses,
+          minRating,
+          maxRating,
+          maxGames,
+          result: newResult,
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
@@ -95,21 +177,28 @@ export default function GapAnalysisClient() {
     }
   };
 
-  return (
-    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
-      <MobileNav
-        isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        onLogoClick={handleBack}
-      />
-      {isSidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-30 bg-black/50"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+  // Explicit reset — clears the persisted state too so the next visit
+  // starts blank rather than re-showing stale data.
+  const handleClear = () => {
+    setResult(null);
+    setError(null);
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem(SESSION_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
 
-      <main className="flex-1 min-w-0 h-below-nav lg:h-screen mt-nav lg:mt-0 overflow-y-auto">
+  return (
+    // AppShell locks body/html overflow, so the scroll lives in main.
+    // h-[100dvh] tracks the current visible viewport (so iOS toolbar
+    // collapse doesn't leave an unscrollable strip at the bottom).
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-background">
+      <MobileNav onLogoClick={handleBack} showMenuButton={false} />
+
+      <main className="flex-1 mt-nav lg:mt-0 overflow-y-auto pb-safe">
         <div className="max-w-5xl mx-auto px-4 lg:px-8 py-6 lg:py-10 space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -177,21 +266,27 @@ export default function GapAnalysisClient() {
                 </div>
               </Field>
               <Field label="Rating range">
+                {/* min-w-0 on each input lets them shrink inside the flex
+                    parent on narrow phones — without it browsers respect
+                    a number-input default min-width and the second field
+                    overflows the card edge. */}
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     value={minRating}
                     onChange={(e) => setMinRating(e.target.value)}
                     placeholder="min"
-                    className="flex-1 h-9 px-3 rounded-lg bg-surface-2 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="flex-1 min-w-0 h-9 px-3 rounded-lg bg-surface-2 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
-                  <span className="text-muted-foreground">–</span>
+                  <span className="text-muted-foreground flex-shrink-0">
+                    –
+                  </span>
                   <input
                     type="number"
                     value={maxRating}
                     onChange={(e) => setMaxRating(e.target.value)}
                     placeholder="max"
-                    className="flex-1 h-9 px-3 rounded-lg bg-surface-2 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="flex-1 min-w-0 h-9 px-3 rounded-lg bg-surface-2 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                 </div>
               </Field>
@@ -226,13 +321,21 @@ export default function GapAnalysisClient() {
               </div>
             </Field>
 
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-3 pt-1 flex-wrap">
               <Button
                 onClick={handleAnalyze}
                 disabled={loading}
                 className="btn-primary-gradient">
                 {loading ? "Analyzing…" : "Analyze games"}
               </Button>
+              {result && !loading && (
+                <Button
+                  onClick={handleClear}
+                  variant="outline"
+                  disabled={loading}>
+                  Clear results
+                </Button>
+              )}
               {loading && (
                 <p className="text-xs text-muted-foreground">
                   This can take 10–30 seconds while we pull and replay

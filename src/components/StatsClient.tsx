@@ -90,7 +90,6 @@ export default function StatsClient({
   tacticsOverall,
 }: StatsClientProps) {
   const router = useRouter();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Default to "worst openings first" — low ease = struggling. Falls back
   // to family name for ties so the order is deterministic.
   const [sort, setSort] = useState<SortState>({
@@ -159,21 +158,15 @@ export default function StatsClient({
     sort.key === key ? (sort.direction === "asc" ? "↑" : "↓") : "";
 
   return (
-    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
-      <MobileNav
-        isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        onLogoClick={handleBack}
-      />
+    // AppShell locks body/html overflow, so the page scroll has to live
+    // inside main. h-[100dvh] keeps the outer matched to the *current*
+    // visible viewport (not the iOS pre-collapse 100vh), and main owns
+    // the scroll with pb-safe so iOS's home indicator doesn't eat the
+    // last row.
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-background">
+      <MobileNav onLogoClick={handleBack} showMenuButton={false} />
 
-      {isSidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-30 bg-black/50"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      <main className="flex-1 min-w-0 h-below-nav lg:h-screen mt-nav lg:mt-0 overflow-y-auto">
+      <main className="flex-1 mt-nav lg:mt-0 overflow-y-auto pb-safe">
         <div className="max-w-5xl mx-auto px-4 lg:px-8 py-6 lg:py-10 space-y-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

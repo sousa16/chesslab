@@ -23,7 +23,7 @@ interface RequestBody {
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -66,24 +66,17 @@ export async function POST(request: NextRequest) {
   // Pull the user's repertoire entry FENs grouped by color. We only need
   // the FEN strings to know "does the user have a saved response at this
   // position", so the projection is tiny even for big repertoires.
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+  const repertoiresRaw = await prisma.repertoire.findMany({
+    where: { userId: session.user.id },
     select: {
-      repertoires: {
-        select: {
-          color: true,
-          entries: {
-            select: { position: { select: { fen: true } } },
-          },
-        },
+      color: true,
+      entries: {
+        select: { position: { select: { fen: true } } },
       },
     },
   });
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
 
-  const repertoires = user.repertoires.map((r) => ({
+  const repertoires = repertoiresRaw.map((r) => ({
     color: (r.color === "White" ? "white" : "black") as "white" | "black",
     fens: r.entries.map((e) => e.position.fen),
   }));

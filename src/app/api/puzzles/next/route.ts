@@ -29,25 +29,22 @@ const DEFAULT_PREFS = {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, puzzlePrefs: true },
+    const userId = session.user.id;
+    const puzzlePrefs = await prisma.userPuzzlePrefs.findUnique({
+      where: { userId },
     });
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
 
-    const prefs = user.puzzlePrefs ?? DEFAULT_PREFS;
+    const prefs = puzzlePrefs ?? DEFAULT_PREFS;
     const now = new Date();
     const exclude = request.nextUrl.searchParams.get("exclude");
 
     // 1) due review
     const dueReviewWhere = {
-      userId: user.id,
+      userId,
       nextReviewDate: { lte: now },
       puzzle: { categories: { hasSome: prefs.enabledCategories } },
       ...(exclude ? { puzzleId: { not: exclude } } : {}),
@@ -101,7 +98,7 @@ export async function GET(request: NextRequest) {
         AND (${exclude}::text IS NULL OR p.id <> ${exclude})
         AND NOT EXISTS (
           SELECT 1 FROM "PuzzleReview" r
-          WHERE r."puzzleId" = p.id AND r."userId" = ${user.id}
+          WHERE r."puzzleId" = p.id AND r."userId" = ${userId}
         )
       ORDER BY ABS(p.rating - ${targetRating}) ASC, p.id ASC
       LIMIT 1

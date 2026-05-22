@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
         lastReviewDate: true,
         repertoire: {
           select: {
-            user: { select: { id: true, email: true } },
+            userId: true,
           },
         },
       },
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     }
 
-    if (entry.repertoire.user.email !== session.user.email) {
+    if (entry.repertoire.userId !== session.user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
         },
         select: { id: true },
       }),
-      recordDailyActivity(entry.repertoire.user.id, isCorrect, timeSpentMs),
+      recordDailyActivity(entry.repertoire.userId, isCorrect, timeSpentMs),
     ]);
 
     return NextResponse.json({

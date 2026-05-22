@@ -32,7 +32,7 @@ export default async function TrainingPage({
   const session = await getServerSession(authOptions);
   const params = await searchParams;
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     return <div>Please sign in to access training</div>;
   }
 
@@ -44,6 +44,8 @@ export default async function TrainingPage({
     params.color === "white" || params.color === "black" ? params.color : null;
   const familyFilter = params.family?.trim() ? params.family.trim() : null;
 
+  const userId = session.user.id;
+
   // We need ALL of a repertoire's entries (including first-move ones) to
   // reconstruct the move tree — opening-name lookup relies on the SAN path
   // from the standard starting position to each card, and the SAN of the
@@ -51,41 +53,36 @@ export default async function TrainingPage({
   // children. The first-move entries are filtered out *after* the tree is
   // built (see below) so they don't appear as training cards, but their
   // SAN contribution is preserved.
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+  const repertoiresRaw = await prisma.repertoire.findMany({
+    where: {
+      userId,
+      ...(colorFilter
+        ? { color: colorFilter === "white" ? "White" : "Black" }
+        : {}),
+    },
     select: {
       id: true,
-      repertoires: {
-        where: colorFilter
-          ? { color: colorFilter === "white" ? "White" : "Black" }
-          : undefined,
+      color: true,
+      entries: {
+        orderBy: { nextReviewDate: "asc" },
         select: {
           id: true,
-          color: true,
-          entries: {
-            orderBy: { nextReviewDate: "asc" },
-            select: {
-              id: true,
-              expectedMove: true,
-              interval: true,
-              easeFactor: true,
-              repetitions: true,
-              nextReviewDate: true,
-              phase: true,
-              learningStepIndex: true,
-              position: {
-                select: { id: true, fen: true, fullmoveNumber: true },
-              },
-            },
+          expectedMove: true,
+          interval: true,
+          easeFactor: true,
+          repetitions: true,
+          nextReviewDate: true,
+          phase: true,
+          learningStepIndex: true,
+          position: {
+            select: { id: true, fen: true, fullmoveNumber: true },
           },
         },
       },
     },
   });
 
-  if (!user) {
-    return <div>User not found</div>;
-  }
+  const user = { id: userId, repertoires: repertoiresRaw };
 
   const now = new Date();
   const enriched = {

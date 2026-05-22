@@ -40,9 +40,8 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     const userId = session?.user?.id;
-    const userEmail = session?.user?.email;
 
-    if (!userId && !userEmail) {
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -55,22 +54,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let actualUserId = userId;
-    if (!actualUserId && userEmail) {
-      const user = await prisma.user.findUnique({
-        where: { email: userEmail },
-        select: { id: true },
-      });
-      if (!user) {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-      }
-      actualUserId = user.id;
-    }
-
     const prismaColor: PieceColor =
       color === "white" ? PieceColor.White : PieceColor.Black;
     const entryFilter: Prisma.RepertoireEntryWhereInput = {
-      repertoire: { userId: actualUserId!, color: prismaColor },
+      repertoire: { userId, color: prismaColor },
     };
 
     // Cheap conditional-request probe. Two indexed lookups on
@@ -100,7 +87,7 @@ export async function GET(request: NextRequest) {
     // every entry for no consumer.
     const repertoire = await prisma.repertoire.findUnique({
       where: {
-        userId_color: { userId: actualUserId!, color: prismaColor },
+        userId_color: { userId, color: prismaColor },
       },
       select: {
         id: true,

@@ -114,8 +114,14 @@ export default function HomeClient() {
 
   const handleLearn = (openingId?: string, lineId?: string) => {
     if (openingId) sessionStorage.setItem("practiceOpeningId", openingId);
-    if (lineId) sessionStorage.setItem("practiceLineId", lineId);
-    router.push(`/training?mode=practice&color=${selectedColor}`);
+    // Pass lineId on the URL so the server training page can scope the
+    // practice queue to this line's path (leaf + ancestors). The previous
+    // sessionStorage hand-off was never read — clicking "practice this
+    // line" silently fell back to "practice everything".
+    const linePart = lineId ? `&line=${encodeURIComponent(lineId)}` : "";
+    router.push(
+      `/training?mode=practice&color=${selectedColor}${linePart}`,
+    );
   };
 
   const handleLearnFamily = (family: string) => {

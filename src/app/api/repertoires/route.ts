@@ -33,7 +33,12 @@ interface LineNode {
   mastered?: boolean;
 }
 
-const CACHE_HEADER = "private, max-age=30, stale-while-revalidate=60";
+// max-age=0 forces every nav to ask the server, but the etag probe (two
+// indexed queries against RepertoireEntry) is cheap and returns 304 when
+// nothing changed. The previous max-age=30 had the browser serve stale
+// local copies for 30s after writes, which hid newly-saved/deleted lines
+// from the panel until the cache expired.
+const CACHE_HEADER = "private, max-age=0, must-revalidate";
 
 export async function GET(request: NextRequest) {
   try {

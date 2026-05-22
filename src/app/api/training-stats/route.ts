@@ -13,7 +13,11 @@ import {
   getTrainingStatsLastChanged,
 } from "@/lib/trainingStats";
 
-const CACHE_HEADER = "private, max-age=30, stale-while-revalidate=60";
+// max-age=0 forces every nav to ask the server, but the etag fast-path
+// (cheap probe + 304) means a hit costs essentially one network round-
+// trip. With max-age=30 the browser previously served stale stats for
+// up to 30s after a write, which hid post-review updates.
+const CACHE_HEADER = "private, max-age=0, must-revalidate";
 
 export async function GET(request: NextRequest) {
   try {

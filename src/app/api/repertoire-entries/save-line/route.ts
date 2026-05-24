@@ -8,6 +8,8 @@ import {
 } from "@/lib/repertoire";
 import { recomputeRepertoireLeaves } from "@/lib/repertoireLeaves";
 
+export const maxDuration = 60;
+
 /**
  * POST /api/repertoire-entries/save-line
  *

@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SessionProvider } from "next-auth/react";
-import Home from "@/app/(app)/home/page";
+import HomeClient from "@/app/(app)/home/HomeClient";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -94,6 +94,20 @@ jest.mock("@/components/Logo", () => ({
   Logo: () => <div>Logo</div>,
 }));
 
+jest.mock("@/components/MobileNav", () => ({
+  MobileNav: () => null,
+}));
+
+const mockStatsPromise = Promise.resolve(null);
+
+function renderHome() {
+  return render(
+    <SessionProvider session={null}>
+      <HomeClient statsPromise={mockStatsPromise} />
+    </SessionProvider>,
+  );
+}
+
 const mockUseSession = useSession as jest.MockedFunction<typeof useSession>;
 const mockUseRouter = useRouter as jest.MockedFunction<typeof useRouter>;
 const mockUseSearchParams = useSearchParams as jest.MockedFunction<
@@ -132,7 +146,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
@@ -144,7 +158,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     expect(mockPush).toHaveBeenCalledWith("/");
   });
@@ -156,7 +170,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    const { container } = render(<Home />);
+    const { container } = renderHome();
 
     // Check that container exists
     expect(container.querySelector("div")).toBeInTheDocument();
@@ -169,7 +183,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     const dashboard = screen.getByText("Dashboard");
     expect(dashboard).toBeInTheDocument();
@@ -188,7 +202,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     const dailyTasks = screen.getByText("Daily Tasks");
     expect(dailyTasks).toBeInTheDocument();
@@ -206,7 +220,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     expect(screen.getByText("Lines Learned")).toBeInTheDocument();
     expect(screen.getByText("Accuracy")).toBeInTheDocument();
@@ -220,7 +234,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     // Check for board and control buttons
     expect(screen.getByTestId("chessboard")).toBeInTheDocument();
@@ -238,7 +252,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     expect(screen.getByTitle("Rotate board")).toBeInTheDocument();
   });
@@ -250,7 +264,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     // Click the board to trigger onMoveMade (simulating a move)
     fireEvent.click(screen.getByTestId("chessboard"));
@@ -266,7 +280,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    const { rerender } = render(<Home />);
+    const { rerender } = renderHome();
 
     // Rotate board to black
     fireEvent.click(screen.getByTitle("Rotate board"));
@@ -285,7 +299,7 @@ describe("Home Page", () => {
       update: jest.fn(),
     } as any);
 
-    render(<Home />);
+    renderHome();
 
     // Verify that reset was called when component mounted
     expect(mockBoardReset).toHaveBeenCalled();

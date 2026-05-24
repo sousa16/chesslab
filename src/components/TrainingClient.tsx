@@ -175,11 +175,22 @@ export default function TrainingClient({
 
   const currentEntry = currentRepertoire?.entries[currentCardIndex];
 
-  // Preview navigation state: which ply of the line leading up to the live
-  // position should the board show? `null` means "live position" — the card
-  // the user is being asked to recall. Otherwise it's a 0-based index into
-  // `currentEntry.priorMoves` showing the position right after that move.
-  const [previewPly, setPreviewPly] = useState<number | null>(null);
+  // Which ply of the line the board shows. `null` = live recall position
+  // (totalPlies). 0..totalPlies-1 = earlier positions. totalPlies+1 = after
+  // the revealed solution (only while showingAnswer). Keeping this explicit
+  // avoids conflating "live + answer shown" with "post-solution", which made
+  // step-back hide the answer or skip the live position.
+  const entryId = currentEntry?.id ?? "";
+  const [navForEntryId, setNavForEntryId] = useState(entryId);
+  const [navPly, setNavPly] = useState<number | null>(null);
+  // Reset during render when the card changes — not in useEffect — so the
+  // first paint of a new card never reuses the previous card's navPly (which
+  // briefly showed e.g. "17/18" and a penultimate-line FEN before snapping to
+  // Current).
+  if (navForEntryId !== entryId) {
+    setNavForEntryId(entryId);
+    setNavPly(null);
+  }
   const priorMoves = currentEntry?.priorMoves ?? [];
 
   // FENs for each step of the line leading to the live position. Replays
@@ -217,16 +228,26 @@ export default function TrainingClient({
     fenKey(precedingFens[precedingFens.length - 1]) ===
       fenKey(currentEntry?.position.fen);
 
-  // Reset preview when card changes so each new card starts at its live
-  // position, not at a leftover history ply.
-  useEffect(() => {
-    setPreviewPly(null);
-  }, [currentEntry?.id]);
+  // The FEN reached by playing the user's expected move from the live
+  // position. Used when showingAnswer flips on — the board shows the
+  // position AFTER the solution, and the navigation arrows treat that
+  // as "ply totalPlies + 1" so stepping back lands on the live
+  // pre-solution position (= the recall view) instead of skipping it.
+  const postSolutionFen = useMemo(() => {
+    if (!currentEntry) return null;
+    try {
+      const g = new Chess(currentEntry.position.fen);
+      const from = currentEntry.expectedMove.slice(0, 2);
+      const to = currentEntry.expectedMove.slice(2, 4);
+      const promotion = currentEntry.expectedMove.slice(4) || undefined;
+      const moved = g.move({ from, to, promotion });
+      if (!moved) return null;
+      return g.fen();
+    } catch {
+      return null;
+    }
+  }, [currentEntry?.id, currentEntry?.position.fen, currentEntry?.expectedMove]);
 
-  const isPreviewing = previewPly !== null;
-  const viewFen = isPreviewing
-    ? precedingFens[previewPly] ?? currentEntry?.position.fen
-    : currentEntry?.position.fen;
 
   // Render the prior moves as numbered pairs for the move list in the
   // sidebar, with each ply clickable to jump there. `ply` here means
@@ -269,21 +290,33 @@ export default function TrainingClient({
   // Helpers used by the prev/next arrows and the move list. Use the
   // number of plies that actually replayed cleanly — not priorMoves.length —
   // so transpositions or unreachable SANs in the saved line can't push
-  // previewPly past the end of precedingFens.
+  // navPly past the end of precedingFens.
   const totalPlies = Math.max(0, precedingFens.length - 1);
-  // `displayedPly` always reflects what the board is showing — even when
-  // previewPly is null (live), so highlighting logic can compare uniformly.
-  const displayedPly = previewPly ?? totalPlies;
+  const effectiveNavPly = navPly ?? totalPlies;
+  const isPreviewing = effectiveNavPly < totalPlies;
+  const displayedPly = effectiveNavPly;
+
+  const viewFen =
+    showingAnswer &&
+    effectiveNavPly === totalPlies + 1 &&
+    postSolutionFen
+      ? postSolutionFen
+      : effectiveNavPly >= totalPlies
+        ? currentEntry?.position.fen
+        : (precedingFens[effectiveNavPly] ?? currentEntry?.position.fen);
+
+  const maxNavPly = showingAnswer ? totalPlies + 1 : totalPlies;
   const canStepBack = displayedPly > 0;
-  const canStepForward = isPreviewing; // forward returns to live when at last ply
+  const canStepForward = displayedPly < maxNavPly;
   const jumpToPly = (ply: number) => {
-    if (ply >= totalPlies) setPreviewPly(null);
-    else if (ply <= 0) setPreviewPly(0);
-    else setPreviewPly(ply);
+    if (ply <= 0) setNavPly(0);
+    else if (showingAnswer && ply >= totalPlies + 1) setNavPly(totalPlies + 1);
+    else if (ply >= totalPlies) setNavPly(null);
+    else setNavPly(ply);
   };
   const stepBack = () => jumpToPly(displayedPly - 1);
   const stepForward = () => jumpToPly(displayedPly + 1);
-  const returnToLive = () => setPreviewPly(null);
+  const returnToLive = () => setNavPly(null);
 
   // Get the expected move in a readable format
   const getExpectedMoveDisplay = () => {
@@ -402,20 +435,16 @@ export default function TrainingClient({
   const handleShowAnswer = () => {
     // If user was browsing prior moves, snap back to the live position so
     // the revealed answer is shown on the position they're actually meant
-    // to recall.
-    setPreviewPly(null);
+    // to recall. The board's viewFen derivation will pick up the
+    // post-solution FEN once showingAnswer flips — no imperative
+    // makeMove needed, and keeping the move in declarative state lets
+    // the back-arrow correctly treat the solution as a single ply.
+    setNavPly(totalPlies + 1);
     setShowingAnswer(true);
-
-    // Show the correct move on the board
-    if (currentEntry && boardRef.current) {
-      const from = currentEntry.expectedMove.slice(0, 2);
-      const to = currentEntry.expectedMove.slice(2, 4);
-      const promotion = currentEntry.expectedMove.slice(4) || undefined;
-      boardRef.current.makeMove(from, to, promotion);
-    }
   };
 
   const moveToNextCard = useCallback(() => {
+    setNavPly(null);
     // Check if there are more cards in current repertoire
     if (
       currentRepertoire &&
@@ -609,8 +638,8 @@ export default function TrainingClient({
               ref={boardRef}
               playerColor={repertoireColor}
               initialFen={viewFen}
-              trainingMode={!isPreviewing}
-              showingAnswer={showingAnswer && !isPreviewing}
+              trainingMode={effectiveNavPly === totalPlies && !showingAnswer}
+              showingAnswer={showingAnswer && effectiveNavPly >= totalPlies}
               onTrainingMove={handleTrainingMove}
               highlightSquare={isPreviewing ? null : feedbackSquare}
             />
@@ -632,11 +661,13 @@ export default function TrainingClient({
                 <ChevronLeft size={16} />
               </Button>
               <span className="text-[11px] text-muted-foreground tabular-nums w-[5rem] text-center">
-                {!isPreviewing
-                  ? "Current"
-                  : previewPly === 0
+                {isPreviewing
+                  ? effectiveNavPly === 0
                     ? "Start"
-                    : `${previewPly} / ${totalPlies}`}
+                    : `${effectiveNavPly} / ${totalPlies}`
+                  : showingAnswer && navPly === totalPlies + 1
+                    ? "Answer"
+                    : "Current"}
               </span>
               <Button
                 variant="ghost"
@@ -652,7 +683,7 @@ export default function TrainingClient({
                 size="sm"
                 className="h-8 text-[11px] rounded-lg disabled:opacity-30"
                 onClick={returnToLive}
-                disabled={!isPreviewing}
+                disabled={effectiveNavPly === totalPlies}
                 title="Return to current position">
                 <RotateCcw size={12} className="mr-1" />
                 Current
@@ -712,47 +743,43 @@ export default function TrainingClient({
                 Show Answer
               </Button>
             ) : (
-              /* Answer revealed — only shown in main panel on mobile */
-              <div className="lg:hidden space-y-2">
-                <div className="glass-card rounded-xl p-2.5 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    The move was
-                  </p>
-                  <p className="text-xl font-mono font-bold text-foreground">
+              /* Answer revealed — mobile-only compact layout. Single
+                 inline header ("The move was Nf3 · How well?") + a
+                 single line of 4 buttons fit comfortably in the slot
+                 reserved below the board even on small phones. */
+              <div className="lg:hidden space-y-1.5">
+                <p className="text-[11px] text-center text-muted-foreground">
+                  The move was{" "}
+                  <span className="font-mono font-semibold text-foreground">
                     {getExpectedMoveDisplay()}
-                  </p>
-                </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  How well did you know this?
+                  </span>
+                  <span className="mx-1.5 text-muted-foreground/50">·</span>
+                  How well did you know it?
                 </p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-1.5">
                   <Button
                     onClick={() => handleRecallRating("forgot")}
-                    className="h-11 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    className="h-10 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl"
                     variant="ghost">
-                    <span className="text-xs font-medium">Forgot</span>
-                    <span className="text-[10px] opacity-70">Again</span>
+                    Forgot
                   </Button>
                   <Button
                     onClick={() => handleRecallRating("partial")}
-                    className="h-11 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    className="h-10 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 text-xs font-medium rounded-xl"
                     variant="ghost">
-                    <span className="text-xs font-medium">Hard</span>
-                    <span className="text-[10px] opacity-70">Struggled</span>
+                    Hard
                   </Button>
                   <Button
                     onClick={() => handleRecallRating("effort")}
-                    className="h-11 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    className="h-10 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 text-xs font-medium rounded-xl"
                     variant="ghost">
-                    <span className="text-xs font-medium">Good</span>
-                    <span className="text-[10px] opacity-70">Effort</span>
+                    Good
                   </Button>
                   <Button
                     onClick={() => handleRecallRating("easy")}
-                    className="h-11 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
+                    className="h-10 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 text-xs font-medium rounded-xl"
                     variant="ghost">
-                    <span className="text-xs font-medium">Easy</span>
-                    <span className="text-[10px] opacity-70">No problem</span>
+                    Easy
                   </Button>
                 </div>
               </div>

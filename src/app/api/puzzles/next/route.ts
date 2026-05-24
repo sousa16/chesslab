@@ -40,14 +40,27 @@ export async function GET(request: NextRequest) {
 
     const prefs = puzzlePrefs ?? DEFAULT_PREFS;
     const now = new Date();
-    const exclude = request.nextUrl.searchParams.get("exclude");
+    // `exclude` is a comma-separated list of puzzle IDs the client knows
+    // shouldn't be picked. The original use was just the current
+    // displayed puzzle (so a prefetch with the same exclude couldn't
+    // re-pick it). Now also covers RECENTLY-RATED puzzles whose review
+    // write may not have committed yet — without that filter the
+    // prefetch can race a fire-and-forget review POST and serve the
+    // just-rated puzzle right back to the user.
+    const excludeParam = request.nextUrl.searchParams.get("exclude");
+    const excludeIds = excludeParam
+      ? excludeParam
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
 
     // 1) due review
     const dueReviewWhere = {
       userId,
       nextReviewDate: { lte: now },
       puzzle: { categories: { hasSome: prefs.enabledCategories } },
-      ...(exclude ? { puzzleId: { not: exclude } } : {}),
+      ...(excludeIds.length > 0 ? { puzzleId: { notIn: excludeIds } } : {}),
     } satisfies Prisma.PuzzleReviewWhereInput;
 
     const dueReview = await prisma.puzzleReview.findFirst({
@@ -80,6 +93,8 @@ export async function GET(request: NextRequest) {
       prefs.ratingMin +
       Math.floor(Math.random() * (prefs.ratingMax - prefs.ratingMin + 1));
 
+    // Empty-array → no exclusion. Postgres `<> ALL ($::text[])` returns
+    // TRUE when the array is empty, so the predicate is a no-op there.
     const rows = await prisma.$queryRaw<
       Array<{
         id: string;
@@ -95,7 +110,7 @@ export async function GET(request: NextRequest) {
       FROM "Puzzle" p
       WHERE p.rating BETWEEN ${prefs.ratingMin} AND ${prefs.ratingMax}
         AND p.categories && ${prefs.enabledCategories}::text[]
-        AND (${exclude}::text IS NULL OR p.id <> ${exclude})
+        AND p.id <> ALL (${excludeIds}::text[])
         AND NOT EXISTS (
           SELECT 1 FROM "PuzzleReview" r
           WHERE r."puzzleId" = p.id AND r."userId" = ${userId}

@@ -86,17 +86,26 @@ export default function TacticsClient() {
   // one currently on screen. Populated by the effect below whenever a new
   // puzzle lands; consumed (or cleared) in handleRate and updatePrefs.
   const prefetchRef = useRef<Promise<NextPuzzleResponse | null> | null>(null);
+  // Bounded list of just-rated puzzle ids. The review POST is fire-and-
+  // forget, so the prefetch can race a not-yet-committed write and serve
+  // the same puzzle back. Passing the recent ids as additional excludes
+  // closes that window — by the time IDs roll off this list the server
+  // has long since persisted them and SRS will have pushed them forward.
+  const recentlyRatedRef = useRef<string[]>([]);
+  const RECENT_RATED_CAP = 20;
 
   const handleBack = () => {
     router.push("/home");
   };
 
   const fetchNext = useCallback(
-    async (excludeId?: string): Promise<NextPuzzleResponse | null> => {
+    async (excludeIds?: string[]): Promise<NextPuzzleResponse | null> => {
       try {
-        const url = excludeId
-          ? `/api/puzzles/next?exclude=${encodeURIComponent(excludeId)}`
-          : "/api/puzzles/next";
+        const filtered = (excludeIds ?? []).filter(Boolean);
+        const url =
+          filtered.length > 0
+            ? `/api/puzzles/next?exclude=${encodeURIComponent(filtered.join(","))}`
+            : "/api/puzzles/next";
         const res = await fetch(url);
         if (!res.ok) return null;
         return (await res.json()) as NextPuzzleResponse;
@@ -127,7 +136,10 @@ export default function TacticsClient() {
       // pull (filters changed, initial load, etc.).
       prefetchRef.current = null;
       try {
-        const data = await fetchNext(excludeId);
+        const excludes = excludeId
+          ? [excludeId, ...recentlyRatedRef.current]
+          : [...recentlyRatedRef.current];
+        const data = await fetchNext(excludes);
         applyNext(data);
       } finally {
         setSubmitting(false);
@@ -153,15 +165,19 @@ export default function TacticsClient() {
 
   // Prefetch the next puzzle in the background as soon as the current one
   // lands, so that when the user rates we can swap to it instantly instead
-  // of awaiting the GET. The exclude is the current puzzle id — the server
-  // already filters that out, so the prefetched response is still valid
-  // after we commit the review.
+  // of awaiting the GET. Excludes both the current puzzle AND every
+  // recently-rated id — the prefetch can fire before a previous review
+  // POST has committed, and without the recent-rated filter the server
+  // would happily return the not-yet-committed puzzle as the "next due".
   useEffect(() => {
     if (!puzzle || empty) {
       prefetchRef.current = null;
       return;
     }
-    prefetchRef.current = fetchNext(puzzle.id);
+    prefetchRef.current = fetchNext([
+      puzzle.id,
+      ...recentlyRatedRef.current,
+    ]);
   }, [puzzle?.id, empty, fetchNext]);
 
   const handleShowAnswer = () => {
@@ -248,9 +264,16 @@ export default function TacticsClient() {
       }),
     }).catch((err) => console.error(err));
 
+    // Record the rated id so subsequent prefetches exclude it. The list
+    // is bounded so it doesn't grow unbounded across long sessions; by
+    // the time the cap rolls an id off, the review write is committed
+    // and SRS has bumped nextReviewDate forward.
+    recentlyRatedRef.current.push(ratedId);
+    if (recentlyRatedRef.current.length > RECENT_RATED_CAP) {
+      recentlyRatedRef.current.shift();
+    }
+
     // Consume the prefetched next puzzle if it's ready (or about to be).
-    // When the GET races ahead of the review commit the `exclude=ratedId`
-    // we sent on prefetch keeps the same puzzle from being served back.
     const pending = prefetchRef.current;
     prefetchRef.current = null;
     if (pending) {

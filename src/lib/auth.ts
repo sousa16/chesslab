@@ -236,5 +236,28 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  events: {
+    // Fire-and-forget warm-up of the heavy training-stats compute when
+    // the user signs in. The first /home → /api/training-stats call
+    // can then hit the unstable_cache instead of running the full
+    // aggregation cold. In dev (single process) this is a clean win;
+    // on serverless it only helps when /api/auth and /api/training-stats
+    // share a warm lambda, which is common in practice on Vercel.
+    signIn: async ({ user }) => {
+      if (!user?.id) return;
+      // Lazy require to avoid pulling Prisma into the auth bundle at
+      // module-load time — the call only matters when an actual signin
+      // happens, and only on the server.
+      try {
+        const { getTrainingStats } = await import("@/lib/trainingStats");
+        // Don't await: signin shouldn't be blocked on this. Errors are
+        // swallowed — a failed pre-warm just means /home pays the cold
+        // cost like before.
+        getTrainingStats(user.id).catch(() => {});
+      } catch {
+        /* import failure shouldn't break signin */
+      }
+    },
+  },
   secret: process.env.NEXTAUTH_SECRET,
 };

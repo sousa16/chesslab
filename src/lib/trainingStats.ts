@@ -11,7 +11,6 @@
 
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { buildRepertoireTree } from "@/lib/repertoireTree";
 
 export interface ColorStats {
   mastered: number;
@@ -68,30 +67,35 @@ async function computeTrainingStats(userId: string): Promise<TrainingStats> {
   const todayUTC = new Date(
     Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
   );
+  const now = new Date();
   // Streak + today's counters only need the recent slice. All-time
   // accuracy is computed in SQL below — no need to scan every row.
   const since = new Date(Date.now() - NINETY_DAYS_MS);
 
-  const [repertoires, recentActivities, accuracyAgg] = await Promise.all([
-    prisma.repertoire.findMany({
-      where: { userId },
-      select: {
-        color: true,
-        entries: {
-          where: {
-            // Skip first-move positions — they're kept in the model so
-            // child SAN paths reconstruct correctly, but they don't count
-            // as practice-able cards.
-            position: { fullmoveNumber: { gt: 1 } },
-          },
-          select: {
-            id: true,
-            expectedMove: true,
-            phase: true,
-            nextReviewDate: true,
-            position: { select: { fen: true } },
-          },
-        },
+  const [leafCounts, dueCount, recentActivities, accuracyAgg] = await Promise.all([
+    // Count leaves per (color, phase). Uses the denormalized
+    // RepertoireEntry.isLeaf column + the (repertoireId, isLeaf, phase)
+    // composite index, so this is purely indexed aggregation — no
+    // chess.js tree-build needed on the read path.
+    prisma.$queryRaw<
+      Array<{ color: string; phase: string; count: bigint }>
+    >`
+      SELECT r.color::text AS color, e.phase, COUNT(*)::bigint AS count
+      FROM "Repertoire" r
+      INNER JOIN "RepertoireEntry" e ON e."repertoireId" = r.id
+      INNER JOIN "Position" p ON p.id = e."positionId"
+      WHERE r."userId" = ${userId}
+        AND e."isLeaf" = true
+        AND p."fullmoveNumber" > 1
+      GROUP BY r.color, e.phase
+    `,
+    // Due cards across both colors. Uses the (repertoireId,
+    // nextReviewDate) composite index introduced in perf_indexes.
+    prisma.repertoireEntry.count({
+      where: {
+        repertoire: { userId },
+        nextReviewDate: { lte: now },
+        position: { fullmoveNumber: { gt: 1 } },
       },
     }),
     prisma.dailyActivity.findMany({
@@ -109,37 +113,15 @@ async function computeTrainingStats(userId: string): Promise<TrainingStats> {
     }),
   ]);
 
-  const now = new Date();
-  let dueCount = 0;
-
   const colorStats = {
     white: { mastered: 0, total: 0 },
     black: { mastered: 0, total: 0 },
   };
-
-  for (const repertoire of repertoires) {
-    const colorKey = repertoire.color === "White" ? "white" : "black";
-
-    for (const entry of repertoire.entries) {
-      if (new Date(entry.nextReviewDate) <= now) dueCount++;
-    }
-
-    const { roots } = buildRepertoireTree(repertoire.entries, repertoire.color);
-    const entriesById = new Map(repertoire.entries.map((e) => [e.id, e]));
-    const visited = new Set<string>();
-    const walk = (node: (typeof roots)[number]) => {
-      if (visited.has(node.id)) return;
-      visited.add(node.id);
-      if (node.children.length === 0) {
-        const e = entriesById.get(node.id);
-        if (e) {
-          colorStats[colorKey].total++;
-          if (e.phase === "exponential") colorStats[colorKey].mastered++;
-        }
-      }
-      for (const c of node.children) walk(c);
-    };
-    for (const root of roots) walk(root);
+  for (const row of leafCounts) {
+    const key = row.color === "White" ? "white" : "black";
+    const n = Number(row.count);
+    colorStats[key].total += n;
+    if (row.phase === "exponential") colorStats[key].mastered += n;
   }
 
   const streak = calculateStreakFromActivities(recentActivities);

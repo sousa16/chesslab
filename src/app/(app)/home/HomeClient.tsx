@@ -11,10 +11,18 @@ import { RepertoirePanel } from "@/components/RepertoirePanel";
 import { Board, BoardHandle } from "@/components/Board";
 import { BoardControls } from "@/components/BoardControls";
 import { Button } from "@/components/ui/button";
+import type { TrainingStats } from "@/lib/trainingStats";
 
 type View = "home" | "repertoire";
 
-export default function HomeClient() {
+interface HomeClientProps {
+  // Passed in from the /home server page. HomePanel `use()`s it for a
+  // cold load; revisits prefer the JS module cache and the promise
+  // resolves silently in the background.
+  statsPromise: Promise<TrainingStats | null>;
+}
+
+export default function HomeClient({ statsPromise }: HomeClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
@@ -293,6 +301,7 @@ export default function HomeClient() {
           <HomePanel
             onSelectRepertoire={handleSelectRepertoire}
             onStartPractice={handleStartPractice}
+            statsPromise={statsPromise}
           />
         ) : (
           <RepertoirePanel

@@ -306,11 +306,19 @@ export default function TrainingClient({
   // (handleTrainingMove) and the manual-rating path (handleRecallRating)
   // so they share the exact same payload + error handling.
   const submitReview = useCallback(
-    (entryId: string, rating: ReviewResponse, timeSpentMs: number) => {
+    (
+      entryId: string,
+      rating: ReviewResponse,
+      timeSpentMs: number,
+      wasDue: boolean,
+    ) => {
       try {
+        // wasDue lets HomePanel decrement the dashboard's dueCount
+        // optimistically — a card that was due is no longer due after a
+        // review (SRS bumps nextReviewDate forward regardless of rating).
         window.dispatchEvent(
           new CustomEvent("training-stats-updated", {
-            detail: { timeSpentMs, positionsReviewed: 1 },
+            detail: { timeSpentMs, positionsReviewed: 1, wasDue },
           }),
         );
       } catch {}
@@ -358,7 +366,12 @@ export default function TrainingClient({
         // practice cards stay a pure refresher.
         const shouldWriteSRS = !isPracticeMode || currentEntry.isDue;
         if (shouldWriteSRS) {
-          submitReview(currentEntry.id, "effort", getTimeSpentMs());
+          submitReview(
+            currentEntry.id,
+            "effort",
+            getTimeSpentMs(),
+            currentEntry.isDue,
+          );
         }
 
         // Clear feedback and move to next after delay
@@ -457,7 +470,7 @@ export default function TrainingClient({
       return;
     }
 
-    submitReview(entryId, rating, timeSpentMs);
+    submitReview(entryId, rating, timeSpentMs, isDue);
   };
 
   // Calculate progress

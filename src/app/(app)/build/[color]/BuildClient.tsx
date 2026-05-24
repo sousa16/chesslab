@@ -10,6 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
 import { convertSanToUci } from "@/lib/repertoire";
 import { useToast } from "@/components/ui/toast";
+import {
+  incrementPendingSave,
+  decrementPendingSave,
+} from "@/lib/savesPending";
 
 interface Move {
   number: number;
@@ -154,6 +158,10 @@ export default function BuildClient({
     // build view.
     setIsSavingLine(true);
     sessionStorage.setItem("buildReturnColor", color);
+    // Mark a save as in-flight BEFORE we navigate, so that a panel
+    // mounting on /home immediately knows to wait for us instead of
+    // racing past the not-yet-committed save.
+    incrementPendingSave();
     router.back();
 
     fetch("/api/repertoire-entries/save-line", {
@@ -177,11 +185,9 @@ export default function BuildClient({
           return;
         }
         toast.success(`Line saved — ${data.entriesCreated} positions added.`);
-        // RepertoirePanel + HomePanel are already mounted by the time
-        // this resolves (router.back() ran synchronously above). Their
-        // initial fetches happened BEFORE the save committed, so the
-        // panel is showing stale data. Fire the existing app-wide event
-        // to make them refetch.
+        // Fire the app-wide event for any panel already mounted; the
+        // pending-saves counter (decremented in finally below) covers
+        // the case where the panel mounts AFTER this resolves.
         try {
           window.dispatchEvent(new CustomEvent("training-stats-updated"));
         } catch {
@@ -190,6 +196,9 @@ export default function BuildClient({
       })
       .catch(() => {
         toast.error("Network error saving line.");
+      })
+      .finally(() => {
+        decrementPendingSave();
       });
     // We don't reset isSavingLine — the component unmounts on router.back().
   }, [isSavingLine, moves, endsWithUserMove, color, router, toast]);

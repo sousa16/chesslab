@@ -10,6 +10,10 @@ import {
 } from "@/components/repertoire";
 import { LineTree } from "@/components/repertoire/LineTree";
 import { useToast } from "@/components/ui/toast";
+import {
+  hasPendingSave,
+  whenAllSavesSettle,
+} from "@/lib/savesPending";
 
 interface LineNode {
   id: string;
@@ -69,16 +73,28 @@ export function RepertoirePanel({
     }
   }, [color]);
 
+  // Initial fetch on mount. If a save POST from BuildClient is still
+  // pending (the panel mounted faster than the save round-trip), we wait
+  // for it to settle BEFORE the first fetch — otherwise the server
+  // returns the pre-save tree and the new line never appears until the
+  // user manually re-enters the panel. whenAllSavesSettle fires
+  // immediately when nothing is pending, so the steady-state cost is a
+  // single function call.
   useEffect(() => {
+    if (hasPendingSave()) {
+      const cancel = whenAllSavesSettle(() => {
+        fetchRepertoire();
+      });
+      return cancel;
+    }
     fetchRepertoire();
   }, [fetchRepertoire]);
 
-  // BuildClient navigates back optimistically (before the save POST
-  // commits), so the initial fetch above can race ahead of the new
-  // entries. The save handler dispatches `training-stats-updated` when
-  // its response lands; we refetch in response. The event is shared with
-  // review writes (TrainingClient), which carry a `positionsReviewed`
-  // detail — those don't change the tree shape, so we ignore them here.
+  // Live updates from other parts of the app. Covers the case where the
+  // panel was already mounted when a save / delete event fires (the
+  // pending-saves path above only runs on mount). Review writes
+  // (TrainingClient) carry a `positionsReviewed` detail — those don't
+  // change the tree shape, so we ignore them here.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ positionsReviewed?: number }>).detail;

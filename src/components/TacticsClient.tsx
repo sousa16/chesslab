@@ -222,6 +222,11 @@ export default function TacticsClient() {
     const timeSpentMs = Date.now() - cardStartRef.current;
 
     try {
+      // wasDue is intentionally omitted: puzzle reviews count toward
+      // positionsReviewedToday (via DailyActivity) but NOT toward the
+      // home dashboard's "moves to practice" number (which is repertoire-
+      // only). Letting HomePanel skip the dueCount patch is the right
+      // behavior here.
       window.dispatchEvent(
         new CustomEvent("training-stats-updated", {
           detail: { timeSpentMs, positionsReviewed: 1 },

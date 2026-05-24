@@ -131,13 +131,22 @@ export async function GET(request: NextRequest) {
       // looking up the opening name, so a mid-game-rooted tree (e.g., a
       // Caro-Kann sub-tree without an entry at "after 1.e4 c6") gets
       // named "Caro-Kann Defense" rather than "Queen's Pawn Game".
+      //
+      // anchorSansToStart returns the path TO the entry's position FEN,
+      // which is the position BEFORE the user's expected move — so the
+      // user's own move (always the last element of built.sanMoves) is
+      // missing from the anchored path. We glue it back on, otherwise
+      // every displayed leaf would end with the opponent's last move.
       const anchoredSans = anchorSansToStart(
         built.sanMoves,
         built.fen,
         built.rootFen,
       );
+      const userMoveSan = built.sanMoves[built.sanMoves.length - 1];
       const displaySans =
-        anchoredSans.length > 0 ? anchoredSans : built.sanMoves;
+        anchoredSans.length > 0 && userMoveSan
+          ? [...anchoredSans, userMoveSan]
+          : built.sanMoves;
       const match = lookupOpening(displaySans);
       return {
         id: built.id,

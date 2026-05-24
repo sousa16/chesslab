@@ -16,9 +16,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, use } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
-import { getCachedStats, setCachedStats } from "@/lib/statsCache";
+import {
+  getCachedStats,
+  setCachedStats,
+  patchCachedStats,
+} from "@/lib/statsCache";
 import type { TrainingStats as ServerTrainingStats } from "@/lib/trainingStats";
 
 interface ColorStats {
@@ -44,6 +48,11 @@ interface TrainingStats {
 interface HomePanelProps {
   onSelectRepertoire: (color: "white" | "black") => void;
   onStartPractice: () => void;
+  // Promise of pre-computed stats from the /home server page. Used as
+  // the initial value when the client cache is empty (= cold load).
+  // Revisits read from the cache and ignore this — `use()` of an
+  // already-resolved promise is cheap and doesn't suspend.
+  statsPromise?: Promise<ServerTrainingStats | null>;
 }
 
 interface RepertoireStats {
@@ -137,9 +146,10 @@ function getFirstName(user: {
 export function HomePanel({
   onSelectRepertoire,
   onStartPractice: onStartPracticeCallback,
+  statsPromise,
 }: HomePanelProps) {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
   const greeting = getGreeting();
   const firstName = session?.user ? getFirstName(session.user) : "there";
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -155,17 +165,34 @@ export function HomePanel({
     positions: 0,
     percentage: 0,
   });
-  // Seed from the cross-route cache so coming back to /home from /tactics
-  // (etc.) renders real numbers immediately while a background fetch
-  // revalidates. The cache is populated by every successful fetchStats.
+  // Seed precedence:
+  //   1. JS module cache — populated by every successful fetchStats.
+  //      Survives client-side nav, so /tactics → /home is instant.
+  //   2. Server-streamed promise — populated by the /home RSC. Used
+  //      for cold loads (no cache yet). `use()` of an already-resolved
+  //      promise returns its value synchronously; only the first cold
+  //      mount actually suspends.
+  //   3. null — show "…" placeholders and rely on fetchStats below.
   const cachedInitial = getCachedStats();
+  const streamedInitial: ServerTrainingStats | null =
+    cachedInitial == null && statsPromise ? use(statsPromise) : null;
+  const initialStats = cachedInitial ?? streamedInitial;
   const [trainingStats, setTrainingStats] = useState<TrainingStats | null>(
-    cachedInitial,
+    initialStats,
   );
   const [positionsReviewedToday, setPositionsReviewedToday] = useState<number>(
-    cachedInitial?.positionsReviewedToday ?? 0,
+    initialStats?.positionsReviewedToday ?? 0,
   );
-  const [isLoading, setIsLoading] = useState(!cachedInitial);
+  const [isLoading, setIsLoading] = useState(!initialStats);
+
+  // The streamed stats are server-fresh on first cold mount, so push
+  // them into the module cache once. After that, fetchStats keeps the
+  // cache in sync.
+  useEffect(() => {
+    if (streamedInitial && !getCachedStats()) {
+      setCachedStats(streamedInitial);
+    }
+  }, [streamedInitial]);
 
   const onStartPractice = () => {
     if (isStartingPractice) return;
@@ -194,45 +221,70 @@ export function HomePanel({
     }
   };
 
+  // Fire the stats fetch as soon as we mount IF we don't already have
+  // them. We deliberately don't wait on `useSession()` to resolve —
+  // the JWT cookie is already attached by the browser, so the API auth
+  // check works regardless of whether the React session context has
+  // hydrated yet. When the RSC streamed stats (initialStats != null),
+  // we skip the fetch entirely — the RSC payload already covered it.
   useEffect(() => {
-    // Wait for session to finish loading
-    if (status === "loading") {
-      return;
-    }
-
-    // Only fetch when session is available
-    if (!session?.user) {
+    if (initialStats) {
       setIsLoading(false);
       return;
     }
-
+    let cancelled = false;
     const doFetch = async () => {
-      setIsLoading(true);
       await fetchStats();
-      setIsLoading(false);
+      if (!cancelled) setIsLoading(false);
     };
-
     doFetch();
-  }, [session?.user, status]);
+    return () => {
+      cancelled = true;
+    };
+    // We intentionally only react to the initial mount-time value of
+    // initialStats; subsequent updates come through fetchStats / the
+    // training-stats-updated event handlers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Listen for training updates from other parts of the app (e.g., TrainingClient)
+  // Listen for training updates from other parts of the app (e.g.,
+  // TrainingClient / TacticsClient / BuildClient).
+  //
+  // Events with `positionsReviewed` in their detail are review writes
+  // (one card finished). We patch the cached stats and React state in
+  // place so re-navigating to /home shows the updated numbers without
+  // waiting on the background refetch. `wasDue` (when present) decrements
+  // dueCount — only opening reviews carry it; puzzle reviews don't
+  // affect the repertoire's "moves to practice" counter.
+  //
+  // Events without that detail are full-change signals (save-line,
+  // delete-line/family). For those we just refetch — too many fields
+  // could have changed to patch reliably.
   useEffect(() => {
     const handler = (e: Event) => {
       const custom = e as CustomEvent<{
         timeSpentMs?: number;
         positionsReviewed?: number;
+        wasDue?: boolean;
       }>;
-      if (
-        custom &&
-        custom.detail &&
-        typeof custom.detail.positionsReviewed === "number"
-      ) {
-        // Optimistically update local positions reviewed counter
-        setPositionsReviewedToday(
-          (prev) => prev + custom.detail.positionsReviewed!,
-        );
+      const detail = custom?.detail;
+      if (detail && typeof detail.positionsReviewed === "number") {
+        const reviewed = detail.positionsReviewed;
+        const wasDue = detail.wasDue === true;
+        setPositionsReviewedToday((prev) => prev + reviewed);
+        setTrainingStats((prev) => {
+          if (!prev) return prev;
+          const next: TrainingStats = {
+            ...prev,
+            positionsReviewedToday:
+              (prev.positionsReviewedToday ?? 0) + reviewed,
+            dueCount: wasDue ? Math.max(0, prev.dueCount - 1) : prev.dueCount,
+          };
+          patchCachedStats(next);
+          return next;
+        });
       } else {
-        // Fallback: refetch full stats
+        // Save/delete event — refetch the whole thing.
         fetchStats();
       }
     };

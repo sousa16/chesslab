@@ -82,27 +82,71 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Compute the family for every entry the same way the stats page and
-    // sidebar do: replay SAN path from start, then ECO lookup. Anything
-    // matching the target family is queued for deletion.
-    const { byEntryId } = buildRepertoireTree(
+    // Compute family per LEAF only (the user-visible "line"), then walk
+    // back up to include every interior ancestor whose leaf-descendants
+    // are all in this family.
+    //
+    // Why we don't classify interior entries directly: ECO lookup on a
+    // shallower path can land on a generic name (e.g. "Queen's Pawn Game")
+    // even though every leaf below it is in a more specific family (e.g.
+    // "Caro-Kann Defense"). The LineTree groups by LEAF family — so
+    // delete must match the same set.
+    const { roots, byEntryId } = buildRepertoireTree(
       repertoire.entries,
       repertoire.color,
     );
-    const idsToDelete: string[] = [];
-    for (const entry of repertoire.entries) {
-      const node = byEntryId.get(entry.id);
-      const sans = node?.sanMoves ?? [];
-      const rootFen = node?.rootFen ?? entry.position.fen;
-      const anchored = anchorSansToStart(sans, entry.position.fen, rootFen);
-      const lookupSans = anchored.length > 0 ? anchored : sans;
-      const match = lookupOpening(lookupSans);
-      if (familyOf(match?.name ?? null) === family) {
-        idsToDelete.push(entry.id);
-      }
-    }
 
-    if (idsToDelete.length === 0) {
+    // The full anchored path (= path-to-position + the user's own move at
+    // that position) is what ECO matches most accurately. anchored alone
+    // drops the leaf's final move; we glue it back the same way the
+    // /api/repertoires display path does.
+    const familyOfNode = (
+      node: ReturnType<typeof byEntryId.get>,
+    ): string => {
+      if (!node) return UNFAMILIED_LABEL;
+      const anchored = anchorSansToStart(
+        node.sanMoves,
+        node.fen,
+        node.rootFen,
+      );
+      const userMove = node.sanMoves[node.sanMoves.length - 1];
+      const lookupSans =
+        anchored.length > 0 && userMove
+          ? [...anchored, userMove]
+          : node.sanMoves;
+      const match = lookupOpening(lookupSans);
+      return familyOf(match?.name ?? null);
+    };
+
+    // Walk down: classify each leaf; for interior nodes, mark them iff
+    // EVERY leaf-descendant is in the target family. This way we don't
+    // strand a parent entry whose specific-leaf children we're about to
+    // remove.
+    const idsToDelete = new Set<string>();
+    type Node = (typeof roots)[number];
+    const collect = (
+      node: Node,
+    ): { allInFamily: boolean; hasAnyLeaf: boolean } => {
+      if (node.children.length === 0) {
+        const inFam = familyOfNode(node) === family;
+        if (inFam) idsToDelete.add(node.id);
+        return { allInFamily: inFam, hasAnyLeaf: true };
+      }
+      let allInFamily = true;
+      let hasAnyLeaf = false;
+      for (const child of node.children) {
+        const r = collect(child);
+        if (r.hasAnyLeaf) hasAnyLeaf = true;
+        if (!r.allInFamily) allInFamily = false;
+      }
+      if (hasAnyLeaf && allInFamily) {
+        idsToDelete.add(node.id);
+      }
+      return { allInFamily, hasAnyLeaf };
+    };
+    for (const root of roots) collect(root);
+
+    if (idsToDelete.size === 0) {
       return NextResponse.json({
         success: true,
         deletedCount: 0,
@@ -111,7 +155,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const result = await prisma.repertoireEntry.deleteMany({
-      where: { id: { in: idsToDelete } },
+      where: { id: { in: Array.from(idsToDelete) } },
     });
 
     // Sweep orphaned positions (no entries refer to them any more).

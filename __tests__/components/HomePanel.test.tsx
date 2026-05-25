@@ -70,6 +70,7 @@ describe("HomePanel Component", () => {
       if (url === "/api/training-stats") {
         return Promise.resolve({
           ok: true,
+          headers: { get: () => null },
           json: async () => mockTrainingStats,
         });
       }
@@ -136,7 +137,7 @@ describe("HomePanel Component", () => {
     );
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats");
+      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats", expect.any(Object));
     });
   });
 
@@ -150,7 +151,7 @@ describe("HomePanel Component", () => {
 
     await waitFor(() => {
       // Component fetches training stats
-      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats");
+      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats", expect.any(Object));
     });
   });
 
@@ -173,6 +174,7 @@ describe("HomePanel Component", () => {
       if (url === "/api/training-stats") {
         return Promise.resolve({
           ok: true,
+          headers: { get: () => null },
           json: async () => ({
             dueCount: 0,
             colorStats: {

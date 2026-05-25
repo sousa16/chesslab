@@ -16,6 +16,11 @@ import { lookupOpening } from "@/lib/openings";
 import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
 import { recomputeRepertoireLeaves } from "@/lib/repertoireLeaves";
 
+// Family delete walks the full tree + does an ECO lookup per leaf — for a
+// large repertoire that's a noticeable chunk of work plus the deferred
+// recomputeRepertoireLeaves before the connection drops.
+export const maxDuration = 60;
+
 const UNFAMILIED_LABEL = "Other Lines";
 
 function familyOf(openingName: string | null): string {
@@ -154,19 +159,33 @@ export async function DELETE(request: NextRequest) {
       });
     }
 
+    // Capture positions referenced by the to-be-deleted entries before
+    // they vanish, so the orphan sweep only touches those rows rather
+    // than scanning the whole Position table.
+    const targetIds = Array.from(idsToDelete);
+    const deletedEntryPositions = await prisma.repertoireEntry.findMany({
+      where: { id: { in: targetIds } },
+      select: { positionId: true },
+    });
+    const candidatePositionIds = Array.from(
+      new Set(deletedEntryPositions.map((e) => e.positionId)),
+    );
+
     const result = await prisma.repertoireEntry.deleteMany({
-      where: { id: { in: Array.from(idsToDelete) } },
+      where: { id: { in: targetIds } },
     });
 
-    // Sweep orphaned positions (no entries refer to them any more).
-    const orphaned = await prisma.position.findMany({
-      where: { repertoireEntries: { none: {} } },
-      select: { id: true },
-    });
-    if (orphaned.length > 0) {
-      await prisma.position.deleteMany({
-        where: { id: { in: orphaned.map((p) => p.id) } },
+    if (candidatePositionIds.length > 0) {
+      const stillReferenced = await prisma.repertoireEntry.findMany({
+        where: { positionId: { in: candidatePositionIds } },
+        select: { positionId: true },
+        distinct: ["positionId"],
       });
+      const referenced = new Set(stillReferenced.map((e) => e.positionId));
+      const orphanIds = candidatePositionIds.filter((id) => !referenced.has(id));
+      if (orphanIds.length > 0) {
+        await prisma.position.deleteMany({ where: { id: { in: orphanIds } } });
+      }
     }
 
     // Surviving siblings/parents may have become leaves now. Deferred

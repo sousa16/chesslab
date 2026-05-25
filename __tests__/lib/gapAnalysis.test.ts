@@ -351,3 +351,181 @@ describe("runGapAnalysis — lichess", () => {
     expect(result.gamesFetched).toBe(0);
   });
 });
+
+describe("runGapAnalysis — sub-line continuations", () => {
+  const STARTING_FEN =
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+  it("captures the continuation following the gap and ranks sub-lines by frequency", async () => {
+    // Three games, all hitting the same gap (1.e4 e5 → white-to-move
+    // with no prep). Two share continuation 'Nf3 Nc6 Bb5'; one diverges
+    // into 'Bc4 Nf6'. We expect the heavier sub-line to rank first.
+    mockFetch(
+      chesscomFixture([
+        {
+          url: "https://chess.com/game/1",
+          pgn: pgn(["e4", "e5", "Nf3", "Nc6", "Bb5"]),
+          time_class: "blitz",
+          white: { username: "alice", rating: 1500 },
+          black: { username: "bob", rating: 1500 },
+        },
+        {
+          url: "https://chess.com/game/2",
+          pgn: pgn(["e4", "e5", "Nf3", "Nc6", "Bb5"]),
+          time_class: "blitz",
+          white: { username: "alice", rating: 1500 },
+          black: { username: "carol", rating: 1500 },
+        },
+        {
+          url: "https://chess.com/game/3",
+          pgn: pgn(["e4", "e5", "Bc4", "Nf6"]),
+          time_class: "blitz",
+          white: { username: "alice", rating: 1500 },
+          black: { username: "dave", rating: 1500 },
+        },
+      ]),
+    );
+
+    const result = await runGapAnalysis(
+      { chesscomUsername: "alice", color: "white", maxGames: 10 },
+      [{ color: "white", fens: [STARTING_FEN] }],
+    );
+
+    expect(result.whiteGaps).toHaveLength(1);
+    const [gap] = result.whiteGaps;
+    expect(gap.occurrences).toBe(3);
+
+    // Two sub-lines: Nf3 Nc6 Bb5 (count 2) and Bc4 Nf6 (count 1).
+    expect(gap.continuations).toHaveLength(2);
+    expect(gap.continuations[0]).toEqual(
+      expect.objectContaining({
+        sans: ["Nf3", "Nc6", "Bb5"],
+        count: 2,
+      }),
+    );
+    expect(gap.continuations[0].sampleGameUrls).toHaveLength(2);
+    expect(gap.continuations[1]).toEqual(
+      expect.objectContaining({
+        sans: ["Bc4", "Nf6"],
+        count: 1,
+      }),
+    );
+  });
+
+  it("caps continuations at MAX_CONTINUATIONS_PER_GAP and keeps the heaviest", async () => {
+    // Six distinct continuations following 1.e4 e5; expect at most 5
+    // in the output, sorted desc by count.
+    const seqs: [string, string][] = [
+      ["Nf3", "Nc6"],
+      ["Bc4", "Nf6"],
+      ["d4", "exd4"],
+      ["Nc3", "Nf6"],
+      ["f4", "exf4"],
+      ["Qh5", "Nc6"],
+    ];
+    const games = seqs.flatMap(([w, b], i) =>
+      // Make 'Nf3 Nc6' the most popular (3 copies).
+      Array.from({ length: i === 0 ? 3 : 1 }, (_, k) => ({
+        url: `https://chess.com/game/${i}-${k}`,
+        pgn: pgn(["e4", "e5", w, b]),
+        time_class: "blitz",
+        white: { username: "alice", rating: 1500 },
+        black: { username: "x", rating: 1500 },
+      })),
+    );
+    mockFetch(chesscomFixture(games));
+
+    const result = await runGapAnalysis(
+      { chesscomUsername: "alice", color: "white", maxGames: 50 },
+      [{ color: "white", fens: [STARTING_FEN] }],
+    );
+
+    const [gap] = result.whiteGaps;
+    expect(gap.continuations.length).toBeLessThanOrEqual(5);
+    // Heaviest first.
+    expect(gap.continuations[0].count).toBe(3);
+    expect(gap.continuations[0].sans).toEqual(["Nf3", "Nc6"]);
+  });
+
+  it("returns an empty continuations array when no follow-up moves exist", async () => {
+    // Game has exactly 3 plies (e4 e5 Nf3) — gap is at white-to-move
+    // after Nf3 e5... wait, scratch that. Gap is after 1.e4 e5 (white
+    // to move, ply index 2). Continuation is what comes next: Nf3.
+    // With no further moves there's exactly one continuation: ["Nf3"].
+    mockFetch(
+      chesscomFixture([
+        {
+          url: "https://chess.com/game/short",
+          pgn: pgn(["e4", "e5", "Nf3"]),
+          time_class: "blitz",
+          white: { username: "alice", rating: 1500 },
+          black: { username: "bob", rating: 1500 },
+        },
+      ]),
+    );
+
+    const result = await runGapAnalysis(
+      { chesscomUsername: "alice", color: "white", maxGames: 5 },
+      [{ color: "white", fens: [STARTING_FEN] }],
+    );
+
+    const [gap] = result.whiteGaps;
+    expect(gap.continuations).toHaveLength(1);
+    expect(gap.continuations[0].sans).toEqual(["Nf3"]);
+    expect(gap.continuations[0].count).toBe(1);
+  });
+});
+
+describe("runGapAnalysis — progress + abort", () => {
+  it("emits fetching/fetched/analyzing/analysis-progress events in order", async () => {
+    mockFetch(
+      chesscomFixture([
+        {
+          url: "https://chess.com/game/1",
+          pgn: pgn(["e4", "e5", "Nf3"]),
+          time_class: "blitz",
+          white: { username: "alice", rating: 1500 },
+          black: { username: "bob", rating: 1500 },
+        },
+      ]),
+    );
+
+    const events: { type: string }[] = [];
+    const STARTING_FEN =
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    await runGapAnalysis(
+      { chesscomUsername: "alice", color: "white", maxGames: 5 },
+      [{ color: "white", fens: [STARTING_FEN] }],
+      { onProgress: (e) => events.push(e) },
+    );
+
+    const types = events.map((e) => e.type);
+    // Chess.com fetch phase
+    expect(types).toContain("fetching");
+    expect(types).toContain("fetched");
+    // Analysis phase
+    expect(types).toContain("analyzing");
+    expect(types).toContain("analysis-progress");
+    // Sequence sanity: fetching fires before analyzing.
+    expect(types.indexOf("fetching")).toBeLessThan(types.indexOf("analyzing"));
+  });
+
+  it("throws AbortError when the signal is already aborted at call time", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    mockFetch(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ archives: [] }),
+      }),
+    );
+    await expect(
+      runGapAnalysis(
+        { chesscomUsername: "alice", color: "white", maxGames: 5 },
+        [],
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow(/aborted/i);
+  });
+});

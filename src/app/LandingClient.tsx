@@ -14,6 +14,8 @@ import {
   BarChart3,
   ChevronRight,
   Eye,
+  Target,
+  Radar,
 } from "lucide-react";
 import { Chessboard } from "react-chessboard";
 
@@ -98,14 +100,17 @@ export default function LandingClient() {
           <div className="text-center space-y-6 sm:space-y-8 max-w-4xl mx-auto">
             <div className="space-y-4 sm:space-y-6">
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight text-slate-900 dark:text-white px-2">
-                Master Your{" "}
+                Train Your{" "}
                 <span className="bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
                   Chess Openings
                 </span>
+                , Find Your Gaps
               </h1>
               <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-slate-500 dark:text-slate-300 leading-relaxed px-2">
-                A minimal, focused platform for building and training your
-                opening repertoire with spaced repetition.
+                Build your repertoire by color, drill it with spaced
+                repetition, sharpen with tactics, and replay your real
+                chess.com and Lichess games to see exactly where your
+                prep ran out.
               </p>
             </div>
 
@@ -129,11 +134,12 @@ export default function LandingClient() {
               Core Features
             </h2>
             <p className="text-slate-500 dark:text-slate-300 text-base sm:text-lg max-w-2xl mx-auto px-4">
-              Everything you need to build and master your chess repertoire
+              Repertoire, tactics, gap analysis, and stats — one tightly
+              integrated workflow.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6">
             <div className="bg-stone-50/70 dark:bg-slate-800/50 backdrop-blur-sm border border-stone-200/80 dark:border-slate-700/50 rounded-xl p-6 space-y-4 hover:border-emerald-400/60 dark:hover:border-emerald-500/50 hover:bg-stone-50 dark:hover:bg-slate-800/80 hover:shadow-lg hover:shadow-emerald-500/5 transition-all group">
               <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 dark:group-hover:bg-emerald-500/30 transition-colors">
                 <BookOpen className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
@@ -142,8 +148,9 @@ export default function LandingClient() {
                 Repertoire Builder
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                Build custom opening lines for White and Black. Organize your
-                repertoire with a visual tree structure.
+                Build opening lines for White and Black on an interactive
+                board. The tree groups lines by family (Sicilian, Caro-Kann,
+                …) and auto-recognizes openings from the ECO dataset.
               </p>
             </div>
 
@@ -155,8 +162,38 @@ export default function LandingClient() {
                 Spaced Repetition
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                Train with the SM-2 algorithm. Review positions at optimal
-                intervals for long-term retention.
+                SM-2 scheduling keeps positions in long-term memory. Review
+                mode drills only what&apos;s due; Practice mode walks the
+                whole tree for a deep refresher.
+              </p>
+            </div>
+
+            <div className="bg-stone-50/70 dark:bg-slate-800/50 backdrop-blur-sm border border-stone-200/80 dark:border-slate-700/50 rounded-xl p-6 space-y-4 hover:border-emerald-400/60 dark:hover:border-emerald-500/50 hover:bg-stone-50 dark:hover:bg-slate-800/80 hover:shadow-lg hover:shadow-emerald-500/5 transition-all group">
+              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 dark:group-hover:bg-emerald-500/30 transition-colors">
+                <Target className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+                Tactics Trainer
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400">
+                A Lichess-sourced puzzle pool you can filter by rating band
+                and theme — fork, pin, endgame, mate-in-N. Shares the same
+                SRS scheduler as your openings.
+              </p>
+            </div>
+
+            <div className="bg-stone-50/70 dark:bg-slate-800/50 backdrop-blur-sm border border-stone-200/80 dark:border-slate-700/50 rounded-xl p-6 space-y-4 hover:border-emerald-400/60 dark:hover:border-emerald-500/50 hover:bg-stone-50 dark:hover:bg-slate-800/80 hover:shadow-lg hover:shadow-emerald-500/5 transition-all group">
+              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 dark:group-hover:bg-emerald-500/30 transition-colors">
+                <Radar className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+                Gap Analysis
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400">
+                Plug in your chess.com or Lichess username, and we replay
+                your recent games to find the first position where you had
+                no saved response — plus the sub-lines your opponents
+                pushed you into.
               </p>
             </div>
 
@@ -165,11 +202,12 @@ export default function LandingClient() {
                 <Zap className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                Smart Training
+                Daily Dashboard
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                Daily dashboard showing positions due for review. Practice
-                efficiently with intelligent scheduling.
+                See what&apos;s due at a glance, with your streak,
+                accuracy, time-on-task, and positions-reviewed-today
+                updated live as you train.
               </p>
             </div>
 
@@ -178,11 +216,12 @@ export default function LandingClient() {
                 <BarChart3 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                Progress Tracking
+                Stats & Progress
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                Monitor your learning with detailed statistics. Track mastery
-                levels and review history.
+                Mastery %, average ease, and due counts per opening family
+                — plus per-theme and per-rating breakdowns on the tactics
+                side. See where you&apos;re strong, see where you&apos;re leaking.
               </p>
             </div>
           </div>
@@ -321,7 +360,8 @@ export default function LandingClient() {
               Ready to Start Training?
             </h2>
             <p className="text-base sm:text-lg md:text-xl text-slate-500 dark:text-slate-300">
-              Build your repertoire and train smarter with spaced repetition.
+              Build, drill, and patch your repertoire — one focused
+              workflow, free to use.
             </p>
           </div>
 

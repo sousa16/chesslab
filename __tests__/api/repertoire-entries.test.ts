@@ -308,10 +308,14 @@ describe("DELETE /api/repertoire-entries/[id]", () => {
       });
     });
 
-    it("cleans up orphaned positions after deletion", async () => {
-      mockPrisma.position.findMany.mockResolvedValue([
-        { id: "orphan-pos" },
-      ] as any);
+    it("cleans up positions left orphaned by the delete — scoped to just those rows", async () => {
+      // First findMany: tree-load (one entry).
+      // Second findMany: positionIds of the to-be-deleted entries.
+      // Third findMany: still-referenced positionIds among those candidates.
+      mockPrisma.repertoireEntry.findMany
+        .mockResolvedValueOnce([mockEntry] as any) // tree load
+        .mockResolvedValueOnce([{ positionId: "pos-1" }] as any) // candidates
+        .mockResolvedValueOnce([] as any); // no surviving references → pos-1 is orphan
 
       await DELETE(
         new Request("http://localhost/api/repertoire-entries/entry-1", {
@@ -320,12 +324,33 @@ describe("DELETE /api/repertoire-entries/[id]", () => {
         { params: Promise.resolve({ id: "entry-1" }) },
       );
 
-      expect(mockPrisma.position.findMany).toHaveBeenCalledWith({
-        where: { repertoireEntries: { none: {} } },
-      });
+      // The scoped orphan probe queries by positionId list, not by the
+      // global `none: {}` relation filter — that's the perf fix.
+      const calls = mockPrisma.repertoireEntry.findMany.mock.calls;
+      const scopedProbe = calls.find(
+        (c) =>
+          c[0]?.where?.positionId?.in?.length === 1 &&
+          c[0]?.distinct?.[0] === "positionId",
+      );
+      expect(scopedProbe).toBeDefined();
       expect(mockPrisma.position.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: ["orphan-pos"] } },
+        where: { id: { in: ["pos-1"] } },
       });
+    });
+
+    it("does not delete a position that's still referenced by another entry", async () => {
+      mockPrisma.repertoireEntry.findMany
+        .mockResolvedValueOnce([mockEntry] as any) // tree
+        .mockResolvedValueOnce([{ positionId: "pos-1" }] as any) // candidates
+        .mockResolvedValueOnce([{ positionId: "pos-1" }] as any); // still referenced
+
+      await DELETE(
+        new Request("http://localhost/api/repertoire-entries/entry-1", {
+          method: "DELETE",
+        }),
+        { params: Promise.resolve({ id: "entry-1" }) },
+      );
+      expect(mockPrisma.position.deleteMany).not.toHaveBeenCalled();
     });
   });
 

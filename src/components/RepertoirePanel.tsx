@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Hammer, GraduationCap } from "lucide-react";
 import {
   PanelHeader,
@@ -59,12 +59,26 @@ export function RepertoirePanel({
   const [isLoading, setIsLoading] = useState(true);
   const toast = useToast();
 
+  // Cache the last etag the server sent so subsequent fetches can be 304'd
+  // without re-running the tree-build on the server.
+  const etagRef = useRef<string | null>(null);
+
   const fetchRepertoire = useCallback(async () => {
     try {
-      const response = await fetch(`/api/repertoires?color=${color}`);
+      const headers: Record<string, string> = {};
+      if (etagRef.current) {
+        headers["If-None-Match"] = etagRef.current;
+      }
+      const response = await fetch(`/api/repertoires?color=${color}`, {
+        headers,
+      });
       if (response.ok) {
+        const etag = response.headers.get("etag");
+        if (etag) etagRef.current = etag;
         const data = await response.json();
         setRootNode(data.root);
+      } else if (response.status === 304) {
+        // Tree hasn't changed — existing rootNode is still valid.
       }
     } catch (error) {
       console.error("Error fetching repertoire:", error);

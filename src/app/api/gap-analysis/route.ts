@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   type GapFilters,
+  type GapProgressEvent,
   runGapAnalysis,
 } from "@/lib/gapAnalysis";
 
@@ -81,18 +82,56 @@ export async function POST(request: NextRequest) {
     fens: r.entries.map((e) => e.position.fen),
   }));
 
-  try {
-    const result = await runGapAnalysis(filters, repertoires);
-    return NextResponse.json(result);
-  } catch (err) {
-    return NextResponse.json(
-      {
-        error:
-          err instanceof Error
-            ? err.message
-            : "Gap analysis failed",
-      },
-      { status: 500 },
-    );
-  }
+  // Stream NDJSON: one JSON object per line. The client uses progress
+  // events to drive a real bar; the final {type:"result"} line carries
+  // the same payload the old single-shot JSON used to return.
+  //
+  // `request.signal` aborts when the user clicks Cancel or navigates
+  // away. We forward it to runGapAnalysis, which forwards it to every
+  // upstream fetch — so cancel actually cancels chess.com/lichess I/O
+  // instead of just hanging up the response.
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      const write = (obj: unknown) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      };
+      const onProgress = (event: GapProgressEvent) => write(event);
+
+      try {
+        const result = await runGapAnalysis(filters, repertoires, {
+          onProgress,
+          signal: request.signal,
+        });
+        write({ type: "result", ...result });
+      } catch (err) {
+        // Check `name` directly — in some runtimes DOMException doesn't
+        // satisfy `instanceof Error`, so an instanceof guard would let
+        // genuine aborts fall through to the error branch.
+        const name = (err as { name?: string } | null)?.name;
+        if (name === "AbortError") {
+          write({ type: "aborted" });
+        } else {
+          write({
+            type: "error",
+            error:
+              err instanceof Error ? err.message : "Gap analysis failed",
+          });
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      // Important on serverless: tell the platform NOT to buffer the
+      // whole stream before flushing — defeats the point of progress.
+      "Cache-Control": "no-store, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

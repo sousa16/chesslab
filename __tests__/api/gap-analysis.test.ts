@@ -38,6 +38,29 @@ function req(body: unknown, opts: { rawBody?: string } = {}) {
   });
 }
 
+// Drain an NDJSON response body into an array of parsed events.
+async function readStream(res: Response): Promise<Record<string, unknown>[]> {
+  if (!res.body) return [];
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const events: Record<string, unknown>[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl = buffer.indexOf("\n");
+    while (nl !== -1) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      nl = buffer.indexOf("\n");
+      if (line) events.push(JSON.parse(line));
+    }
+  }
+  if (buffer.trim()) events.push(JSON.parse(buffer));
+  return events;
+}
+
 describe("POST /api/gap-analysis", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -76,6 +99,7 @@ describe("POST /api/gap-analysis", () => {
     expect(mockRunGapAnalysis).toHaveBeenCalledWith(
       expect.objectContaining({ maxGames: 500 }),
       expect.any(Array),
+      expect.any(Object),
     );
 
     mockRunGapAnalysis.mockClear();
@@ -83,6 +107,7 @@ describe("POST /api/gap-analysis", () => {
     expect(mockRunGapAnalysis).toHaveBeenCalledWith(
       expect.objectContaining({ maxGames: 1 }),
       expect.any(Array),
+      expect.any(Object),
     );
   });
 
@@ -91,6 +116,7 @@ describe("POST /api/gap-analysis", () => {
     expect(mockRunGapAnalysis).toHaveBeenCalledWith(
       expect.objectContaining({ maxGames: 200, color: "both" }),
       expect.any(Array),
+      expect.any(Object),
     );
   });
 
@@ -104,6 +130,7 @@ describe("POST /api/gap-analysis", () => {
     expect(mockRunGapAnalysis).toHaveBeenCalledWith(
       expect.objectContaining({ timeClasses: ["blitz", "rapid"] }),
       expect.any(Array),
+      expect.any(Object),
     );
   });
 
@@ -123,16 +150,78 @@ describe("POST /api/gap-analysis", () => {
     ]);
 
     await POST(req({ chesscomUsername: "alice" }));
-    expect(mockRunGapAnalysis).toHaveBeenCalledWith(expect.any(Object), [
-      { color: "white", fens: ["fen-1", "fen-2"] },
-      { color: "black", fens: ["fen-3"] },
+    expect(mockRunGapAnalysis).toHaveBeenCalledWith(
+      expect.any(Object),
+      [
+        { color: "white", fens: ["fen-1", "fen-2"] },
+        { color: "black", fens: ["fen-3"] },
+      ],
+      expect.any(Object),
+    );
+  });
+
+  it("streams a {type:'result',...} final event with the lib payload", async () => {
+    const res = await POST(req({ chesscomUsername: "alice" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("application/x-ndjson");
+    const events = await readStream(res);
+    const final = events.find((e) => e.type === "result");
+    expect(final).toMatchObject({
+      type: "result",
+      gamesFetched: 0,
+      gamesAnalyzed: 0,
+      whiteGaps: [],
+      blackGaps: [],
+    });
+  });
+
+  it("forwards each onProgress event from the lib as a stream line", async () => {
+    // Replay a sequence of progress events through the onProgress callback
+    // the route passes into runGapAnalysis.
+    mockRunGapAnalysis.mockImplementation(async (_filters, _reps, opts) => {
+      opts?.onProgress?.({ type: "fetching", platform: "chesscom" });
+      opts?.onProgress?.({ type: "fetched", platform: "chesscom", games: 12 });
+      opts?.onProgress?.({ type: "analyzing", total: 12 });
+      opts?.onProgress?.({
+        type: "analysis-progress",
+        processed: 12,
+        total: 12,
+      });
+      return {
+        gamesFetched: 12,
+        gamesAnalyzed: 12,
+        whiteGaps: [],
+        blackGaps: [],
+        errors: [],
+      };
+    });
+
+    const res = await POST(req({ chesscomUsername: "alice" }));
+    const events = await readStream(res);
+    const types = events.map((e) => e.type);
+    expect(types).toEqual([
+      "fetching",
+      "fetched",
+      "analyzing",
+      "analysis-progress",
+      "result",
     ]);
   });
 
-  it("returns 500 with the lib's error message when runGapAnalysis throws", async () => {
+  it("emits {type:'error', error} when the lib throws unexpectedly", async () => {
     mockRunGapAnalysis.mockRejectedValue(new Error("upstream down"));
     const res = await POST(req({ chesscomUsername: "alice" }));
-    expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: "upstream down" });
+    expect(res.status).toBe(200); // stream successfully opened
+    const events = await readStream(res);
+    expect(events).toContainEqual({ type: "error", error: "upstream down" });
+  });
+
+  it("emits {type:'aborted'} when the lib throws AbortError", async () => {
+    mockRunGapAnalysis.mockRejectedValue(
+      new DOMException("Gap analysis aborted", "AbortError"),
+    );
+    const res = await POST(req({ chesscomUsername: "alice" }));
+    const events = await readStream(res);
+    expect(events).toContainEqual({ type: "aborted" });
   });
 });

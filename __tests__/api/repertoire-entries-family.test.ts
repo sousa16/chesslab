@@ -49,6 +49,7 @@ jest.mock("@/lib/prisma", () => ({
     },
     repertoireEntry: {
       deleteMany: jest.fn(),
+      findMany: jest.fn(),
     },
     position: {
       findMany: jest.fn(),
@@ -78,6 +79,8 @@ describe("DELETE /api/repertoire-entries/family", () => {
     mockGetServerSession.mockResolvedValue({ user: { id: "user-1" } } as any);
     mockPrisma.position.findMany.mockResolvedValue([]);
     mockPrisma.position.deleteMany.mockResolvedValue({ count: 0 });
+    // Default: no entries to look up positions for, no surviving refs.
+    (mockPrisma.repertoireEntry.findMany as jest.Mock).mockResolvedValue([]);
   });
 
   it("returns 401 when not authenticated", async () => {

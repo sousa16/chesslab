@@ -8,7 +8,7 @@ import { Board, BoardHandle } from "@/components/Board";
 import { BuildPanel } from "@/components/BuildPanel";
 import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
-import { convertSanToUci } from "@/lib/repertoire";
+import { convertSanToUci } from "@/lib/chessMoves";
 import { useToast } from "@/components/ui/toast";
 import {
   incrementPendingSave,

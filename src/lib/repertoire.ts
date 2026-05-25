@@ -210,20 +210,7 @@ export async function saveRepertoireLine(
   });
 }
 
-/**
- * Convert SAN moves to UCI format using chess.js
- */
-export function convertSanToUci(movesInSan: string[]): string[] {
-  const game = new Chess();
-  const uciMoves: string[] = [];
-
-  for (const sanMove of movesInSan) {
-    const move = game.move(sanMove);
-    if (!move) {
-      throw new Error(`Invalid move: ${sanMove}`);
-    }
-    uciMoves.push(`${move.from}${move.to}${move.promotion || ""}`);
-  }
-
-  return uciMoves;
-}
+// Re-exported from the prisma-free chessMoves module. Client components
+// should import from "@/lib/chessMoves" directly so they don't pull this
+// file (and @prisma/client) into the client bundle.
+export { convertSanToUci } from "./chessMoves";

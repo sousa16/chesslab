@@ -47,6 +47,18 @@ jest.mock("@/lib/savesPending", () => ({
 
 global.fetch = jest.fn();
 
+// Helper: every mocked response needs a `headers.get` shim because the
+// component reads `response.headers.get("etag")` for the If-None-Match
+// caching path. Wrapping at construction time keeps each test concise.
+function mockResponse(body: unknown, init: { ok?: boolean; etag?: string } = {}) {
+  return {
+    ok: init.ok ?? true,
+    status: init.ok === false ? 500 : 200,
+    headers: { get: (k: string) => (k.toLowerCase() === "etag" ? init.etag ?? null : null) },
+    json: async () => body,
+  };
+}
+
 function renderPanel(overrides: Partial<React.ComponentProps<typeof RepertoirePanel>> = {}) {
   return render(
     <ToastProvider>
@@ -73,12 +85,9 @@ describe("RepertoirePanel", () => {
   });
 
   it("shows the empty state when the repertoire has no children", async () => {
-    (fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        root: { id: "root", children: [] },
-      }),
-    });
+    (fetch as jest.Mock).mockResolvedValue(
+      mockResponse({ root: { id: "root", children: [] } }),
+    );
     renderPanel();
     await waitFor(() =>
       expect(screen.getByText(/No openings yet/i)).toBeInTheDocument(),
@@ -86,9 +95,8 @@ describe("RepertoirePanel", () => {
   });
 
   it("renders the line tree when entries exist", async () => {
-    (fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    (fetch as jest.Mock).mockResolvedValue(
+      mockResponse({
         root: {
           id: "root",
           children: [
@@ -107,7 +115,7 @@ describe("RepertoirePanel", () => {
           ],
         },
       }),
-    });
+    );
     renderPanel();
     await waitFor(() =>
       expect(screen.getByTestId("trigger-delete")).toBeInTheDocument(),
@@ -117,20 +125,15 @@ describe("RepertoirePanel", () => {
   it("issues a DELETE to /api/repertoire-entries/:id and refetches on success", async () => {
     // 1) initial GET, 2) DELETE, 3) refetch GET
     (fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+      .mockResolvedValueOnce(
+        mockResponse({
           root: { id: "root", children: [{ id: "n1", children: [] }] },
         }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ deletedCount: 1 }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ root: { id: "root", children: [] } }),
-      });
+      )
+      .mockResolvedValueOnce(mockResponse({ deletedCount: 1 }))
+      .mockResolvedValueOnce(
+        mockResponse({ root: { id: "root", children: [] } }),
+      );
 
     renderPanel();
     const trigger = await screen.findByTestId("trigger-delete");
@@ -150,20 +153,15 @@ describe("RepertoirePanel", () => {
 
   it("issues a DELETE to /api/repertoire-entries/family on family delete", async () => {
     (fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+      .mockResolvedValueOnce(
+        mockResponse({
           root: { id: "root", children: [{ id: "n1", children: [] }] },
         }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ deletedCount: 3 }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ root: { id: "root", children: [] } }),
-      });
+      )
+      .mockResolvedValueOnce(mockResponse({ deletedCount: 3 }))
+      .mockResolvedValueOnce(
+        mockResponse({ root: { id: "root", children: [] } }),
+      );
 
     renderPanel();
     const trigger = await screen.findByTestId("trigger-delete-family");
@@ -181,10 +179,9 @@ describe("RepertoirePanel", () => {
   });
 
   it("calls onBack/onBuild/onLearn from the panel header and action buttons", async () => {
-    (fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ root: { id: "root", children: [] } }),
-    });
+    (fetch as jest.Mock).mockResolvedValue(
+      mockResponse({ root: { id: "root", children: [] } }),
+    );
     const onBack = jest.fn();
     const onBuild = jest.fn();
     const onLearn = jest.fn();

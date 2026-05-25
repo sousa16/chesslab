@@ -6,6 +6,11 @@ import { buildRepertoireTree } from "@/lib/repertoireTree";
 import { recomputeRepertoireLeaves } from "@/lib/repertoireLeaves";
 import type { Prisma } from "@prisma/client";
 
+// DELETE walks the user's whole tree to compute ancestor cleanup and
+// then re-checks position references. 60s mirrors save-line and gives
+// us slack on cold-start Prisma connections for big repertoires.
+export const maxDuration = 60;
+
 /**
  * PATCH /api/repertoire-entries/[id]
  * Update a repertoire entry (name, notes)
@@ -160,32 +165,37 @@ export async function DELETE(
       }
     }
 
-    // Delete all entries in the tree
+    // Capture the positions referenced by the entries we're about to
+    // delete so we can check just those for orphan status afterward.
+    // Previously this route ran `position.findMany({ where: {
+    // repertoireEntries: { none: {} } } })` against the whole table —
+    // a scan whose cost grew with global position count, not with the
+    // size of this delete. Scoping to deleted-entry positions keeps the
+    // sweep proportional to the work just done.
+    const deletedIds = Array.from(entriesToDelete);
+    const deletedEntryPositions = await prisma.repertoireEntry.findMany({
+      where: { id: { in: deletedIds } },
+      select: { positionId: true },
+    });
+    const candidatePositionIds = Array.from(
+      new Set(deletedEntryPositions.map((e) => e.positionId)),
+    );
+
     const result = await prisma.repertoireEntry.deleteMany({
-      where: {
-        id: {
-          in: Array.from(entriesToDelete),
-        },
-      },
+      where: { id: { in: deletedIds } },
     });
 
-    // Clean up orphaned positions
-    const orphanedPositions = await prisma.position.findMany({
-      where: {
-        repertoireEntries: {
-          none: {},
-        },
-      },
-    });
-
-    if (orphanedPositions.length > 0) {
-      await prisma.position.deleteMany({
-        where: {
-          id: {
-            in: orphanedPositions.map((p) => p.id),
-          },
-        },
+    if (candidatePositionIds.length > 0) {
+      const stillReferenced = await prisma.repertoireEntry.findMany({
+        where: { positionId: { in: candidatePositionIds } },
+        select: { positionId: true },
+        distinct: ["positionId"],
       });
+      const referenced = new Set(stillReferenced.map((e) => e.positionId));
+      const orphanIds = candidatePositionIds.filter((id) => !referenced.has(id));
+      if (orphanIds.length > 0) {
+        await prisma.position.deleteMany({ where: { id: { in: orphanIds } } });
+      }
     }
 
     // Surviving parent entries in the same repertoire may have just

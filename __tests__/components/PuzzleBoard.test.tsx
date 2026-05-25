@@ -11,15 +11,33 @@ import { act, render, screen } from "@testing-library/react";
 import { PuzzleBoard, type PuzzleBoardHandle } from "@/components/PuzzleBoard";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 
+// Stash the latest options on a global so analysis-mode tests can invoke
+// onPieceDrop directly. The mock factory is hoisted by Jest and can't close
+// over outer `let`s, so globalThis is the cleanest channel.
 jest.mock("react-chessboard", () => ({
-  Chessboard: ({ options }: { options: any }) => (
-    <div
-      data-testid="chessboard"
-      data-position={options?.position ?? ""}
-      data-orientation={options?.boardOrientation ?? ""}
-    />
-  ),
+  Chessboard: ({ options }: { options: any }) => {
+    (globalThis as any).__lastChessboardOptions = options;
+    return (
+      <div
+        data-testid="chessboard"
+        data-position={options?.position ?? ""}
+        data-orientation={options?.boardOrientation ?? ""}
+        data-dragging={String(Boolean(options?.allowDragging))}
+      />
+    );
+  },
 }));
+
+function lastBoardOptions() {
+  return (globalThis as any).__lastChessboardOptions as {
+    position: string;
+    allowDragging: boolean;
+    onPieceDrop?: (args: {
+      sourceSquare: string;
+      targetSquare: string | null;
+    }) => boolean;
+  };
+}
 
 function renderWithProviders(ui: React.ReactElement) {
   return render(<SettingsProvider>{ui}</SettingsProvider>);
@@ -146,5 +164,186 @@ describe("PuzzleBoard", () => {
       screen.getByTestId("first").click();
     });
     expect(board()).toBe(initial);
+  });
+
+  describe("analysis mode", () => {
+    // Setup move = e2e4, then a 2-ply "solution" (e7e5, g1f3). Tests
+    // assert the board state at each base / branch position.
+    const MOVES = ["e2e4", "e7e5", "g1f3"];
+
+    function Harness({ onPositionChange }: { onPositionChange?: jest.Mock }) {
+      const ref = useRef<PuzzleBoardHandle | null>(null);
+      const [analysis, setAnalysis] = React.useState(false);
+      return (
+        <>
+          <button
+            data-testid="toggle"
+            onClick={() => setAnalysis((a) => !a)}
+          />
+          <button
+            data-testid="next"
+            onClick={() => ref.current?.goToNext()}
+          />
+          <button
+            data-testid="prev"
+            onClick={() => ref.current?.goToPrevious()}
+          />
+          <button
+            data-testid="first"
+            onClick={() => ref.current?.goToFirst()}
+          />
+          <button
+            data-testid="last"
+            onClick={() => ref.current?.goToLast()}
+          />
+          <PuzzleBoard
+            ref={ref}
+            initialFen={FEN_START}
+            moves={MOVES}
+            revealSolution={true}
+            orientation="black"
+            analysisMode={analysis}
+            onPositionChange={onPositionChange}
+          />
+        </>
+      );
+    }
+
+    function position() {
+      return screen.getByTestId("chessboard").getAttribute("data-position");
+    }
+
+    function dragging() {
+      return (
+        screen.getByTestId("chessboard").getAttribute("data-dragging") ===
+        "true"
+      );
+    }
+
+    it("disables dragging by default and enables it only in analysis mode", () => {
+      renderWithProviders(<Harness />);
+      expect(dragging()).toBe(false);
+      act(() => {
+        screen.getByTestId("toggle").click();
+      });
+      expect(dragging()).toBe(true);
+    });
+
+    it("preserves the displayed position when toggled on, then lets arrows walk the full solution backwards", () => {
+      renderWithProviders(<Harness />);
+      // Play the solution out so we land on the last move.
+      act(() => {
+        jest.advanceTimersByTime(MOVES.length * 700);
+      });
+      const lastFen = position();
+      expect(lastFen).toContain(" b "); // after e4 e5 Nf3, black to move
+
+      // Toggle analysis on — should NOT move the board.
+      act(() => {
+        screen.getByTestId("toggle").click();
+      });
+      expect(position()).toBe(lastFen);
+
+      // Stepping backward should walk the entire solution, not stop at
+      // the anchor (this is the bug fix the user asked for).
+      act(() => {
+        screen.getByTestId("prev").click();
+      });
+      const afterFirstBack = position();
+      expect(afterFirstBack).not.toBe(lastFen);
+
+      act(() => {
+        screen.getByTestId("prev").click();
+      });
+      expect(position()).not.toBe(afterFirstBack);
+
+      act(() => {
+        screen.getByTestId("first").click();
+      });
+      // goToFirst lands at the puzzle position (before any solution move,
+      // i.e. after the setup move e2e4 → black to move with no pieces yet
+      // captured).
+      expect(position()).toContain(" b ");
+      // Sanity: this is the position BEFORE black plays e7e5, distinct
+      // from the post-e7e5 position we passed through.
+      expect(position()).not.toBe(afterFirstBack);
+    });
+
+    it("creates a branch when the user drags from a base position and re-engages base nav when stepping back past the root", () => {
+      renderWithProviders(<Harness />);
+      act(() => {
+        jest.advanceTimersByTime(MOVES.length * 700);
+      });
+      // Walk back to the puzzle position so the next legal move is for black.
+      act(() => {
+        screen.getByTestId("toggle").click();
+      });
+      act(() => {
+        screen.getByTestId("first").click();
+      });
+      const baseFen = position();
+
+      // Drag black's c7-c5 → board updates to a NEW position (branch).
+      act(() => {
+        lastBoardOptions().onPieceDrop?.({
+          sourceSquare: "c7",
+          targetSquare: "c5",
+        });
+      });
+      const branchFen = position();
+      expect(branchFen).not.toBe(baseFen);
+      expect(branchFen).toContain(" w "); // it's now white to move
+
+      // Stepping back from inside a 1-move branch lands us at the base
+      // (branch is kept so forward navigation re-enters it).
+      act(() => {
+        screen.getByTestId("prev").click();
+      });
+      expect(position()).toBe(baseFen);
+
+      // Stepping back AGAIN from the base discards the branch and walks
+      // the base line further back. From baseIndex=-1 it stays put.
+      act(() => {
+        screen.getByTestId("prev").click();
+      });
+      expect(position()).toBe(baseFen);
+    });
+
+    it("rejects illegal drops without losing the current position", () => {
+      renderWithProviders(<Harness />);
+      act(() => {
+        screen.getByTestId("toggle").click();
+      });
+      const before = position();
+      let result: boolean | undefined;
+      act(() => {
+        result = lastBoardOptions().onPieceDrop?.({
+          sourceSquare: "a1",
+          targetSquare: "a8", // illegal — own piece blocked / can't jump
+        });
+      });
+      expect(result).toBe(false);
+      expect(position()).toBe(before);
+    });
+
+    it("fires onPositionChange whenever the displayed FEN changes in analysis mode", () => {
+      const cb = jest.fn();
+      renderWithProviders(<Harness onPositionChange={cb} />);
+      act(() => {
+        jest.advanceTimersByTime(MOVES.length * 700);
+      });
+      act(() => {
+        screen.getByTestId("toggle").click();
+      });
+      cb.mockClear();
+      // Walking back through the base line changes the displayed FEN, so
+      // each step must emit the new position to the engine effect.
+      act(() => {
+        screen.getByTestId("prev").click();
+      });
+      expect(cb).toHaveBeenCalled();
+      const fenSeen = cb.mock.calls[cb.mock.calls.length - 1][0] as string;
+      expect(fenSeen).toBe(position());
+    });
   });
 });

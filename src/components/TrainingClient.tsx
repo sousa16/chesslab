@@ -20,6 +20,7 @@ import { Board, BoardHandle } from "@/components/Board";
 import { type ReviewResponse } from "@/lib/sm2";
 import { useSettings } from "@/contexts/SettingsContext";
 import { playCorrectSound, playIncorrectSound } from "@/lib/sounds";
+import { recordReview } from "@/lib/statsCache";
 
 interface Position {
   id: string;
@@ -346,9 +347,17 @@ export default function TrainingClient({
       wasDue: boolean,
     ) => {
       try {
+        // Patch the module-level stats cache up front so the dashboard
+        // counters are correct when the user returns to /home — HomePanel
+        // is unmounted for the duration of a training session, so its
+        // own React event listener can't catch this event. Doing it
+        // before the dispatch keeps the two paths (cache write vs.
+        // mounted-HomePanel React patch) idempotent.
+        recordReview({ wasDue });
         // wasDue lets HomePanel decrement the dashboard's dueCount
-        // optimistically — a card that was due is no longer due after a
-        // review (SRS bumps nextReviewDate forward regardless of rating).
+        // optimistically when it IS mounted — a card that was due is no
+        // longer due after a review (SRS bumps nextReviewDate forward
+        // regardless of rating).
         window.dispatchEvent(
           new CustomEvent("training-stats-updated", {
             detail: { timeSpentMs, positionsReviewed: 1, wasDue },

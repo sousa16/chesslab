@@ -29,6 +29,28 @@ export function patchCachedStats(patch: Partial<TrainingStats>): void {
   cached = { ...cached, ...patch };
 }
 
+/**
+ * Apply a finished-review delta to the cache. Used by TrainingClient
+ * (and TacticsClient) so the dashboard counters stay correct when the
+ * user returns to /home, even though HomePanel itself is unmounted for
+ * the duration of the training session.
+ *
+ * `wasDue` is the opening-side flag: a card that was due no longer is
+ * after a review, so the "moves to practice" counter drops by one.
+ * Puzzle reviews don't carry that flag (they don't affect repertoire
+ * dueCount) — pass false / omit and only positionsReviewedToday moves.
+ */
+export function recordReview(opts: { wasDue: boolean }): void {
+  if (!cached) return;
+  cached = {
+    ...cached,
+    positionsReviewedToday: (cached.positionsReviewedToday ?? 0) + 1,
+    dueCount: opts.wasDue
+      ? Math.max(0, cached.dueCount - 1)
+      : cached.dueCount,
+  };
+}
+
 export function clearCachedStats(): void {
   cached = null;
 }

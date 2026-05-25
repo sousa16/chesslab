@@ -283,6 +283,19 @@ export default function AuthClient() {
               {isLogin ? "Sign up" : "Sign in"}
             </button>
           </p>
+
+          <p className="text-center text-xs text-slate-500 mt-2">
+            {isLogin ? "By signing in" : "By creating an account"}, you agree
+            to ChessLab&apos;s{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-slate-300 transition-colors">
+              Privacy Policy
+            </a>
+            .
+          </p>
         </div>
       </div>
     </div>

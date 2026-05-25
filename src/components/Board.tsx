@@ -625,15 +625,17 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           />
         </div>
         {isViewingHistory && !hideHistoryOverlay && (
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-2xl flex items-center justify-center">
-            <div className="glass-card px-6 py-4 rounded-xl text-center">
-              <p className="text-base font-medium text-foreground">
-                Viewing move history
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Press &quot;Last move&quot; to continue playing
-              </p>
-            </div>
+          // Tiny corner badge instead of a full-board scrim. The previous
+          // backdrop-blur curtain covered the very thing the user was
+          // trying to study (the past position). A pill in the corner
+          // still communicates "read-only / step forward to play" without
+          // hiding anything; the drag handler is what actually blocks
+          // illegal moves from a back-stepped position.
+          <div
+            className="pointer-events-none absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/55 text-white/90 text-[10px] font-semibold uppercase tracking-wider shadow-sm"
+            title="Read-only — press &quot;Last move&quot; to play"
+            aria-label="Viewing move history">
+            History
           </div>
         )}
       </div>

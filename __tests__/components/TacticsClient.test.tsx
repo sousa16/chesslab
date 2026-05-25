@@ -24,13 +24,31 @@ import TacticsClient from "@/components/TacticsClient";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 
 // Replace heavy children with simple markers so the suite isn't testing
-// them transitively.
-jest.mock("@/components/PuzzleBoard", () => ({
-  __esModule: true,
-  PuzzleBoard: ({ initialFen }: { initialFen: string }) => (
-    <div data-testid="puzzle-board" data-fen={initialFen} />
-  ),
-}));
+// them transitively. The PuzzleBoard mock stashes its props on globalThis
+// so analysis-mode tests can drive `onPositionChange` directly.
+jest.mock("@/components/PuzzleBoard", () => {
+  const React = require("react");
+  const PuzzleBoard = React.forwardRef(
+    (
+      props: {
+        initialFen: string;
+        analysisMode?: boolean;
+        onPositionChange?: (fen: string) => void;
+      },
+      _ref: React.Ref<unknown>,
+    ) => {
+      (globalThis as any).__lastPuzzleBoardProps = props;
+      return (
+        <div
+          data-testid="puzzle-board"
+          data-fen={props.initialFen}
+          data-analysis={String(Boolean(props.analysisMode))}
+        />
+      );
+    },
+  );
+  return { __esModule: true, PuzzleBoard };
+});
 jest.mock("@/components/MobileNav", () => ({
   MobileNav: () => <div data-testid="mobile-nav" />,
 }));
@@ -177,5 +195,170 @@ describe("TacticsClient", () => {
         response: "easy",
       }),
     );
+  });
+
+  describe("analysis toggle", () => {
+    function mockSequenceForOneReveal() {
+      // initial prefs fetch, the active puzzle, and the speculative
+      // next-puzzle prefetch the component fires in the background.
+      mockFetchSequence([
+        samplePrefs,
+        {
+          puzzle: samplePuzzle,
+          review: { id: "r-1" },
+          dueCount: 1,
+          source: "due",
+        },
+        "empty",
+      ]);
+    }
+
+    it("only shows the Analyze toggle after Show Answer is pressed", async () => {
+      mockSequenceForOneReveal();
+      renderClient();
+      await screen.findByText("Show Answer");
+      expect(screen.queryByRole("button", { name: /analyze/i })).toBeNull();
+
+      fireEvent.click(screen.getByText("Show Answer"));
+
+      const analyzeBtns = await screen.findAllByRole("button", {
+        name: /analyze/i,
+      });
+      expect(analyzeBtns.length).toBeGreaterThan(0);
+      // PuzzleBoard prop reflects the toggled-off state.
+      expect(
+        (globalThis as any).__lastPuzzleBoardProps?.analysisMode,
+      ).toBe(false);
+    });
+
+    it("hits /api/analysis (debounced) and renders the eval / best move when the board reports a new position", async () => {
+      jest.useFakeTimers();
+      try {
+        mockSequenceForOneReveal();
+        renderClient();
+        // findByText is async — fake-timers don't block microtasks, but
+        // pending promises still need a real tick to resolve. waitFor
+        // pumps them.
+        await waitFor(() =>
+          expect(screen.getByText("Show Answer")).toBeInTheDocument(),
+        );
+
+        fireEvent.click(screen.getByText("Show Answer"));
+        const [analyzeBtn] = await screen.findAllByRole("button", {
+          name: /analyze/i,
+        });
+
+        // Once the user toggles analysis on, the next /api/analysis call
+        // we queue up should match this fixture.
+        const analysisFen =
+          "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
+        (fetch as jest.Mock).mockImplementationOnce(() =>
+          Promise.resolve({
+            ok: true,
+            json: async () => ({
+              eval: 0.32,
+              mate: null,
+              bestMove: "g1f3",
+              continuation: "g1f3 b8c6 f1b5",
+            }),
+          }),
+        );
+
+        await act(async () => {
+          analyzeBtn.click();
+        });
+        // Drive a position update from the mocked PuzzleBoard.
+        await act(async () => {
+          (globalThis as any).__lastPuzzleBoardProps?.onPositionChange?.(
+            analysisFen,
+          );
+        });
+
+        // Debounce is 300ms in TacticsClient. Advance past it, then let
+        // the queued promise resolve.
+        await act(async () => {
+          jest.advanceTimersByTime(350);
+        });
+        await waitFor(() => {
+          const calls = (fetch as jest.Mock).mock.calls;
+          expect(
+            calls.some(
+              (c) =>
+                typeof c[0] === "string" &&
+                (c[0] as string).startsWith("/api/analysis"),
+            ),
+          ).toBe(true);
+        });
+
+        // The panel surfaces the engine response. Both layouts (mobile
+        // and desktop) render the panel concurrently, so use the All
+        // variants to avoid "multiple elements" throws.
+        await waitFor(() => {
+          expect(screen.getAllByText(/Engine/i).length).toBeGreaterThan(0);
+          // Best move SAN derived from g1f3 on the analysisFen is "Nf3".
+          expect(screen.getAllByText("Nf3").length).toBeGreaterThan(0);
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("debounces rapid position changes into a single /api/analysis call", async () => {
+      jest.useFakeTimers();
+      try {
+        mockSequenceForOneReveal();
+        renderClient();
+        await waitFor(() =>
+          expect(screen.getByText("Show Answer")).toBeInTheDocument(),
+        );
+        fireEvent.click(screen.getByText("Show Answer"));
+        const [analyzeBtn] = await screen.findAllByRole("button", {
+          name: /analyze/i,
+        });
+
+        (fetch as jest.Mock).mockImplementation(() =>
+          Promise.resolve({
+            ok: true,
+            json: async () => ({
+              eval: 0,
+              mate: null,
+              bestMove: null,
+              continuation: null,
+            }),
+          }),
+        );
+
+        await act(async () => {
+          analyzeBtn.click();
+        });
+        const propsRef = (globalThis as any).__lastPuzzleBoardProps;
+        // Three quick position changes back-to-back.
+        const fenA =
+          "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2";
+        const fenB =
+          "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
+        const fenC =
+          "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3";
+        await act(async () => {
+          propsRef.onPositionChange(fenA);
+          propsRef.onPositionChange(fenB);
+          propsRef.onPositionChange(fenC);
+        });
+        await act(async () => {
+          jest.advanceTimersByTime(350);
+        });
+        const analysisCalls = (fetch as jest.Mock).mock.calls.filter(
+          (c) =>
+            typeof c[0] === "string" &&
+            (c[0] as string).startsWith("/api/analysis"),
+        );
+        // The first two debounces were cancelled by subsequent position
+        // changes; only the final fen should have actually hit the API.
+        expect(analysisCalls.length).toBe(1);
+        expect(analysisCalls[0][0]).toContain(encodeURIComponent(fenC));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });

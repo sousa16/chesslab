@@ -14,6 +14,7 @@ import {
 } from "@/components/PuzzleBoard";
 import { PUZZLE_CATEGORIES, type PuzzleCategory } from "@/lib/puzzleCategories";
 import type { ReviewResponse } from "@/lib/sm2";
+import { recordReview } from "@/lib/statsCache";
 
 interface PuzzleData {
   id: string;
@@ -238,11 +239,13 @@ export default function TacticsClient() {
     const timeSpentMs = Date.now() - cardStartRef.current;
 
     try {
-      // wasDue is intentionally omitted: puzzle reviews count toward
-      // positionsReviewedToday (via DailyActivity) but NOT toward the
-      // home dashboard's "moves to practice" number (which is repertoire-
-      // only). Letting HomePanel skip the dueCount patch is the right
-      // behavior here.
+      // wasDue is intentionally omitted/false: puzzle reviews count
+      // toward positionsReviewedToday (via DailyActivity) but NOT toward
+      // the home dashboard's "moves to practice" number (which is
+      // repertoire-only). Patch the module cache up front so /home shows
+      // the new count when the user returns — HomePanel is unmounted for
+      // the duration of the tactics session.
+      recordReview({ wasDue: false });
       window.dispatchEvent(
         new CustomEvent("training-stats-updated", {
           detail: { timeSpentMs, positionsReviewed: 1 },

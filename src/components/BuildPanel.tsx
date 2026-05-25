@@ -190,7 +190,9 @@ export function BuildPanel({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 lg:h-7 lg:w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
+                        // Always visible on touch (no hover); fade-in on
+                        // desktop where the hover signal is meaningful.
+                        className="h-6 w-6 lg:h-7 lg:w-7 text-muted-foreground hover:text-destructive opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity rounded-lg"
                         onClick={() => onDeleteMove?.(index)}>
                         <X size={12} className="lg:hidden" />
                         <X size={14} className="hidden lg:block" />

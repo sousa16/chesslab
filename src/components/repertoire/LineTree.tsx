@@ -203,7 +203,9 @@ function FamilyGroup({
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 w-7 p-0 rounded-lg hover:bg-primary/15 hover:text-primary flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            // Always visible on touch screens (no hover affordance); fade in
+            // on hover for desktop pointers where the hover signal is real.
+            className="h-7 w-7 p-0 rounded-lg hover:bg-primary/15 hover:text-primary flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation();
               onLearnFamily(family);
@@ -217,7 +219,7 @@ function FamilyGroup({
             size="sm"
             variant="ghost"
             disabled={deletingFamily}
-            className="h-7 w-7 p-0 rounded-lg hover:bg-red-500/15 hover:text-red-500 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+            className="h-7 w-7 p-0 rounded-lg hover:bg-red-500/15 hover:text-red-500 flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity disabled:opacity-50"
             onClick={async (e) => {
               e.stopPropagation();
               if (deletingFamily) return;
@@ -320,7 +322,7 @@ function LineItem({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
         <Button
           size="sm"
           variant="ghost"

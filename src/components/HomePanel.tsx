@@ -268,6 +268,11 @@ export function HomePanel({
   // check works regardless of whether the React session context has
   // hydrated yet. When the RSC streamed stats (initialStats != null),
   // we skip the fetch entirely — the RSC payload already covered it.
+  //
+  // Reviews fired during a training session patch the module-level
+  // cache directly via `recordReview` in statsCache, so HomePanel sees
+  // the right numbers when it re-mounts on return from /training even
+  // though its own React event listener was torn down for the session.
   useEffect(() => {
     if (initialStats) {
       setIsLoading(false);

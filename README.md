@@ -2,7 +2,7 @@
 
 A personal chess training app for serious improvement. Build your opening repertoire by color, drill it with spaced repetition, train tactics from a 10k+ Lichess puzzle pool, and find the holes in your prep by replaying your real games against your saved lines.
 
-Live at [chesslab.club](https://chesslab.club).
+**Live at [chesslab.club](https://chesslab.club).** Sign up with email or Google; everything below describes what the deployed app does.
 
 ## Features
 
@@ -27,6 +27,7 @@ Live at [chesslab.club](https://chesslab.club).
 - Pulls puzzles from a precomputed Lichess dump, gated by user-configurable **rating band** + **categories** (mate, fork, pin, endgame, etc.).
 - SM-2 reviews shared with the opening engine, so the home dashboard's daily counters cover both.
 - **Prefetches the next puzzle** as soon as the current one lands; rating a card is instant, no spinner between cards.
+- **Engine analysis after reveal**: an "Analyze" toggle turns the board into a Lichess-style scratchpad. Navigate any position in the solution with the board arrows, drag pieces to branch into your own variation, and a Stockfish eval (best move + principal variation) updates per position. Built to answer "why wasn't *my* move the right one?" — try the candidate you had in mind, see how the engine refutes it, then snap back to the main line.
 
 ### Gap analysis (`/gaps`)
 
@@ -50,17 +51,43 @@ Live at [chesslab.club](https://chesslab.club).
 
 ## Tech stack
 
-- **Next.js 16** (App Router, RSC, server actions)
+- **Next.js 16** (App Router, RSC, server actions) on Vercel
 - **React 19** (`use()` for RSC-streamed promises)
 - **TypeScript** end-to-end
 - **PostgreSQL + Prisma 6**
 - **NextAuth.js 4** (Google + Credentials providers)
 - **chess.js** for move validation + replay; **react-chessboard 5** for the UI
+- **Stockfish.online** for puzzle-side engine analysis
 - **Tailwind CSS 4** + **Radix UI** primitives
 - **Resend** for transactional email
 - **Jest + React Testing Library** for tests
 
-## Getting started
+## Architecture notes
+
+- **Route protection** lives in [src/proxy.ts](src/proxy.ts). It dispatches by path prefix: `/api/*` goes through IP rate limits (three buckets: sensitive auth flows, write paths, generic API), everything else goes through the NextAuth JWT gate (redirects signed-in users away from `/`, signed-out users away from protected pages).
+
+- **Caching strategy**
+  - `/api/repertoires` and `/api/training-stats` return an ETag keyed on `(maxUpdatedAt, count)`; both `HomePanel` and `RepertoirePanel` send `If-None-Match` on subsequent fetches so revisits short-circuit to 304.
+  - `/stats` and `/training` cache the expensive per-entry opening-name enrichment via `next/cache`'s `unstable_cache`, keyed on the user's latest entry update timestamp. Writes naturally invalidate.
+  - Home dashboard training stats are streamed via React 19 `use()` on the RSC payload, with a module-level cache so client-side nav is instant.
+
+- **isLeaf denormalization** — leaf status is recomputed after every save / delete via `repertoireLeaves.ts` and the Next.js `after()` deferred-work API, so the home dashboard's "lines" counter is a single SQL aggregate.
+
+- **Save-line race** — `BuildClient` increments a pending-save counter in `savesPending.ts`; `RepertoirePanel` waits for that counter to drain before its first fetch, so a panel that mounts faster than the save POST still sees the new line.
+
+- **chess.js / Prisma bundle isolation** — `convertSanToUci` and other client-needed helpers live in [src/lib/chessMoves.ts](src/lib/chessMoves.ts) (chess.js only). The prisma-coupled `src/lib/repertoire.ts` re-exports them for server use but client components import directly from `chessMoves` to keep prisma out of their bundle.
+
+- **Engine proxy** — `/api/analysis` is a thin auth-gated server route in front of stockfish.online. Going through the proxy keeps the upstream URL off the client, normalizes their UCI engine line into a clean JSON shape, and lets us swap engines later without touching the UI.
+
+## License
+
+Licensed under the MIT License — see [LICENSE](LICENSE).
+
+---
+
+## Development
+
+Sections below are for working on chesslab locally.
 
 ### Prerequisites
 
@@ -81,7 +108,7 @@ npm run seed:puzzles  # one-time, populates the puzzle table from data/
 npm run dev
 ```
 
-### Required environment variables
+### Environment variables
 
 ```
 DATABASE_URL=postgres://...
@@ -96,7 +123,21 @@ GOOGLE_CLIENT_SECRET=...
 CRON_SECRET=<random>
 ```
 
-## Project structure
+### Scripts
+
+```bash
+npm run dev              # next dev (Turbopack)
+npm run build            # next build
+npm start                # next start
+npm run lint             # eslint
+npm test                 # full jest suite (node + jsdom configs)
+npm run test:watch       # watch mode
+npm run test:coverage    # coverage report
+npm run seed:puzzles     # one-time puzzle table seed
+npm run precompute:eco   # rebuild the ECO precomputed dataset
+```
+
+### Project structure
 
 ```
 src/
@@ -113,6 +154,7 @@ src/
       puzzle-prefs/         user puzzle config
       training-stats/       SQL-aggregated dashboard counts
       gap-analysis/         NDJSON-streaming game analyzer
+      analysis/             Stockfish proxy for puzzle-side engine analysis
       openings/lookup/      ECO name lookup
       user/                 update-profile, update-settings, change-password, delete-account
       cron/                 daily reminder email
@@ -139,51 +181,17 @@ src/
     trainingEnrichment.ts   unstable_cache for /training opening enrichment
     trainingStats.ts        SQL-aggregated home dashboard data
   proxy.ts                  Next 16 proxy: API rate limits + auth gate
-  middleware.ts             (removed — merged into proxy.ts under Next 16)
 __tests__/                  Jest suites (node) + jsdom suites for components
 prisma/schema.prisma        DB schema
 scripts/                    seed-puzzles, precompute-eco
 data/                       Puzzle + ECO source data
 ```
 
-## Architecture notes
+### Testing
 
-- **Route protection** lives in [src/proxy.ts](src/proxy.ts). It dispatches by path prefix: `/api/*` goes through IP rate limits (three buckets: sensitive auth flows, write paths, generic API), everything else goes through the NextAuth JWT gate (redirects signed-in users away from `/`, signed-out users away from protected pages).
-
-- **Caching strategy**
-  - `/api/repertoires` and `/api/training-stats` return an ETag keyed on `(maxUpdatedAt, count)`; both `HomePanel` and `RepertoirePanel` send `If-None-Match` on subsequent fetches so revisits short-circuit to 304.
-  - `/stats` and `/training` cache the expensive per-entry opening-name enrichment via `next/cache`'s `unstable_cache`, keyed on the user's latest entry update timestamp. Writes naturally invalidate.
-  - Home dashboard training stats are streamed via React 19 `use()` on the RSC payload, with a module-level cache so client-side nav is instant.
-
-- **isLeaf denormalization** — leaf status is recomputed after every save / delete via `repertoireLeaves.ts` and the Next.js `after()` deferred-work API, so the home dashboard's "lines" counter is a single SQL aggregate.
-
-- **Save-line race** — `BuildClient` increments a pending-save counter in `savesPending.ts`; `RepertoirePanel` waits for that counter to drain before its first fetch, so a panel that mounts faster than the save POST still sees the new line.
-
-- **chess.js / Prisma bundle isolation** — `convertSanToUci` and other client-needed helpers live in [src/lib/chessMoves.ts](src/lib/chessMoves.ts) (chess.js only). The prisma-coupled `src/lib/repertoire.ts` re-exports them for server use but client components import directly from `chessMoves` to keep prisma out of their bundle.
-
-## Scripts
-
-```bash
-npm run dev              # next dev (Turbopack)
-npm run build            # next build
-npm start                # next start
-npm run lint             # eslint
-npm test                 # full jest suite (node + jsdom configs)
-npm run test:watch       # watch mode
-npm run test:coverage    # coverage report
-npm run seed:puzzles     # one-time puzzle table seed
-npm run precompute:eco   # rebuild the ECO precomputed dataset
-```
-
-## Testing
-
-The suite covers API routes, core libs, and key client components. Two Jest configs:
+Two Jest configs:
 
 - [jest.config.js](jest.config.js) — node env, picks up `__tests__/**/*.test.ts` (routes + libs)
 - [jest-client.config.js](jest-client.config.js) — jsdom env, picks up `__tests__/**/*.test.tsx` (components)
 
-`npm test` runs both. See [`__tests__/`](__tests__/) for fixtures and patterns; most route tests mock `next-auth/next` + `@/lib/prisma`, lib tests use real `chess.js` and a mocked `fetch`, component tests stub `react-chessboard` and `next/navigation`.
-
-## License
-
-Licensed under the MIT License — see [LICENSE](LICENSE).
+`npm test` runs both. Most route tests mock `next-auth/next` + `@/lib/prisma`, lib tests use real `chess.js` and a mocked `fetch`, component tests stub `react-chessboard` and `next/navigation`.

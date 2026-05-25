@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -377,10 +378,15 @@ export default function LandingClient() {
       </section>
 
       <footer className="border-t border-stone-200/80 dark:border-slate-800/50 py-6 sm:py-8 px-4 bg-stone-50 dark:bg-slate-950 transition-colors duration-300">
-        <div className="max-w-6xl mx-auto flex items-center justify-center">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
           <p className="text-slate-400 dark:text-slate-400 text-xs sm:text-sm text-center">
             © 2026 ChessLab. Minimal, focused chess training.
           </p>
+          <Link
+            href="/privacy"
+            className="text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs sm:text-sm underline-offset-4 hover:underline transition-colors">
+            Privacy
+          </Link>
         </div>
       </footer>
 

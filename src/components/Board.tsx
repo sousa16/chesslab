@@ -44,6 +44,12 @@ interface BoardProps {
   // the line via BoardControls. Used by the line-viewer flow on Home so
   // the user actually sees how the position was reached.
   landAtStart?: boolean;
+  // Suppress the "Viewing move history" overlay that normally appears
+  // when the user steps back from the latest ply. Surfaces in build/home
+  // where the overlay nudges the user back to live play; in Explorer the
+  // entire point is scrubbing through a loaded game, so the overlay just
+  // gets in the way.
+  hideHistoryOverlay?: boolean;
 }
 
 export interface BoardHandle {
@@ -84,6 +90,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       onTrainingMove,
       highlightSquare,
       landAtStart = false,
+      hideHistoryOverlay = false,
     },
     ref,
   ) => {
@@ -617,14 +624,14 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
             }}
           />
         </div>
-        {isViewingHistory && (
+        {isViewingHistory && !hideHistoryOverlay && (
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-2xl flex items-center justify-center">
             <div className="glass-card px-6 py-4 rounded-xl text-center">
               <p className="text-base font-medium text-foreground">
                 Viewing move history
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                Press "Last move" to continue playing
+                Press &quot;Last move&quot; to continue playing
               </p>
             </div>
           </div>

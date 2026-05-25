@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Chess } from "chess.js";
-import { ChevronLeft, Eye, Flame, Target, Trophy } from "lucide-react";
+import {
+  ChevronLeft,
+  Cpu,
+  Eye,
+  Flame,
+  Target,
+  Trophy,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
@@ -15,6 +22,7 @@ import {
 import { PUZZLE_CATEGORIES, type PuzzleCategory } from "@/lib/puzzleCategories";
 import type { ReviewResponse } from "@/lib/sm2";
 import { recordReview } from "@/lib/statsCache";
+import type { AnalysisResponse } from "@/app/api/analysis/route";
 
 interface PuzzleData {
   id: string;
@@ -94,6 +102,20 @@ export default function TacticsClient() {
   // has long since persisted them and SRS will have pushed them forward.
   const recentlyRatedRef = useRef<string[]>([]);
   const RECENT_RATED_CAP = 20;
+
+  // Engine analysis (only available after reveal). The board fires
+  // `onPositionChange` for every FEN it shows in analysis mode; we
+  // debounce-fetch eval for that FEN and ignore stale responses.
+  const [analysisOn, setAnalysisOn] = useState(false);
+  const [analysisFen, setAnalysisFen] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(
+    null,
+  );
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  // Monotonic request id — only the latest in-flight fetch wins. Without
+  // this, a slow eval for an earlier position can overwrite a fresh one.
+  const analysisReqRef = useRef(0);
 
   const handleBack = () => {
     router.push("/home");
@@ -183,6 +205,58 @@ export default function TacticsClient() {
 
   const handleShowAnswer = () => {
     setRevealed(true);
+  };
+
+  // Reset analysis whenever the puzzle changes or the user un-reveals.
+  // PuzzleBoard remounts on puzzle.id, but the parent-level analysis state
+  // doesn't unless we clear it here.
+  useEffect(() => {
+    setAnalysisOn(false);
+    setAnalysisFen(null);
+    setAnalysisResult(null);
+    setAnalysisError(null);
+    setAnalysisLoading(false);
+  }, [puzzle?.id, revealed]);
+
+  // Debounced eval fetch on FEN change. 300ms is long enough that a quick
+  // sequence of takeback-then-replay-same-move collapses to one request,
+  // but short enough that single drops feel instant.
+  useEffect(() => {
+    if (!analysisOn || !analysisFen) return;
+    const myReqId = ++analysisReqRef.current;
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/analysis?fen=${encodeURIComponent(analysisFen)}`,
+        );
+        if (myReqId !== analysisReqRef.current) return;
+        if (!res.ok) {
+          setAnalysisError("Engine unavailable");
+          setAnalysisResult(null);
+        } else {
+          const data = (await res.json()) as AnalysisResponse;
+          if (myReqId !== analysisReqRef.current) return;
+          setAnalysisResult(data);
+        }
+      } catch {
+        if (myReqId !== analysisReqRef.current) return;
+        setAnalysisError("Engine unavailable");
+        setAnalysisResult(null);
+      } finally {
+        if (myReqId === analysisReqRef.current) setAnalysisLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [analysisOn, analysisFen]);
+
+  const handleAnalysisPositionChange = useCallback((fen: string) => {
+    setAnalysisFen(fen);
+  }, []);
+
+  const toggleAnalysis = () => {
+    setAnalysisOn((on) => !on);
   };
 
   // Keyboard shortcuts: Enter = Show Answer, 1-4 = recall rating after reveal.
@@ -420,20 +494,38 @@ export default function TacticsClient() {
               moves={movesArr}
               revealSolution={revealed}
               orientation={orientation}
+              analysisMode={analysisOn}
+              onPositionChange={
+                analysisOn ? handleAnalysisPositionChange : undefined
+              }
             />
           </div>
 
           {revealed && (
-            <div className="flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center justify-center gap-2 flex-shrink-0">
               <BoardControls
                 onFirstMove={() => boardRef.current?.goToFirst()}
                 onPreviousMove={() => boardRef.current?.goToPrevious()}
                 onNextMove={() => boardRef.current?.goToNext()}
                 onLastMove={() => boardRef.current?.goToLast()}
-                // Reset = jump back to the puzzle position (before any
-                // solution move) — same as goToFirst for this view.
+                // Reset = jump back to the start of whichever line is
+                // active: solution mode → puzzle position; analysis mode
+                // → the anchor (position when analysis was toggled on).
                 onReset={() => boardRef.current?.goToFirst()}
               />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleAnalysis}
+                className={`h-9 px-3 rounded-lg text-xs font-medium border transition-colors ${
+                  analysisOn
+                    ? "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30"
+                    : "bg-surface-2/60 border-border/50 text-muted-foreground hover:bg-surface-2"
+                }`}
+                aria-pressed={analysisOn}>
+                <Cpu size={14} className="mr-1.5" />
+                {analysisOn ? "Stop" : "Analyze"}
+              </Button>
             </div>
           )}
 
@@ -454,6 +546,15 @@ export default function TacticsClient() {
                     {solutionSan.join(" ")}
                   </p>
                 </div>
+                {analysisOn && (
+                  <AnalysisPanel
+                    fen={analysisFen}
+                    result={analysisResult}
+                    loading={analysisLoading}
+                    error={analysisError}
+                    compact
+                  />
+                )}
                 <p className="text-xs text-muted-foreground text-center">
                   How well did you know this?
                 </p>
@@ -537,6 +638,14 @@ export default function TacticsClient() {
                   {solutionSan.join(" ")}
                 </p>
               </div>
+              {analysisOn && (
+                <AnalysisPanel
+                  fen={analysisFen}
+                  result={analysisResult}
+                  loading={analysisLoading}
+                  error={analysisError}
+                />
+              )}
               <p className="text-xs text-muted-foreground text-center">
                 How well did you know this?
               </p>
@@ -675,6 +784,129 @@ function RatingButtons({
       </Button>
     </div>
   );
+}
+
+function AnalysisPanel({
+  fen,
+  result,
+  loading,
+  error,
+  compact = false,
+}: {
+  fen: string | null;
+  result: AnalysisResponse | null;
+  loading: boolean;
+  error: string | null;
+  compact?: boolean;
+}) {
+  // Convert engine output (UCI from the analyzed FEN) to SAN so the user
+  // sees moves in the notation they actually think in. We try the best
+  // move on its own first, then walk the continuation off the same FEN.
+  const { bestSan, pvSan } = (() => {
+    if (!fen || !result) return { bestSan: null as string | null, pvSan: [] as string[] };
+    let bestSan: string | null = null;
+    const pvSan: string[] = [];
+    try {
+      if (result.bestMove) {
+        const g = new Chess(fen);
+        const m = applyUciToGame(g, result.bestMove);
+        if (m) bestSan = m.san;
+      }
+    } catch {}
+    try {
+      if (result.continuation) {
+        const g = new Chess(fen);
+        const ucis = result.continuation.split(/\s+/).filter(Boolean).slice(0, 6);
+        for (const uci of ucis) {
+          const m = applyUciToGame(g, uci);
+          if (!m) break;
+          pvSan.push(m.san);
+        }
+      }
+    } catch {}
+    return { bestSan, pvSan };
+  })();
+
+  const evalText = (() => {
+    if (!result) return "—";
+    if (typeof result.mate === "number" && result.mate !== 0) {
+      const n = Math.abs(result.mate);
+      return result.mate > 0 ? `M${n}` : `-M${n}`;
+    }
+    if (typeof result.eval === "number") {
+      const sign = result.eval > 0 ? "+" : "";
+      return `${sign}${result.eval.toFixed(2)}`;
+    }
+    return "—";
+  })();
+
+  const evalColor = (() => {
+    if (!result) return "text-foreground";
+    const score =
+      typeof result.mate === "number" && result.mate !== 0
+        ? result.mate > 0
+          ? 99
+          : -99
+        : (result.eval ?? 0);
+    if (score > 0.3) return "text-emerald-400";
+    if (score < -0.3) return "text-rose-400";
+    return "text-foreground";
+  })();
+
+  return (
+    <div className={`glass-card rounded-xl ${compact ? "p-2.5" : "p-4"} space-y-2`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground uppercase tracking-wider">
+          Engine
+        </span>
+        <span className={`text-base font-mono font-semibold ${evalColor}`}>
+          {evalText}
+          {loading && (
+            <span className="ml-2 inline-block w-2 h-2 rounded-full bg-primary/60 animate-pulse align-middle" />
+          )}
+        </span>
+      </div>
+      {error ? (
+        <p className="text-xs text-rose-400/80">{error}</p>
+      ) : (
+        <>
+          {bestSan && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Best</span>
+              <span className="font-mono font-semibold text-foreground">
+                {bestSan}
+              </span>
+            </div>
+          )}
+          {pvSan.length > 0 && (
+            <div className="text-xs">
+              <span className="text-muted-foreground">Line </span>
+              <span className="font-mono text-foreground/90 break-words">
+                {pvSan.join(" ")}
+              </span>
+            </div>
+          )}
+          {!result && !loading && (
+            <p className="text-xs text-muted-foreground">
+              Drag a piece to explore alternatives.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function applyUciToGame(game: Chess, uci: string) {
+  if (uci.length < 4) return null;
+  const from = uci.slice(0, 2);
+  const to = uci.slice(2, 4);
+  const promotion = uci.length > 4 ? uci.slice(4, 5) : undefined;
+  try {
+    return game.move({ from, to, promotion: promotion || "q" });
+  } catch {
+    return null;
+  }
 }
 
 function computeOrientation(

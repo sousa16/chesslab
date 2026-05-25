@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Chess } from "chess.js";
 import { ChevronLeft, Compass, Plus } from "lucide-react";
@@ -76,6 +76,16 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
   // position, 0..moves.length-1 = position after that many moves played.
   // Updated whenever the Board's internal nav state changes.
   const [displayedIndex, setDisplayedIndex] = useState(-1);
+
+  // `repertoires` is server-fetched and rides along in the RSC payload that
+  // Next caches client-side. When the user routes away (e.g. to /build or
+  // /gaps), saves a line, and comes back, the router will happily replay
+  // the stale RSC — and the explorer will keep telling them the new line
+  // is "out of repertoire". Forcing a refresh on mount re-pulls the RSC
+  // from the server so the latest entries land in props.
+  useEffect(() => {
+    router.refresh();
+  }, [router]);
 
   // Build per-color fen→expectedMoves map. We store an ARRAY of UCI moves
   // (one per repertoire entry at the same FEN) so multiple planned
@@ -395,6 +405,7 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
               initialMoves={loadedMoves}
               onMovesUpdated={handleMovesUpdated}
               onMoveIndexChange={handleMoveIndexChange}
+              hideHistoryOverlay
             />
           </div>
 
@@ -416,11 +427,16 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
 
           {/* Current-position banner: either show the user's planned move
               from here, or surface that this position is out of repertoire
-              with a shortcut to add it. */}
-          <div className="w-full flex-shrink-0 min-h-[3rem]">
+              with a shortcut to add it.
+              Fixed height across all three states keeps the desktop
+              `lg:justify-center` column from reflowing as the user scrubs
+              back and forth — the board would otherwise nudge up/down as
+              the banner swapped between the (taller) user-turn card and
+              the (shorter) "Opponent to move" text. */}
+          <div className="w-full flex-shrink-0 h-[5.5rem] flex items-center">
             {currentIsUserTurn ? (
               currentHasPlan ? (
-                <div className="glass-card rounded-xl p-3 lg:p-4 text-center border border-primary/30 bg-primary/5">
+                <div className="w-full glass-card rounded-xl p-3 lg:p-4 text-center border border-primary/30 bg-primary/5">
                   <p className="text-xs text-muted-foreground">
                     {currentExpectedSans.length > 1
                       ? "Your repertoire plays one of"
@@ -431,7 +447,7 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
                   </p>
                 </div>
               ) : (
-                <div className="glass-card rounded-xl p-3 lg:p-4 flex items-center justify-between gap-3 border border-amber-500/30 bg-amber-500/5">
+                <div className="w-full glass-card rounded-xl p-3 lg:p-4 flex items-center justify-between gap-3 border border-amber-500/30 bg-amber-500/5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-amber-400">
                       Out of repertoire
@@ -456,7 +472,7 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
                 </div>
               )
             ) : (
-              <div className="text-center text-xs text-muted-foreground py-3">
+              <div className="w-full text-center text-xs text-muted-foreground">
                 Opponent to move
               </div>
             )}

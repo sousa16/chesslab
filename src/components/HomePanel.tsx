@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useState, useEffect, useTransition, use } from "react";
+import { useState, useEffect, useTransition, use, useRef } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
 import {
   getCachedStats,
@@ -201,18 +201,59 @@ export function HomePanel({
     });
   };
 
+  // Warm the repertoire fetch + the Tactics route bundle before the user
+  // actually navigates. By the time onClick fires, the response is sitting
+  // in the browser's HTTP cache and the route's JS chunks have downloaded,
+  // so the panel/page renders without the initial loading flash. The
+  // prefetched fetch piggybacks on the existing ETag — repeated hovers
+  // cost nothing once a 304 has been observed.
+  const prefetchedColorsRef = useRef<Set<"white" | "black">>(new Set());
+  const handleRepertoireHover = (color: "white" | "black") => {
+    if (prefetchedColorsRef.current.has(color)) return;
+    prefetchedColorsRef.current.add(color);
+    try {
+      void fetch(`/api/repertoires?color=${color}`, {
+        credentials: "same-origin",
+      }).catch(() => {
+        prefetchedColorsRef.current.delete(color);
+      });
+    } catch {
+      prefetchedColorsRef.current.delete(color);
+    }
+  };
+  const tacticsPrefetchedRef = useRef(false);
+  const handleTacticsHover = () => {
+    if (tacticsPrefetchedRef.current) return;
+    tacticsPrefetchedRef.current = true;
+    try {
+      router.prefetch("/tactics");
+    } catch {
+      tacticsPrefetchedRef.current = false;
+    }
+  };
+
+  // Last etag the server sent us for /api/training-stats. Sending it back
+  // as If-None-Match lets the server respond 304 without serializing the
+  // full body — meaningful win on every nav/visibility-change refetch
+  // since the actual stats only change after a review/save/delete.
+  const trainingStatsEtagRef = useRef<string | null>(null);
+
   const fetchStats = async () => {
     try {
-      // Fetch training stats (due cards, total positions, learned count)
-      const trainingRes = await fetch("/api/training-stats");
+      const headers: Record<string, string> = {};
+      if (trainingStatsEtagRef.current) {
+        headers["If-None-Match"] = trainingStatsEtagRef.current;
+      }
+      const trainingRes = await fetch("/api/training-stats", { headers });
       if (trainingRes.ok) {
+        const etag = trainingRes.headers.get("etag");
+        if (etag) trainingStatsEtagRef.current = etag;
         const trainingData = (await trainingRes.json()) as ServerTrainingStats;
         setTrainingStats(trainingData);
         setCachedStats(trainingData);
-        // Initialize positions reviewed counter from API
         setPositionsReviewedToday(trainingData.positionsReviewedToday ?? 0);
       } else if (trainingRes.status === 304) {
-        // Etag match — the existing state is still valid.
+        // Etag match — existing state is still valid; no work to do.
       } else {
         console.error("Training stats fetch failed:", trainingRes.status);
       }
@@ -412,6 +453,8 @@ export function HomePanel({
             {/* White Repertoire - Premium Card */}
             <button
               onClick={() => onSelectRepertoire("white")}
+              onMouseEnter={() => handleRepertoireHover("white")}
+              onFocus={() => handleRepertoireHover("white")}
               className="repertoire-card repertoire-card-white w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
               {/* Gradient border effect */}
               <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-zinc-400/20 via-white/10 to-zinc-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -470,6 +513,8 @@ export function HomePanel({
             {/* Black Repertoire - Premium Card */}
             <button
               onClick={() => onSelectRepertoire("black")}
+              onMouseEnter={() => handleRepertoireHover("black")}
+              onFocus={() => handleRepertoireHover("black")}
               className="repertoire-card repertoire-card-black w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
               {/* Gradient border effect */}
               <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-zinc-600/20 via-zinc-800/10 to-zinc-900/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -534,6 +579,8 @@ export function HomePanel({
           </h3>
           <button
             onClick={() => router.push("/tactics")}
+            onMouseEnter={handleTacticsHover}
+            onFocus={handleTacticsHover}
             className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
             <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-purple-500/20 via-blue-500/10 to-purple-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative flex items-center gap-3 lg:gap-4">

@@ -8,7 +8,7 @@ import { Board, BoardHandle } from "@/components/Board";
 import { BuildPanel } from "@/components/BuildPanel";
 import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
-import { convertSanToUci } from "@/lib/repertoire";
+import { convertSanToUci } from "@/lib/chessMoves";
 import { useToast } from "@/components/ui/toast";
 import {
   incrementPendingSave,
@@ -179,6 +179,8 @@ export default function BuildClient({
             );
           } else if (errMsg.includes("unauthorized")) {
             toast.error("Please sign in to save your repertoire.");
+          } else if (res.status === 429) {
+            toast.error("Too many saves — please wait a moment and try again.");
           } else {
             toast.error(data?.error || "Couldn't save the line.");
           }

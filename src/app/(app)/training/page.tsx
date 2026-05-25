@@ -1,8 +1,8 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { lookupOpening } from "@/lib/openings";
-import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
+import { buildRepertoireTree } from "@/lib/repertoireTree";
+import { getTrainingEnrichment } from "@/lib/trainingEnrichment";
 import TrainingClient from "@/components/TrainingClient";
 
 interface TrainingPageProps {
@@ -57,34 +57,49 @@ export default async function TrainingPage({
   // children. The first-move entries are filtered out *after* the tree is
   // built (see below) so they don't appear as training cards, but their
   // SAN contribution is preserved.
-  const repertoiresRaw = await prisma.repertoire.findMany({
-    where: {
-      userId,
-      ...(colorFilter
-        ? { color: colorFilter === "white" ? "White" : "Black" }
-        : {}),
-    },
-    select: {
-      id: true,
-      color: true,
-      entries: {
-        orderBy: { nextReviewDate: "asc" },
-        select: {
-          id: true,
-          expectedMove: true,
-          interval: true,
-          easeFactor: true,
-          repetitions: true,
-          nextReviewDate: true,
-          phase: true,
-          learningStepIndex: true,
-          position: {
-            select: { id: true, fen: true, fullmoveNumber: true },
+  const prismaColorFilter = colorFilter
+    ? colorFilter === "white"
+      ? ("White" as const)
+      : ("Black" as const)
+    : null;
+
+  // Pull the SRS-flavored row data + the cached opening enrichment in
+  // parallel. The enrichment cache is shared across navigations and is
+  // automatically invalidated by entry writes (see trainingEnrichment.ts),
+  // so the per-render work here is just the fast SRS row read.
+  const [repertoiresRaw, enrichmentByRep] = await Promise.all([
+    prisma.repertoire.findMany({
+      where: {
+        userId,
+        ...(prismaColorFilter ? { color: prismaColorFilter } : {}),
+      },
+      select: {
+        id: true,
+        color: true,
+        entries: {
+          orderBy: { nextReviewDate: "asc" },
+          select: {
+            id: true,
+            expectedMove: true,
+            interval: true,
+            easeFactor: true,
+            repetitions: true,
+            nextReviewDate: true,
+            phase: true,
+            learningStepIndex: true,
+            position: {
+              select: { id: true, fen: true, fullmoveNumber: true },
+            },
           },
         },
       },
-    },
-  });
+    }),
+    getTrainingEnrichment(userId, prismaColorFilter),
+  ]);
+
+  const enrichmentMapByRep = new Map(
+    enrichmentByRep.map((r) => [r.repertoireId, r]),
+  );
 
   const user = { id: userId, repertoires: repertoiresRaw };
 
@@ -92,7 +107,11 @@ export default async function TrainingPage({
   const enriched = {
     ...user,
     repertoires: user.repertoires.map((r) => {
+      // Tree is still needed for the lineLeafId path expansion below.
+      // Everything else (sanMoves, priorMoves, opening name) now comes
+      // straight out of the cached enrichment.
       const { roots, byEntryId } = buildRepertoireTree(r.entries, r.color);
+      const enrichmentForRep = enrichmentMapByRep.get(r.id);
       const dueOnly = mode === "review";
       const entriesById = new Map(r.entries.map((e) => [e.id, e]));
 
@@ -128,22 +147,15 @@ export default async function TrainingPage({
       }
 
       const enrichedEntries = ordered.map((entry) => {
-        const node = byEntryId.get(entry.id);
-        const sans = node?.sanMoves ?? [];
-        const rootFen = node?.rootFen ?? entry.position.fen;
-        // Resolve the canonical line from the standard starting position
-        // first, then look up the opening name from THAT — using raw tree
-        // sans would misname mid-game-rooted entries (e.g., a Caro-Kann
-        // Advance entry would resolve to "Queen's Pawn Game" because its
-        // sans start at "d4 d5").
-        const priorMoves = anchorSansToStart(sans, entry.position.fen, rootFen);
-        const lookupSans = priorMoves.length > 0 ? priorMoves : sans;
-        const match = lookupOpening(lookupSans);
+        // Pull opening enrichment straight from the cached map. Falls back
+        // to {null, null, []} for entries the cache hasn't seen yet (e.g.,
+        // race with a very recent save — the next nav will pick it up).
+        const cached = enrichmentForRep?.enrichmentByEntryId[entry.id];
         return {
           ...entry,
-          openingName: match?.name ?? null,
-          openingEco: match?.eco ?? null,
-          priorMoves,
+          openingName: cached?.openingName ?? null,
+          openingEco: cached?.openingEco ?? null,
+          priorMoves: cached?.priorMoves ?? [],
           // In practice mode (Learn All) we still want to update SRS for
           // cards that happen to be due — otherwise a long Learn All session
           // hides them from the regular review queue without ever being

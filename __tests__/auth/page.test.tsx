@@ -187,6 +187,7 @@ describe("AuthPage Component", () => {
         password: "password123",
         action: "login",
         redirect: false,
+        rememberMe: "true",
       });
     });
 
@@ -261,6 +262,7 @@ describe("AuthPage Component", () => {
         password: "SecurePassword123",
         action: "register",
         redirect: false,
+        rememberMe: "true",
       });
     });
 

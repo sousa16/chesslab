@@ -63,7 +63,7 @@ jest.mock("@/components/Logo", () => ({
   Logo: () => <div>Logo</div>,
 }));
 
-jest.mock("@/lib/repertoire", () => ({
+jest.mock("@/lib/chessMoves", () => ({
   convertSanToUci: jest.fn((moves) => moves.map((m) => m.toLowerCase())),
 }));
 

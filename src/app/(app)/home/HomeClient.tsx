@@ -159,7 +159,16 @@ export default function HomeClient({ statsPromise }: HomeClientProps) {
       const error = await response.json();
       throw new Error(error.error || "Failed to delete line");
     }
-    window.location.reload();
+    // Fire the shared bus event that both RepertoirePanel and HomePanel
+    // already listen to. A detail without `positionsReviewed` triggers
+    // a tree refetch (review writes use that field to suppress it).
+    // Previously we did a full window.location.reload() — that dropped
+    // the user's scroll position and tore down every other open panel.
+    try {
+      window.dispatchEvent(new CustomEvent("training-stats-updated"));
+    } catch {
+      /* non-browser env — no-op */
+    }
   };
 
   const handleRotateBoard = () =>

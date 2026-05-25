@@ -30,8 +30,26 @@ jest.mock("next-auth/react", () => ({
   })),
 }));
 
+jest.mock("@/lib/statsCache", () => ({
+  getCachedStats: jest.fn(() => null),
+  setCachedStats: jest.fn(),
+  patchCachedStats: jest.fn(),
+}));
+
 // Mock fetch
 global.fetch = jest.fn();
+
+const mockTrainingStats = {
+  dueCount: 15,
+  colorStats: {
+    white: { mastered: 20, total: 25 },
+    black: { mastered: 10, total: 17 },
+  },
+  streak: 3,
+  accuracy: 75,
+  timeSpentMinutes: 10,
+  positionsReviewedToday: 4,
+};
 
 // Helper function to render with providers
 const renderWithProviders = (component: React.ReactElement) => {
@@ -48,40 +66,15 @@ describe("HomePanel Component", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockImplementation((url) => {
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
       if (url === "/api/training-stats") {
         return Promise.resolve({
           ok: true,
-          json: async () => ({
-            dueCount: 15,
-            totalPositions: 42,
-            colorStats: {
-              white: { learned: 20, total: 25 },
-              black: { learned: 10, total: 17 },
-            },
-          }),
+          headers: { get: () => null },
+          json: async () => mockTrainingStats,
         });
       }
-      if (url === "/api/repertoires?color=white") {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            openings: [
-              { id: "1", root: { children: [] } },
-              { id: "2", root: { children: [] } },
-            ],
-          }),
-        });
-      }
-      if (url === "/api/repertoires?color=black") {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            openings: [{ id: "3", root: { children: [] } }],
-          }),
-        });
-      }
-      return Promise.reject(new Error("Unknown URL"));
+      return Promise.reject(new Error(`Unknown URL: ${url}`));
     });
   });
 
@@ -144,7 +137,7 @@ describe("HomePanel Component", () => {
     );
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats");
+      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats", expect.any(Object));
     });
   });
 
@@ -158,7 +151,7 @@ describe("HomePanel Component", () => {
 
     await waitFor(() => {
       // Component fetches training stats
-      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats");
+      expect(global.fetch).toHaveBeenCalledWith("/api/training-stats", expect.any(Object));
     });
   });
 
@@ -181,23 +174,21 @@ describe("HomePanel Component", () => {
       if (url === "/api/training-stats") {
         return Promise.resolve({
           ok: true,
+          headers: { get: () => null },
           json: async () => ({
             dueCount: 0,
-            totalPositions: 0,
             colorStats: {
-              white: { learned: 0, total: 0 },
-              black: { learned: 0, total: 0 },
+              white: { mastered: 0, total: 0 },
+              black: { mastered: 0, total: 0 },
             },
+            streak: 0,
+            accuracy: 0,
+            timeSpentMinutes: 0,
+            positionsReviewedToday: 0,
           }),
         });
       }
-      if (url.includes("/api/repertoires")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ openings: [] }),
-        });
-      }
-      return Promise.reject(new Error("Unknown URL"));
+      return Promise.reject(new Error(`Unknown URL: ${url}`));
     });
 
     renderWithProviders(

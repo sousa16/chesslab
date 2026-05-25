@@ -53,8 +53,9 @@ export async function ensureUserRepertoires(userId: string) {
  * 5. Initialize SRS fields for spaced repetition training
  *
  * Performance: all DB work is batched inside a single transaction —
- * positions are upserted in parallel, existing entries are fetched in
- * one query, and new entries are bulk-inserted with createMany.
+ * positions are resolved with findMany + createMany (not N upserts),
+ * existing entries are fetched in one query, and new entries are
+ * bulk-inserted with createMany.
  */
 export async function saveRepertoireLine(
   userId: string,
@@ -134,16 +135,39 @@ export async function saveRepertoireLine(
       },
     });
 
-    // Upsert all positions in parallel (one round-trip each, but concurrent)
-    const positions = await Promise.all(
-      userMoves.map(({ fen }) =>
-        tx.position.upsert({
-          where: { fen },
-          update: {},
-          create: { fen, fullmoveNumber: parseFullmove(fen) },
-        }),
-      ),
-    );
+    // Resolve positions in O(1) round-trips — N parallel upserts inside one
+    // transaction routinely hit Prisma's default 5s interactive timeout on
+    // longer lines.
+    const fens = userMoves.map((m) => m.fen);
+    const fenToId = new Map<string, string>();
+
+    const existingPositions = await tx.position.findMany({
+      where: { fen: { in: fens } },
+      select: { id: true, fen: true },
+    });
+    for (const p of existingPositions) fenToId.set(p.fen, p.id);
+
+    const missingFens = fens.filter((fen) => !fenToId.has(fen));
+    if (missingFens.length > 0) {
+      await tx.position.createMany({
+        data: missingFens.map((fen) => ({
+          fen,
+          fullmoveNumber: parseFullmove(fen),
+        })),
+        skipDuplicates: true,
+      });
+      const created = await tx.position.findMany({
+        where: { fen: { in: missingFens } },
+        select: { id: true, fen: true },
+      });
+      for (const p of created) fenToId.set(p.fen, p.id);
+    }
+
+    const positions = userMoves.map(({ fen }) => {
+      const id = fenToId.get(fen);
+      if (!id) throw new Error(`Failed to resolve position for FEN: ${fen}`);
+      return { id, fen };
+    });
 
     // Fetch all existing entries for these positions in a single query
     const positionIds = positions.map((p) => p.id);
@@ -179,23 +203,14 @@ export async function saveRepertoireLine(
     }
 
     return { entriesCreated: toCreate.length, repertoireId: repertoire.id };
+  }, {
+    // Default interactive transaction timeout is 5s — long lines exceed it.
+    maxWait: 10_000,
+    timeout: 60_000,
   });
 }
 
-/**
- * Convert SAN moves to UCI format using chess.js
- */
-export function convertSanToUci(movesInSan: string[]): string[] {
-  const game = new Chess();
-  const uciMoves: string[] = [];
-
-  for (const sanMove of movesInSan) {
-    const move = game.move(sanMove);
-    if (!move) {
-      throw new Error(`Invalid move: ${sanMove}`);
-    }
-    uciMoves.push(`${move.from}${move.to}${move.promotion || ""}`);
-  }
-
-  return uciMoves;
-}
+// Re-exported from the prisma-free chessMoves module. Client components
+// should import from "@/lib/chessMoves" directly so they don't pull this
+// file (and @prisma/client) into the client bundle.
+export { convertSanToUci } from "./chessMoves";

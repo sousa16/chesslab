@@ -6,6 +6,11 @@ import { prisma } from "@/lib/prisma";
 import { lookupOpening } from "@/lib/openings";
 import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
 
+// Tree-build for large repertoires can briefly spike CPU and Prisma's
+// cold-connection latency adds another second or two — give the lambda
+// enough headroom that a slow cold start doesn't 504 in front of users.
+export const maxDuration = 60;
+
 /**
  * GET /api/repertoires?color=white|black
  *

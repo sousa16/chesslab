@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Chess } from "chess.js";
 import { ChevronLeft, Plus, Radar } from "lucide-react";
@@ -8,12 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
 
+interface GapContinuation {
+  sans: string[];
+  count: number;
+  sampleGameUrls: string[];
+}
+
 interface AggregatedGap {
   positionFen: string;
   opponentMove: string | null;
   precedingSans: string[];
   occurrences: number;
   sampleGameUrls: string[];
+  // Top sub-lines played against the user from this gap position. Sorted
+  // desc by count. May be undefined when restoring a result persisted
+  // before this field existed — UI should treat it as [].
+  continuations?: GapContinuation[];
 }
 
 interface GapResult {
@@ -86,6 +96,21 @@ export default function GapAnalysisClient() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GapResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Phase + progress drive the visible bar. `null` = no analysis in
+  // flight. `processed`/`total` are populated from the analysis-phase
+  // events; the fetch phase shows an indeterminate state instead.
+  const [progress, setProgress] = useState<
+    | null
+    | {
+        phase: "fetching" | "analyzing";
+        message: string;
+        processed?: number;
+        total?: number;
+      }
+  >(null);
+  // Ref so the Cancel handler can reach the in-flight controller
+  // without re-rendering on every progress tick.
+  const abortRef = useRef<AbortController | null>(null);
 
   // Rehydrate inputs + last result on first mount. Guarded by a ref via
   // dependency-less useEffect — we don't want it running again after the
@@ -137,10 +162,20 @@ export default function GapAnalysisClient() {
       return;
     }
     setLoading(true);
+    setProgress({ phase: "fetching", message: "Starting…" });
+
+    // Tear down any prior in-flight request — defensive: the UI guards
+    // against double-submits via `disabled={loading}` but the user
+    // could rapid-click before React commits the disable.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const res = await fetch("/api/gap-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           chesscomUsername: chesscomUsername.trim() || undefined,
           lichessUsername: lichessUsername.trim() || undefined,
@@ -151,14 +186,91 @@ export default function GapAnalysisClient() {
           maxGames: Number(maxGames) || 200,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Analysis failed");
-      } else {
-        const newResult = data as GapResult;
-        setResult(newResult);
-        // Persist on success so coming back to /gaps later in the
-        // session restores the form + results without re-fetching.
+
+      if (!res.ok || !res.body) {
+        // Fall back to JSON error envelope for non-streaming errors
+        // (401/400 short-circuits in the route).
+        let msg = "Analysis failed";
+        try {
+          const data = await res.json();
+          if (typeof data?.error === "string") msg = data.error;
+        } catch {
+          /* leave default */
+        }
+        setError(msg);
+        return;
+      }
+
+      // NDJSON stream: parse line-by-line. Last line may not have a
+      // trailing newline if the writer closed mid-line — flush whatever
+      // is left in the buffer when reader.done fires.
+      let finalResult: GapResult | null = null;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl = buffer.indexOf("\n");
+        while (nl !== -1) {
+          const line = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          nl = buffer.indexOf("\n");
+          if (!line) continue;
+          try {
+            const event = JSON.parse(line) as
+              | { type: "fetching"; platform: "chesscom" | "lichess" }
+              | { type: "fetched"; platform: "chesscom" | "lichess"; games: number }
+              | { type: "analyzing"; total: number }
+              | { type: "analysis-progress"; processed: number; total: number }
+              | { type: "result" } & GapResult
+              | { type: "aborted" }
+              | { type: "error"; error: string };
+            if (event.type === "fetching") {
+              setProgress({
+                phase: "fetching",
+                message: `Fetching games from ${event.platform === "chesscom" ? "chess.com" : "Lichess"}…`,
+              });
+            } else if (event.type === "fetched") {
+              setProgress({
+                phase: "fetching",
+                message: `Fetched ${event.games} games from ${event.platform === "chesscom" ? "chess.com" : "Lichess"}.`,
+              });
+            } else if (event.type === "analyzing") {
+              setProgress({
+                phase: "analyzing",
+                message: `Analyzing ${event.total} games…`,
+                processed: 0,
+                total: event.total,
+              });
+            } else if (event.type === "analysis-progress") {
+              setProgress({
+                phase: "analyzing",
+                message: `Analyzing games (${event.processed}/${event.total})…`,
+                processed: event.processed,
+                total: event.total,
+              });
+            } else if (event.type === "result") {
+              const { type, ...payload } = event;
+              void type;
+              finalResult = payload as GapResult;
+            } else if (event.type === "aborted") {
+              setError("Analysis canceled.");
+              return;
+            } else if (event.type === "error") {
+              setError(event.error);
+              return;
+            }
+          } catch {
+            /* malformed line — ignore so a single bad write doesn't
+               nuke the whole run. */
+          }
+        }
+      }
+
+      if (finalResult) {
+        setResult(finalResult);
         writePersisted({
           chesscomUsername,
           lichessUsername,
@@ -167,15 +279,35 @@ export default function GapAnalysisClient() {
           minRating,
           maxRating,
           maxGames,
-          result: newResult,
+          result: finalResult,
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error");
+      // AbortError is the user clicking Cancel — surface a friendly
+      // message instead of "The user aborted a request."
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Analysis canceled.");
+      } else {
+        setError(err instanceof Error ? err.message : "Network error");
+      }
     } finally {
       setLoading(false);
+      setProgress(null);
+      abortRef.current = null;
     }
   };
+
+  const handleCancel = () => {
+    abortRef.current?.abort();
+  };
+
+  // Cancel an in-flight analysis if the user navigates away — leaves no
+  // zombie upstream fetches running on the server.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   // Explicit reset — clears the persisted state too so the next visit
   // starts blank rather than re-showing stale data.
@@ -328,6 +460,11 @@ export default function GapAnalysisClient() {
                 className="btn-primary-gradient">
                 {loading ? "Analyzing…" : "Analyze games"}
               </Button>
+              {loading && (
+                <Button onClick={handleCancel} variant="outline">
+                  Cancel
+                </Button>
+              )}
               {result && !loading && (
                 <Button
                   onClick={handleClear}
@@ -336,16 +473,50 @@ export default function GapAnalysisClient() {
                   Clear results
                 </Button>
               )}
-              {loading && (
-                <p className="text-xs text-muted-foreground">
-                  This can take 10–30 seconds while we pull and replay
-                  games.
-                </p>
-              )}
               {error && (
                 <p className="text-xs text-red-400">{error}</p>
               )}
             </div>
+
+            {/* Progress strip — only visible while a run is in flight.
+                We show a labeled bar; analysis events provide a real
+                percentage, fetch events stay indeterminate (striped). */}
+            {loading && progress && (
+              <div className="space-y-1.5 pt-1" data-testid="gap-progress">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {progress.message}
+                  </p>
+                  {progress.phase === "analyzing" &&
+                    progress.total != null &&
+                    progress.total > 0 && (
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {Math.floor(
+                          ((progress.processed ?? 0) / progress.total) * 100,
+                        )}
+                        %
+                      </p>
+                    )}
+                </div>
+                <div className="h-1.5 w-full rounded-full overflow-hidden bg-surface-2/60">
+                  {progress.phase === "analyzing" &&
+                  progress.total != null &&
+                  progress.total > 0 ? (
+                    <div
+                      className="h-full bg-primary transition-[width] duration-200 ease-out"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          ((progress.processed ?? 0) / progress.total) * 100,
+                        )}%`,
+                      }}
+                    />
+                  ) : (
+                    <div className="h-full w-1/3 bg-primary/70 animate-pulse" />
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Results */}
@@ -466,9 +637,15 @@ function GapRow({
   color: "white" | "black";
   router: ReturnType<typeof useRouter>;
 }) {
+  // Sub-line rows are collapsed by default — most users only care
+  // about the broad "1...c5" count. Power users can expand to see
+  // which 2nd / 3rd move continuations are pushing them out of book.
+  const [expanded, setExpanded] = useState(false);
+
   // Build a short label like "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 — Ba4" so the
   // user can see at a glance which line we're talking about.
   const label = describeLine(gap.precedingSans);
+  const continuations = gap.continuations ?? [];
   const handleAdd = () => {
     sessionStorage.setItem(
       "buildSanMoves",
@@ -476,50 +653,136 @@ function GapRow({
     );
     router.push(`/build/${color}`);
   };
+
+  // Letting the user prep against the EXACT sub-line (gap moves +
+  // continuation) means clicking "Add" on a continuation should seed
+  // the Build screen with the longer path, not just the gap.
+  const handleAddContinuation = (cont: GapContinuation) => {
+    sessionStorage.setItem(
+      "buildSanMoves",
+      JSON.stringify([...gap.precedingSans, ...cont.sans]),
+    );
+    router.push(`/build/${color}`);
+  };
+
   return (
-    <li className="px-4 py-3 flex items-start gap-3 hover:bg-surface-2/30 transition-colors">
-      <div className="flex-shrink-0 w-12 text-right">
-        <span className="inline-flex items-center justify-center min-w-[2.5rem] h-7 px-2 rounded-lg bg-amber-500/15 text-amber-400 text-sm font-semibold tabular-nums">
-          ×{gap.occurrences}
-        </span>
-      </div>
-      <div className="flex-1 min-w-0 space-y-1">
-        <p className="text-xs font-mono text-foreground break-words">
-          {label}
-        </p>
-        {gap.opponentMove && (
-          <p className="text-[11px] text-muted-foreground">
-            Opponent's last move:{" "}
-            <span className="text-foreground font-mono">
-              {gap.opponentMove}
-            </span>
+    <li className="px-4 py-3 hover:bg-surface-2/30 transition-colors">
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 w-12 text-right">
+          <span className="inline-flex items-center justify-center min-w-[2.5rem] h-7 px-2 rounded-lg bg-amber-500/15 text-amber-400 text-sm font-semibold tabular-nums">
+            ×{gap.occurrences}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0 space-y-1">
+          <p className="text-xs font-mono text-foreground break-words">
+            {label}
           </p>
-        )}
-        {gap.sampleGameUrls.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-0.5">
-            {gap.sampleGameUrls.slice(0, 3).map((u, i) => (
-              <a
-                key={i}
-                href={u}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] text-primary hover:underline">
-                game {i + 1} ↗
-              </a>
-            ))}
-          </div>
-        )}
+          {gap.opponentMove && (
+            <p className="text-[11px] text-muted-foreground">
+              Opponent&apos;s last move:{" "}
+              <span className="text-foreground font-mono">
+                {gap.opponentMove}
+              </span>
+            </p>
+          )}
+          {gap.sampleGameUrls.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-0.5">
+              {gap.sampleGameUrls.slice(0, 3).map((u, i) => (
+                <a
+                  key={i}
+                  href={u}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-primary hover:underline">
+                  game {i + 1} ↗
+                </a>
+              ))}
+            </div>
+          )}
+          {continuations.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              data-testid="gap-toggle-continuations"
+              className="text-[10px] text-primary hover:underline mt-1">
+              {expanded
+                ? `Hide ${continuations.length} sub-line${continuations.length === 1 ? "" : "s"}`
+                : `Show ${continuations.length} sub-line${continuations.length === 1 ? "" : "s"} ↓`}
+            </button>
+          )}
+        </div>
+        <Button
+          size="sm"
+          onClick={handleAdd}
+          className="btn-primary-gradient flex-shrink-0"
+          title="Open in Build to add a response">
+          <Plus size={14} className="mr-1" />
+          Add
+        </Button>
       </div>
-      <Button
-        size="sm"
-        onClick={handleAdd}
-        className="btn-primary-gradient flex-shrink-0"
-        title="Open in Build to add a response">
-        <Plus size={14} className="mr-1" />
-        Add
-      </Button>
+      {expanded && continuations.length > 0 && (
+        <ul
+          className="mt-2 ml-15 pl-3 border-l border-border/40 space-y-1.5"
+          data-testid="gap-continuations">
+          {continuations.map((cont, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-3 text-[11px]"
+              data-testid="gap-continuation-row">
+              <span className="inline-flex items-center justify-center min-w-[2.25rem] h-6 px-1.5 rounded-md bg-surface-2/60 text-muted-foreground font-semibold tabular-nums">
+                ×{cont.count}
+              </span>
+              <span className="flex-1 font-mono text-foreground break-words">
+                {describeContinuation(gap.precedingSans, cont.sans)}
+              </span>
+              {cont.sampleGameUrls.length > 0 && (
+                <a
+                  href={cont.sampleGameUrls[0]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-primary hover:underline flex-shrink-0">
+                  example ↗
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => handleAddContinuation(cont)}
+                className="text-[10px] text-primary hover:underline flex-shrink-0"
+                title="Open this exact sub-line in Build">
+                Add line
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
+}
+
+// Render the continuation as the SAN tail that follows the gap line, so
+// the user reads it as a contiguous variation. Numbers continue from
+// wherever the gap ended (precedingSans length determines parity).
+function describeContinuation(
+  precedingSans: string[],
+  contSans: string[],
+): string {
+  if (contSans.length === 0) return "(no further moves recorded)";
+  const startPly = precedingSans.length;
+  const parts: string[] = [];
+  for (let i = 0; i < contSans.length; i++) {
+    const ply = startPly + i;
+    const moveNumber = Math.floor(ply / 2) + 1;
+    if (ply % 2 === 0) {
+      parts.push(`${moveNumber}.${contSans[i]}`);
+    } else if (i === 0) {
+      // First ply of continuation is black-to-move — emit "1...Nf6" so
+      // the move number isn't lost when the line opens mid-pair.
+      parts.push(`${moveNumber}...${contSans[i]}`);
+    } else {
+      parts.push(contSans[i]);
+    }
+  }
+  return parts.join(" ");
 }
 
 function describeLine(sans: string[]): string {

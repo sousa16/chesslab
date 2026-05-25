@@ -1,491 +1,230 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { LineTree } from "@/components/repertoire/LineTree";
 
-// Mock next/navigation
-jest.mock("next/navigation", () => ({
-  usePathname: jest.fn(() => "/build"),
-  useRouter: jest.fn(() => ({
-    push: jest.fn(),
-    back: jest.fn(),
-  })),
-}));
-
-// Mock next-auth
-jest.mock("next-auth/react", () => ({
-  useSession: jest.fn(() => ({
-    data: { user: { id: "user-1" } },
-    status: "authenticated",
-  })),
-}));
-
-// Mock chess.js for unit testing
-jest.mock("chess.js", () => {
+function makeLeaf(
+  overrides: Partial<{
+    id: string;
+    fen: string;
+    displaySequence: string;
+    sanMoves: string[];
+    openingName: string | null;
+    openingEco: string | null;
+  }> = {},
+) {
   return {
-    Chess: jest.fn().mockImplementation((fen) => {
-      const game = {
-        fen: jest
-          .fn()
-          .mockReturnValue(
-            fen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-          ),
-        move: jest.fn((moveInput) => {
-          // Mock move behavior
-          if (typeof moveInput === "string") {
-            // SAN move
-            if (moveInput === "e4") return { from: "e2", to: "e4", san: "e4" };
-            if (moveInput === "c5") return { from: "c7", to: "c5", san: "c5" };
-            if (moveInput === "Nf3")
-              return { from: "g1", to: "f3", san: "Nf3" };
-          } else if (typeof moveInput === "object") {
-            // UCI move object
-            const { from, to } = moveInput;
-            if (from === "e2" && to === "e4")
-              return { from: "e2", to: "e4", san: "e4" };
-            if (from === "c7" && to === "c5")
-              return { from: "c7", to: "c5", san: "c5" };
-            if (from === "g1" && to === "f3")
-              return { from: "g1", to: "f3", san: "Nf3" };
-          }
-          return null;
-        }),
-      };
-      return game;
-    }),
+    id: "leaf-1",
+    fen: "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+    expectedMove: "g1f3",
+    moveNumber: 3,
+    displaySequence: "1.e4 c5 2.Nf3",
+    sanMoves: ["e4", "c5", "Nf3"],
+    openingName: "Sicilian Defense",
+    openingEco: "B20",
+    children: [],
+    ...overrides,
   };
-});
+}
+
+function makeRoot(leaves: ReturnType<typeof makeLeaf>[]) {
+  return {
+    id: "root",
+    fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    expectedMove: "",
+    moveNumber: 0,
+    displaySequence: "Initial Position",
+    sanMoves: [] as string[],
+    openingName: null,
+    openingEco: null,
+    children: leaves.map((leaf) => ({
+      id: `branch-${leaf.id}`,
+      fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1",
+      expectedMove: "e2e4",
+      moveNumber: 1,
+      displaySequence: "1.e4",
+      sanMoves: ["e4"],
+      openingName: leaf.openingName,
+      openingEco: null,
+      children: [leaf],
+    })),
+  };
+}
 
 describe("LineTree Component", () => {
   const mockOnBuild = jest.fn();
   const mockOnLearn = jest.fn();
-  const mockOnDelete = jest.fn();
+  const mockOnDelete = jest.fn().mockResolvedValue(undefined);
   const mockOnLineClick = jest.fn();
-
-  const mockRoot: any = {
-    id: "root",
-    fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    expectedMove: "",
-    moveSequence: "Initial Position",
-    children: [
-      {
-        id: "e4-node",
-        fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
-        expectedMove: "e2e4",
-        moveSequence: "1.e2e4",
-        children: [
-          {
-            id: "e4-c5-node",
-            fen: "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
-            expectedMove: "c7c5",
-            moveSequence: "1.e2e4 c7c5",
-            children: [
-              {
-                id: "e4-c5-nf3-node",
-                fen: "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
-                expectedMove: "g1f3",
-                moveSequence: "1.e2e4 c7c5 2.g1f3",
-                children: [],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOnDelete.mockResolvedValue(undefined);
   });
 
-  describe("Rendering", () => {
-    it("renders child moves when root is Initial Position", () => {
-      render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // Component skips "Initial Position" root and renders children directly
-      expect(screen.queryByText("Initial Position")).not.toBeInTheDocument();
-      expect(screen.getByText("1.e2e4")).toBeInTheDocument();
-    });
-
-    it("renders child nodes when expanded", () => {
-      render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // First level is visible
-      expect(screen.getByText("1.e2e4")).toBeInTheDocument();
-
-      // Expand the first node to see its children
-      const expandButton = screen.getAllByTitle("Expand")[0];
-      fireEvent.click(expandButton);
-
-      // Now child should be visible
-      expect(screen.getByText("1.e2e4 c7c5")).toBeInTheDocument();
-    });
-
-    it("displays nested children with proper indentation", async () => {
-      render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // Expand to see nested children
-      const firstExpandButton = screen.getAllByTitle("Expand")[0];
-      fireEvent.click(firstExpandButton); // Expand e4
-
-      // Wait for child to appear and then expand it
-      await waitFor(() => {
-        expect(screen.getByText("1.e2e4 c7c5")).toBeInTheDocument();
-      });
-
-      const secondExpandButton = screen.getAllByTitle("Expand")[0]; // After first expansion, indices change
-      fireEvent.click(secondExpandButton); // Expand c5
-
-      // Verify the deepest line is rendered (component shows last two moves)
-      await waitFor(() => {
-        expect(screen.getByText("1.c7c5 2.g1f3")).toBeInTheDocument();
-      });
-    });
+  it("renders nothing when there are no leaves", () => {
+    const { container } = render(
+      <LineTree
+        root={{
+          id: "root",
+          fen: "start",
+          expectedMove: "",
+          moveNumber: 0,
+          displaySequence: "Initial Position",
+          sanMoves: [],
+          openingName: null,
+          openingEco: null,
+          children: [],
+        }}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+      />,
+    );
+    expect(container.firstChild).toBeNull();
   });
 
-  describe("Click to Display Feature", () => {
-    it("calls onLineClick when a line is clicked", () => {
-      render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
+  it("groups leaves by opening family and shows displaySequence", () => {
+    render(
+      <LineTree
+        root={makeRoot([makeLeaf()])}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+        onLineClick={mockOnLineClick}
+      />,
+    );
 
-      // Click on the e4 line
-      const e4Line = screen.getByText("1.e2e4");
-      fireEvent.click(e4Line);
-
-      // Verify callback was called with moves and FEN
-      expect(mockOnLineClick).toHaveBeenCalledWith(
-        expect.arrayContaining(["e4"]),
-        expect.any(String),
-      );
-    });
-
-    it("passes full move sequence to callback for nested lines", async () => {
-      render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // Expand to reach nested line
-      const firstExpandButton = screen.getAllByTitle("Expand")[0];
-      fireEvent.click(firstExpandButton); // Expand e4
-
-      await waitFor(() => {
-        expect(screen.getByText("1.e2e4 c7c5")).toBeInTheDocument();
-      });
-
-      const secondExpandButton = screen.getAllByTitle("Expand")[0];
-      fireEvent.click(secondExpandButton); // Expand c5
-
-      // Wait for deepest line to appear (last two moves shown)
-      await waitFor(() => {
-        expect(screen.getByText("1.c7c5 2.g1f3")).toBeInTheDocument();
-      });
-
-      // Click on the deepest line
-      const nf3Line = screen.getByText("1.c7c5 2.g1f3");
-      fireEvent.click(nf3Line);
-
-      // Verify callback was called with the full move sequence
-      expect(mockOnLineClick).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(String),
-      );
-
-      const [moves, fen] = mockOnLineClick.mock.calls[0];
-      expect(moves.length).toBeGreaterThanOrEqual(2); // Should have at least 2 moves
-      expect(fen).toMatch(/^[rnbqkbnr\/pppppppp]/); // Should be a valid FEN
-    });
-
-    it("passes the correct starting FEN position to callback", () => {
-      render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      const e4Line = screen.getByText("1.e2e4");
-      fireEvent.click(e4Line);
-
-      const [, fen] = mockOnLineClick.mock.calls[0];
-
-      // Verify the FEN is the position after e2e4 (what the node contains)
-      expect(fen).toBe(
-        "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
-      );
-    });
+    expect(screen.getByText("Sicilian Defense")).toBeInTheDocument();
+    expect(screen.getByText("1.e4 c5 2.Nf3")).toBeInTheDocument();
+    expect(screen.queryByText("Initial Position")).not.toBeInTheDocument();
   });
 
-  describe("Expand/Collapse", () => {
-    it("toggles expansion when chevron is clicked", () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // Initially expanded, so children are visible
-      expect(screen.getByText("1.e2e4")).toBeInTheDocument();
-
-      // Find and click the expand/collapse button
-      const chevronButton = container.querySelector("button[title='Collapse']");
-      if (chevronButton) {
-        fireEvent.click(chevronButton);
-        // After collapse, children should not be visible
-        expect(screen.queryByText("1.e2e4 c7c5")).not.toBeInTheDocument();
-      }
-    });
+  it("puts unnamed openings under Other Lines", () => {
+    render(
+      <LineTree
+        root={makeRoot([makeLeaf({ openingName: null, id: "x" })])}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+      />,
+    );
+    expect(screen.getByText("Other Lines")).toBeInTheDocument();
   });
 
-  describe("Build and Learn Buttons", () => {
-    it("calls onBuild when build button is clicked", () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
+  it("calls onLineClick with sanMoves when a line is clicked", () => {
+    const leaf = makeLeaf();
+    render(
+      <LineTree
+        root={makeRoot([leaf])}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+        onLineClick={mockOnLineClick}
+      />,
+    );
 
-      // Find Build buttons (hammer icon)
-      const buildButtons = container.querySelectorAll("button[title='Build']");
-      if (buildButtons.length > 0) {
-        fireEvent.click(buildButtons[0]);
-        expect(mockOnBuild).toHaveBeenCalled();
-      }
-    });
-
-    it("calls onLearn when learn button is clicked", () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // Find Learn buttons (graduation cap icon)
-      const learnButtons = container.querySelectorAll("button[title='Learn']");
-      if (learnButtons.length > 0) {
-        fireEvent.click(learnButtons[0]);
-        expect(mockOnLearn).toHaveBeenCalled();
-      }
-    });
+    fireEvent.click(screen.getByText(leaf.displaySequence));
+    expect(mockOnLineClick).toHaveBeenCalledWith(
+      leaf.sanMoves,
+      leaf.openingName,
+      leaf.openingEco,
+    );
   });
 
-  describe("Move Extraction Edge Cases", () => {
-    it("handles empty move sequences gracefully", () => {
-      const emptyRoot: any = {
-        id: "empty",
-        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        expectedMove: "",
-        moveSequence: "Initial Position",
-        children: [],
-      };
+  it("collapses and expands a multi-line family", () => {
+    const root = makeRoot([
+      makeLeaf({ id: "a", displaySequence: "1.e4 c5 2.Nf3" }),
+      makeLeaf({
+        id: "b",
+        displaySequence: "1.e4 e5 2.Nf3",
+        sanMoves: ["e4", "e5", "Nf3"],
+      }),
+    ]);
 
-      render(
-        <LineTree
-          root={emptyRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
+    render(
+      <LineTree
+        root={root}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+        onLineClick={mockOnLineClick}
+      />,
+    );
 
-      const initialPosition = screen.getByText("Initial Position");
-      fireEvent.click(initialPosition);
+    // Families with more than one line start collapsed.
+    expect(screen.queryByText("1.e4 c5 2.Nf3")).not.toBeInTheDocument();
 
-      // Should call with empty moves array
-      expect(mockOnLineClick).toHaveBeenCalledWith([], expect.any(String));
-    });
+    fireEvent.click(screen.getByText("Sicilian Defense"));
+    expect(screen.getByText("1.e4 c5 2.Nf3")).toBeInTheDocument();
+    expect(screen.getByText("1.e4 e5 2.Nf3")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Sicilian Defense"));
+    expect(screen.queryByText("1.e4 c5 2.Nf3")).not.toBeInTheDocument();
   });
 
-  describe("Delete Button", () => {
-    // Delete button feature not yet implemented in component
-    it("does not show delete button on Initial Position (root with no expectedMove)", () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onDelete={mockOnDelete}
-          onLineClick={mockOnLineClick}
-        />,
-      );
+  it("calls onBuild and onLearn from line action buttons", () => {
+    const { container } = render(
+      <LineTree
+        root={makeRoot([makeLeaf()])}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+      />,
+    );
 
-      // Get all delete buttons
-      const deleteButtons = container.querySelectorAll(
-        "button[title='Delete']",
-      );
-      // Delete buttons are not currently rendered in the UI
-      expect(deleteButtons.length).toBe(0);
-    });
+    const buildBtn = container.querySelector(
+      'button[title="Continue building from here"]',
+    );
+    const learnBtn = container.querySelector('button[title="Practice this line"]');
+    expect(buildBtn).toBeTruthy();
+    expect(learnBtn).toBeTruthy();
 
-    it("shows delete button on first move line (depth 1)", () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onDelete={mockOnDelete}
-          onLineClick={mockOnLineClick}
-        />,
-      );
+    fireEvent.click(buildBtn!);
+    fireEvent.click(learnBtn!);
+    expect(mockOnBuild).toHaveBeenCalled();
+    expect(mockOnLearn).toHaveBeenCalled();
+  });
 
-      // Find the first move line (1.e2e4)
-      const e4Line = screen.getByText("1.e2e4");
-      expect(e4Line).toBeInTheDocument();
+  it("shows delete control when onDelete is provided", () => {
+    const { container } = render(
+      <LineTree
+        root={makeRoot([makeLeaf()])}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+        onDelete={mockOnDelete}
+      />,
+    );
 
-      // Delete button functionality not yet implemented in UI
-      const e4Row = e4Line.closest(".flex.items-center");
-      const deleteBtn = e4Row?.querySelector("button[title='Delete']");
-      expect(deleteBtn).toBeNull();
-    });
+    expect(
+      container.querySelector('button[title="Delete this line"]'),
+    ).toBeTruthy();
+  });
 
-    it("shows delete button on child nodes when onDelete is provided", () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onDelete={mockOnDelete}
-          onLineClick={mockOnLineClick}
-        />,
-      );
+  it("hides delete control when onDelete is omitted", () => {
+    const { container } = render(
+      <LineTree
+        root={makeRoot([makeLeaf()])}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+      />,
+    );
 
-      // Delete buttons are not rendered in current implementation
-      const deleteButtons = container.querySelectorAll(
-        "button[title='Delete']",
-      );
-      expect(deleteButtons.length).toBe(0);
-    });
+    expect(
+      container.querySelector('button[title="Delete this line"]'),
+    ).toBeNull();
+  });
 
-    it("does not show delete button when onDelete is not provided", () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onLineClick={mockOnLineClick}
-        />,
-      );
+  it("calls onDelete after confirm", () => {
+    const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
 
-      // Should have no delete buttons
-      const deleteButtons = container.querySelectorAll(
-        "button[title='Delete']",
-      );
-      expect(deleteButtons.length).toBe(0);
-    });
+    const { container } = render(
+      <LineTree
+        root={makeRoot([makeLeaf({ id: "del-me" })])}
+        onBuild={mockOnBuild}
+        onLearn={mockOnLearn}
+        onDelete={mockOnDelete}
+      />,
+    );
 
-    it("opens confirmation dialog when delete button is clicked", async () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onDelete={mockOnDelete}
-          onLineClick={mockOnLineClick}
-        />,
-      );
+    fireEvent.click(
+      container.querySelector('button[title="Delete this line"]')!,
+    );
 
-      // Delete buttons are not currently implemented
-      const deleteButtons = container.querySelectorAll(
-        "button[title='Delete']",
-      );
-      expect(deleteButtons.length).toBe(0);
-    });
-
-    it("closes dialog when Cancel is clicked", async () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onDelete={mockOnDelete}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // Delete buttons are not currently implemented
-      const deleteButtons = container.querySelectorAll(
-        "button[title='Delete']",
-      );
-      expect(deleteButtons.length).toBe(0);
-    });
-
-    it("calls onDelete when Delete Line button is clicked", async () => {
-      mockOnDelete.mockResolvedValue(undefined);
-
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onDelete={mockOnDelete}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // Delete buttons are not currently implemented
-      const deleteButtons = container.querySelectorAll(
-        "button[title='Delete']",
-      );
-      expect(deleteButtons.length).toBe(0);
-    });
-
-    it("shows warning for nodes with children", async () => {
-      const { container } = render(
-        <LineTree
-          root={mockRoot}
-          onBuild={mockOnBuild}
-          onLearn={mockOnLearn}
-          onDelete={mockOnDelete}
-          onLineClick={mockOnLineClick}
-        />,
-      );
-
-      // Delete buttons are not currently implemented
-      const deleteButtons = container.querySelectorAll(
-        "button[title='Delete']",
-      );
-      expect(deleteButtons.length).toBe(0);
-    });
+    expect(mockOnDelete).toHaveBeenCalledWith("del-me");
+    confirmSpy.mockRestore();
   });
 });

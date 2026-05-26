@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Chess } from "chess.js";
-import { ChevronLeft, Compass, Plus } from "lucide-react";
+import { ArrowLeftRight, ChevronLeft, Compass, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
@@ -258,6 +258,14 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
   const [, navigate] = useNavTransition();
   const handleBack = () => navigate("/home");
 
+  // Flip the board to view from the other side. Mirrors HomeClient: in
+  // Explorer the "color" state both selects which repertoire to check
+  // against AND drives the board orientation, so flipping the board
+  // also swaps which repertoire's plans are looked up — typically what
+  // the user wants when they want to "see the other side".
+  const handleRotateBoard = () =>
+    setColor(color === "white" ? "black" : "white");
+
   // useCallback keeps the prop reference stable across renders. Without
   // it, Board's `useEffect(..., [pairedMoves, onMovesUpdated])` saw a new
   // onMovesUpdated every render and re-fired, calling setMoves with the
@@ -412,21 +420,30 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
             />
           </div>
 
-          {/* Navigation controls — let the user scrub through the played
-              line without modifying it. Playing a move while looking at a
-              past position is blocked by Board itself; the user must come
-              back to the latest ply first (or use the × on a move row to
-              truncate from that point). */}
-          {moves.length > 0 && (
-            <div className="flex items-center justify-center flex-shrink-0">
+          {/* Controls row — board nav arrows + rotate button. The
+              nav controls only show once there's at least one ply to
+              scrub through; the rotate button is always present so the
+              user can flip the board from the starting position too.
+              Playing a move while looking at a past position is blocked
+              by Board itself; the user must come back to the latest ply
+              first (or use the × on a move row to truncate from there). */}
+          <div className="flex items-center justify-center gap-2 flex-shrink-0">
+            {moves.length > 0 && (
               <BoardControls
                 onFirstMove={() => boardRef.current?.goToFirst()}
                 onPreviousMove={() => boardRef.current?.goToPrevious()}
                 onNextMove={() => boardRef.current?.goToNext()}
                 onLastMove={() => boardRef.current?.goToLast()}
               />
-            </div>
-          )}
+            )}
+            <Button
+              variant="ghost"
+              className="h-10 w-10 p-0 text-muted-foreground hover:text-foreground [&_svg]:size-auto"
+              title="Rotate board"
+              onClick={handleRotateBoard}>
+              <ArrowLeftRight size={22} />
+            </Button>
+          </div>
 
           {/* Current-position banner: either show the user's planned move
               from here, or surface that this position is out of repertoire

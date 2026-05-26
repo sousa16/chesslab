@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Chess } from "chess.js";
-import { ChevronLeft, Plus, Radar } from "lucide-react";
+import { Plus, Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/Logo";
-import { MobileNav } from "@/components/MobileNav";
+import { AppPage } from "@/components/layout/AppPage";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { useNavTransition } from "@/components/NavProgress";
 
 interface GapContinuation {
   sans: string[];
@@ -143,10 +144,11 @@ export default function GapAnalysisClient() {
     if (persisted.result) setResult(persisted.result);
   }, []);
 
-  const handleBack = () => {
-    router.push("/home");
-    router.refresh();
-  };
+  // useNavTransition wraps router.push in a transition so the global
+  // progress bar tracks the back-nav. No router.refresh — see
+  // StatsClient.handleBack for the full rationale.
+  const [, navigate] = useNavTransition();
+  const handleBack = () => navigate("/home");
 
   const toggleTimeClass = (key: string) => {
     setTimeClasses((prev) =>
@@ -324,40 +326,13 @@ export default function GapAnalysisClient() {
   };
 
   return (
-    // AppShell locks body/html overflow, so the scroll lives in main.
-    // h-[100dvh] tracks the current visible viewport (so iOS toolbar
-    // collapse doesn't leave an unscrollable strip at the bottom).
-    <div className="h-[100dvh] flex flex-col overflow-hidden bg-background">
-      <MobileNav onLogoClick={handleBack} showMenuButton={false} />
-
-      <main className="flex-1 mt-nav lg:mt-0 overflow-y-auto pb-safe">
-        <div className="max-w-5xl mx-auto px-4 lg:px-8 py-6 lg:py-10 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="hidden lg:block">
-                <Logo size="lg" clickable={true} onLogoClick={handleBack} />
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleBack}
-                className="rounded-xl">
-                <ChevronLeft size={20} />
-              </Button>
-              <div>
-                <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">
-                  Repertoire gaps
-                </h1>
-                <p className="text-xs lg:text-sm text-muted-foreground mt-1">
-                  Find positions you face often that aren't in your repertoire.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 lg:px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium uppercase tracking-wide">
-              <Radar size={12} />
-              Gaps
-            </div>
-          </div>
+    <AppPage onLogoClick={handleBack}>
+      <PageHeader
+        title="Repertoire gaps"
+        subtitle="Find positions you face often that aren't in your repertoire."
+        accent={{ icon: Radar, label: "Gaps" }}
+        onBack={handleBack}
+      />
 
           {/* Form */}
           <section className="glass-card rounded-2xl p-4 lg:p-6 space-y-4">
@@ -560,9 +535,7 @@ export default function GapAnalysisClient() {
               />
             </section>
           )}
-        </div>
-      </main>
-    </div>
+    </AppPage>
   );
 }
 

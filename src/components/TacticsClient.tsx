@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useNavTransition } from "@/components/NavProgress";
 import { Chess } from "chess.js";
 import {
   ChevronLeft,
@@ -79,6 +80,7 @@ function bandForPrefs(p: Prefs | null): DifficultyBand {
 
 export default function TacticsClient() {
   const router = useRouter();
+  const [, navigate] = useNavTransition();
   const [puzzle, setPuzzle] = useState<PuzzleData | null>(null);
   const [review, setReview] = useState<ReviewData | null>(null);
   const [dueCount, setDueCount] = useState(0);
@@ -117,9 +119,7 @@ export default function TacticsClient() {
   // this, a slow eval for an earlier position can overwrite a fresh one.
   const analysisReqRef = useRef(0);
 
-  const handleBack = () => {
-    router.push("/home");
-  };
+  const handleBack = () => navigate("/home");
 
   const fetchNext = useCallback(
     async (excludeIds?: string[]): Promise<NextPuzzleResponse | null> => {
@@ -456,11 +456,12 @@ export default function TacticsClient() {
   const solutionSan = computeSolutionSan(puzzle.fen, movesArr);
 
   return (
-    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
+    <div className="h-[100dvh] bg-background flex flex-col lg:flex-row overflow-hidden">
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         onLogoClick={handleBack}
+        onBack={handleBack}
       />
       {isSidebarOpen && (
         <div

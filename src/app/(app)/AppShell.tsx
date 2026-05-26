@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { NavProgressBar, NavProgressProvider } from "@/components/NavProgress";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -10,5 +11,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  return <>{children}</>;
+  return (
+    <NavProgressProvider>
+      <NavProgressBar />
+      {children}
+    </NavProgressProvider>
+  );
 }

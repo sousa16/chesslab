@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
 import { Board, BoardHandle } from "@/components/Board";
+import { useNavTransition } from "@/components/NavProgress";
 import { type ReviewResponse } from "@/lib/sm2";
 import { useSettings } from "@/contexts/SettingsContext";
 import { playCorrectSound, playIncorrectSound } from "@/lib/sounds";
@@ -83,6 +84,7 @@ export default function TrainingClient({
   mode = "review",
 }: TrainingClientProps) {
   const router = useRouter();
+  const [, navigate] = useNavTransition();
   const boardRef = useRef<BoardHandle>(null);
   const { soundEffects } = useSettings();
   const [currentRepertoireIndex, setCurrentRepertoireIndex] = useState(0);
@@ -169,10 +171,13 @@ export default function TrainingClient({
   const totalCards =
     repertoires.reduce((sum, r) => sum + r.entries.length, 0) || 0;
 
-  const handleBack = () => {
-    router.push("/home");
-    router.refresh();
-  };
+  // useNavTransition push (no router.refresh): /home's
+  // training-stats-updated event listener + statsCache module already
+  // absorb fresh review counts on the way back, so refreshing the
+  // route would just force an unneeded server re-render and make
+  // back-from-training laggy. The transition drives the global
+  // progress bar so the user sees feedback the moment they tap back.
+  const handleBack = () => navigate("/home");
 
   const currentEntry = currentRepertoire?.entries[currentCardIndex];
 
@@ -580,12 +585,13 @@ export default function TrainingClient({
     repertoires.some((r) => r.color === "Black");
 
   return (
-    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
+    <div className="h-[100dvh] bg-background flex flex-col lg:flex-row overflow-hidden">
       {/* Mobile Navigation - sticky, above everything */}
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         onLogoClick={handleBack}
+        onBack={handleBack}
       />
 
       {/* Mobile Sidebar Overlay */}

@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useTransition, use, useRef } from "react";
 import { SettingsModal } from "@/components/SettingsModal";
+import { useNavTransition } from "@/components/NavProgress";
 import {
   getCachedStats,
   setCachedStats,
@@ -154,6 +155,22 @@ export function HomePanel({
   const firstName = session?.user ? getFirstName(session.user) : "there";
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isStartingPractice, startPracticeTransition] = useTransition();
+  // Used by the secondary menu cards (Tactics, Explorer, Gaps, Stats) so
+  // each click drives the global top progress bar AND a per-card dim
+  // state. Practice / repertoire selection don't navigate to a separate
+  // route, so they don't need this.
+  const [isNavigating, navigate] = useNavTransition();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const navTo = (href: string) => {
+    setPendingHref(href);
+    navigate(href);
+  };
+  // Reset the per-card highlight once the nav completes (the route
+  // changes and unmounts this panel, but covering the cancel/error
+  // case keeps the dim state honest).
+  useEffect(() => {
+    if (!isNavigating) setPendingHref(null);
+  }, [isNavigating]);
 
   const [whiteStats, setWhiteStats] = useState<RepertoireStats>({
     lines: 0,
@@ -583,10 +600,12 @@ export function HomePanel({
             Tactics
           </h3>
           <button
-            onClick={() => router.push("/tactics")}
+            onClick={() => navTo("/tactics")}
             onMouseEnter={handleTacticsHover}
             onFocus={handleTacticsHover}
-            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
+            disabled={isNavigating}
+            data-pending={pendingHref === "/tactics" || undefined}
+            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer data-[pending]:opacity-60 data-[pending]:cursor-progress">
             <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-purple-500/20 via-blue-500/10 to-purple-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative flex items-center gap-3 lg:gap-4">
               <div className="relative">
@@ -622,8 +641,10 @@ export function HomePanel({
             Explorer
           </h3>
           <button
-            onClick={() => router.push("/explorer")}
-            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
+            onClick={() => navTo("/explorer")}
+            disabled={isNavigating}
+            data-pending={pendingHref === "/explorer" || undefined}
+            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer data-[pending]:opacity-60 data-[pending]:cursor-progress">
             <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative flex items-center gap-3 lg:gap-4">
               <div className="relative">
@@ -654,8 +675,10 @@ export function HomePanel({
             Gaps
           </h3>
           <button
-            onClick={() => router.push("/gaps")}
-            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
+            onClick={() => navTo("/gaps")}
+            disabled={isNavigating}
+            data-pending={pendingHref === "/gaps" || undefined}
+            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer data-[pending]:opacity-60 data-[pending]:cursor-progress">
             <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-rose-500/20 via-pink-500/10 to-rose-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative flex items-center gap-3 lg:gap-4">
               <div className="relative">
@@ -686,8 +709,10 @@ export function HomePanel({
             Stats
           </h3>
           <button
-            onClick={() => router.push("/stats")}
-            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
+            onClick={() => navTo("/stats")}
+            disabled={isNavigating}
+            data-pending={pendingHref === "/stats" || undefined}
+            className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer data-[pending]:opacity-60 data-[pending]:cursor-progress">
             <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-amber-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative flex items-center gap-3 lg:gap-4">
               <div className="relative">

@@ -280,3 +280,58 @@ export async function getCachedRepertoireFamilies(
   ]);
   return cachedComputeFamilies(userId, `${vw}|${vb}`);
 }
+
+/**
+ * Per-color (fen, expectedMove) projection — the minimal shape the
+ * Explorer client needs to look up "is this position in my repertoire,
+ * and if so what's the planned move". Cached on structure version so
+ * SRS review writes don't bust it. Avoids a fresh prisma roundtrip per
+ * Explorer nav.
+ */
+export interface CachedExplorerEntries {
+  white: { fen: string; expectedMove: string }[];
+  black: { fen: string; expectedMove: string }[];
+}
+
+async function computeExplorerEntries(
+  userId: string,
+): Promise<CachedExplorerEntries> {
+  const repertoires = await prisma.repertoire.findMany({
+    where: { userId },
+    select: {
+      color: true,
+      entries: {
+        select: {
+          expectedMove: true,
+          position: { select: { fen: true } },
+        },
+      },
+    },
+  });
+  const result: CachedExplorerEntries = { white: [], black: [] };
+  for (const r of repertoires) {
+    const color = r.color === "White" ? "white" : "black";
+    result[color] = r.entries.map((e) => ({
+      fen: e.position.fen,
+      expectedMove: e.expectedMove,
+    }));
+  }
+  return result;
+}
+
+const cachedComputeExplorerEntries = unstable_cache(
+  async (userId: string, _structureVersion: string) =>
+    computeExplorerEntries(userId),
+  ["explorer-entries-v1"],
+  { revalidate: 300, tags: ["repertoire-tree"] },
+);
+
+export async function getCachedExplorerEntries(
+  userId: string,
+): Promise<CachedExplorerEntries> {
+  const [vw, vb] = await Promise.all([
+    getStructureVersion(userId, "White" as PieceColor),
+    getStructureVersion(userId, "Black" as PieceColor),
+  ]);
+  return cachedComputeExplorerEntries(userId, `${vw}|${vb}`);
+}

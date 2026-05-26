@@ -11,6 +11,7 @@ import { RepertoirePanel } from "@/components/RepertoirePanel";
 import { Board, BoardHandle } from "@/components/Board";
 import { BoardControls } from "@/components/BoardControls";
 import { Button } from "@/components/ui/button";
+import { useStartNavTransition } from "@/components/NavProgress";
 import type { TrainingStats } from "@/lib/trainingStats";
 
 type View = "home" | "repertoire";
@@ -26,6 +27,11 @@ export default function HomeClient({ statsPromise }: HomeClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
+  // Wrap nav handlers that need side effects (sessionStorage writes)
+  // inside the provider's transition so the global progress bar tracks
+  // the FULL navigation — including the server-side data fetch on the
+  // destination route, not just the URL flip.
+  const startNavTransition = useStartNavTransition();
 
   const buildReturnColor =
     typeof window !== "undefined"
@@ -101,7 +107,11 @@ export default function HomeClient({ statsPromise }: HomeClientProps) {
 
   const handleBack = handleGoHome;
 
-  const handleStartPractice = () => router.push("/training?mode=review");
+  const handleStartPractice = () => {
+    startNavTransition(() => {
+      router.push("/training?mode=review");
+    });
+  };
 
   const handleBuild = (
     openingId?: string,
@@ -109,33 +119,39 @@ export default function HomeClient({ statsPromise }: HomeClientProps) {
     fen?: string,
     sanMoves?: string[],
   ) => {
-    if (openingId) sessionStorage.setItem("buildOpeningId", openingId);
-    if (lineId) sessionStorage.setItem("buildLineId", lineId);
-    if (fen && (!sanMoves || sanMoves.length === 0)) {
-      sessionStorage.setItem("buildFen", fen);
-    }
-    if (sanMoves && sanMoves.length > 0) {
-      sessionStorage.setItem("buildSanMoves", JSON.stringify(sanMoves));
-    }
-    router.push(`/build/${selectedColor}`);
+    startNavTransition(() => {
+      if (openingId) sessionStorage.setItem("buildOpeningId", openingId);
+      if (lineId) sessionStorage.setItem("buildLineId", lineId);
+      if (fen && (!sanMoves || sanMoves.length === 0)) {
+        sessionStorage.setItem("buildFen", fen);
+      }
+      if (sanMoves && sanMoves.length > 0) {
+        sessionStorage.setItem("buildSanMoves", JSON.stringify(sanMoves));
+      }
+      router.push(`/build/${selectedColor}`);
+    });
   };
 
   const handleLearn = (openingId?: string, lineId?: string) => {
-    if (openingId) sessionStorage.setItem("practiceOpeningId", openingId);
-    // Pass lineId on the URL so the server training page can scope the
-    // practice queue to this line's path (leaf + ancestors). The previous
-    // sessionStorage hand-off was never read — clicking "practice this
-    // line" silently fell back to "practice everything".
-    const linePart = lineId ? `&line=${encodeURIComponent(lineId)}` : "";
-    router.push(
-      `/training?mode=practice&color=${selectedColor}${linePart}`,
-    );
+    startNavTransition(() => {
+      if (openingId) sessionStorage.setItem("practiceOpeningId", openingId);
+      // Pass lineId on the URL so the server training page can scope the
+      // practice queue to this line's path (leaf + ancestors). The
+      // previous sessionStorage hand-off was never read — clicking
+      // "practice this line" silently fell back to "practice everything".
+      const linePart = lineId ? `&line=${encodeURIComponent(lineId)}` : "";
+      router.push(
+        `/training?mode=practice&color=${selectedColor}${linePart}`,
+      );
+    });
   };
 
   const handleLearnFamily = (family: string) => {
-    router.push(
-      `/training?mode=practice&color=${selectedColor}&family=${encodeURIComponent(family)}`,
-    );
+    startNavTransition(() => {
+      router.push(
+        `/training?mode=practice&color=${selectedColor}&family=${encodeURIComponent(family)}`,
+      );
+    });
   };
 
   const handleLineClick = (
@@ -180,11 +196,12 @@ export default function HomeClient({ statsPromise }: HomeClientProps) {
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
+    <div className="h-[100dvh] bg-background flex flex-col lg:flex-row overflow-hidden">
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         onLogoClick={handleGoHome}
+        onBack={view === "repertoire" ? handleGoHome : undefined}
       />
 
       {isSidebarOpen && (

@@ -231,19 +231,6 @@ export function HomePanel({
       tacticsPrefetchedRef.current = false;
     }
   };
-  // The remaining menu items don't have a separate API endpoint to warm,
-  // but prefetching the route preloads the JS chunks and lets Next render
-  // the loading fallback the instant the user clicks.
-  const routePrefetchedRef = useRef<Set<string>>(new Set());
-  const handleRoutePrefetch = (path: string) => {
-    if (routePrefetchedRef.current.has(path)) return;
-    routePrefetchedRef.current.add(path);
-    try {
-      router.prefetch(path);
-    } catch {
-      routePrefetchedRef.current.delete(path);
-    }
-  };
 
   // Last etag the server sent us for /api/training-stats. Sending it back
   // as If-None-Match lets the server respond 304 without serializing the
@@ -636,8 +623,6 @@ export function HomePanel({
           </h3>
           <button
             onClick={() => router.push("/explorer")}
-            onMouseEnter={() => handleRoutePrefetch("/explorer")}
-            onFocus={() => handleRoutePrefetch("/explorer")}
             className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
             <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative flex items-center gap-3 lg:gap-4">
@@ -670,8 +655,6 @@ export function HomePanel({
           </h3>
           <button
             onClick={() => router.push("/gaps")}
-            onMouseEnter={() => handleRoutePrefetch("/gaps")}
-            onFocus={() => handleRoutePrefetch("/gaps")}
             className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
             <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-rose-500/20 via-pink-500/10 to-rose-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative flex items-center gap-3 lg:gap-4">
@@ -704,8 +687,6 @@ export function HomePanel({
           </h3>
           <button
             onClick={() => router.push("/stats")}
-            onMouseEnter={() => handleRoutePrefetch("/stats")}
-            onFocus={() => handleRoutePrefetch("/stats")}
             className="repertoire-card w-full relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-5 transition-all duration-300 group text-left cursor-pointer">
             <div className="absolute inset-0 rounded-xl lg:rounded-2xl bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-amber-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative flex items-center gap-3 lg:gap-4">

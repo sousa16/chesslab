@@ -3,8 +3,10 @@ import { getServerSession } from "next-auth/next";
 import { PieceColor, Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { lookupOpening } from "@/lib/openings";
-import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
+import {
+  getCachedRepertoireTree,
+  type CachedLineNode,
+} from "@/lib/repertoireTreeCache";
 
 // Tree-build for large repertoires can briefly spike CPU and Prisma's
 // cold-connection latency adds another second or two — give the lambda
@@ -91,103 +93,41 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Trimmed select: the tree-build needs id, expectedMove, position.fen;
-    // the route itself needs phase to compute the "mastered" flag. Pulling
-    // the full Position row was shipping createdAt + id over the wire on
-    // every entry for no consumer.
-    const repertoire = await prisma.repertoire.findUnique({
-      where: {
-        userId_color: { userId, color: prismaColor },
-      },
-      select: {
-        id: true,
-        color: true,
-        entries: {
-          select: {
-            id: true,
-            expectedMove: true,
-            phase: true,
-            position: { select: { fen: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
+    // Pull the cached tree (shape + opening names + display strings).
+    // This bypasses the 4–5s buildRepertoireTree + anchorSansToStart +
+    // lookupOpening per entry on a hot cache. The cache key is the
+    // structure version (max createdAt + count), so SRS review writes
+    // don't bust it — only adds/deletes do.
+    //
+    // The fresh `mastered` data is patched in below from a cheap
+    // (id, phase) projection of the current entries.
+    const cached = await getCachedRepertoireTree(userId, prismaColor);
 
-    if (!repertoire || repertoire.entries.length === 0) {
+    if (!cached.root) {
       return NextResponse.json(
         { openings: [] },
         { status: 200, headers: { etag, "Cache-Control": CACHE_HEADER } },
       );
     }
 
-    const { roots: builtRoots, byEntryId: builtById } = buildRepertoireTree(
-      repertoire.entries,
-      repertoire.color,
-    );
-
+    const phaseRows = await prisma.repertoireEntry.findMany({
+      where: entryFilter,
+      select: { id: true, phase: true },
+    });
     const masteredById = new Map<string, boolean>();
-    for (const entry of repertoire.entries) {
-      masteredById.set(entry.id, entry.phase === "exponential");
+    for (const row of phaseRows) {
+      masteredById.set(row.id, row.phase === "exponential");
     }
 
-    const decorate = (built: (typeof builtRoots)[number]): LineNode => {
-      // Anchor the SAN list at the standard starting position before
-      // looking up the opening name, so a mid-game-rooted tree (e.g., a
-      // Caro-Kann sub-tree without an entry at "after 1.e4 c6") gets
-      // named "Caro-Kann Defense" rather than "Queen's Pawn Game".
-      //
-      // anchorSansToStart returns the path TO the entry's position FEN,
-      // which is the position BEFORE the user's expected move — so the
-      // user's own move (always the last element of built.sanMoves) is
-      // missing from the anchored path. We glue it back on, otherwise
-      // every displayed leaf would end with the opponent's last move.
-      const anchoredSans = anchorSansToStart(
-        built.sanMoves,
-        built.fen,
-        built.rootFen,
-      );
-      const userMoveSan = built.sanMoves[built.sanMoves.length - 1];
-      const displaySans =
-        anchoredSans.length > 0 && userMoveSan
-          ? [...anchoredSans, userMoveSan]
-          : built.sanMoves;
-      const match = lookupOpening(displaySans);
-      return {
-        id: built.id,
-        fen: built.fen,
-        expectedMove: built.expectedMove,
-        moveNumber: Math.ceil(displaySans.length / 2),
-        displaySequence: formatSanSequence(displaySans),
-        sanMoves: displaySans,
-        openingName: match?.name ?? null,
-        openingEco: match?.eco ?? null,
-        children: built.children.map(decorate),
-        opponentMove: built.opponentMove,
-        mastered: masteredById.get(built.id) ?? false,
-      };
-    };
+    const patchMastered = (node: CachedLineNode): LineNode => ({
+      ...node,
+      // Virtual roots and intermediate nodes default to false; per-entry
+      // ids match real entries and pick up fresh phase data.
+      mastered: masteredById.get(node.id) ?? false,
+      children: node.children.map(patchMastered),
+    });
 
-    const rootNodes = builtRoots.map(decorate);
-
-    let finalRoot: LineNode | null = null;
-    if (rootNodes.length === 1) {
-      finalRoot = rootNodes[0];
-    } else if (rootNodes.length > 1) {
-      finalRoot = {
-        id: "virtual-root-" + repertoire.id,
-        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        expectedMove: "",
-        moveNumber: 0,
-        displaySequence: "Starting Position",
-        sanMoves: [],
-        openingName: null,
-        openingEco: null,
-        children: rootNodes,
-      };
-    }
-
-    void builtById;
+    const finalRoot: LineNode = patchMastered(cached.root);
 
     return NextResponse.json(
       { root: finalRoot },
@@ -206,19 +146,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function formatSanSequence(moves: string[]): string {
-  if (moves.length === 0) {
-    return "Initial Position";
-  }
-
-  const parts: string[] = [];
-  for (let i = 0; i < moves.length; i++) {
-    if (i % 2 === 0) {
-      parts.push(`${Math.floor(i / 2) + 1}.${moves[i]}`);
-    } else {
-      parts.push(moves[i]);
-    }
-  }
-
-  return parts.join(" ");
-}

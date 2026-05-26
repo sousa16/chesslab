@@ -212,11 +212,12 @@ export default function BuildClient({
   const currentMove = moves[currentMoveIndex - 1];
 
   return (
-    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
+    <div className="h-[100dvh] bg-background flex flex-col lg:flex-row overflow-hidden">
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         onLogoClick={handleBack}
+        onBack={handleBack}
       />
 
       {isSidebarOpen && (

@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getCachedExplorerEntries } from "@/lib/repertoireTreeCache";
 import ExplorerClient from "@/components/ExplorerClient";
 
 export default async function ExplorerPage() {
@@ -10,30 +10,15 @@ export default async function ExplorerPage() {
     return <div>Please sign in to access the explorer</div>;
   }
 
-  // Pull every repertoire entry the user owns, both colors. The client
-  // builds a fen → expectedMove map locally and looks up each ply as the
-  // game is replayed, so we ship the minimal projection: color + positionFen
-  // + expectedMove. No SRS columns are needed here.
-  const repertoiresRaw = await prisma.repertoire.findMany({
-    where: { userId: session.user.id },
-    select: {
-      color: true,
-      entries: {
-        select: {
-          expectedMove: true,
-          position: { select: { fen: true } },
-        },
-      },
-    },
-  });
-
-  const repertoires = repertoiresRaw.map((r) => ({
-    color: r.color === "White" ? ("white" as const) : ("black" as const),
-    entries: r.entries.map((e) => ({
-      fen: e.position.fen,
-      expectedMove: e.expectedMove,
-    })),
-  }));
+  // Cached projection keyed on structure version (max createdAt + count
+  // per color) — SRS review writes don't bust it, only create/delete
+  // do. Saves a per-nav prisma roundtrip + serialization for users with
+  // hundreds of saved entries.
+  const cached = await getCachedExplorerEntries(session.user.id);
+  const repertoires = [
+    { color: "white" as const, entries: cached.white },
+    { color: "black" as const, entries: cached.black },
+  ];
 
   return <ExplorerClient repertoires={repertoires} />;
 }

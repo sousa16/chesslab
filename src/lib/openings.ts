@@ -48,6 +48,16 @@ for (const e of entries) {
 // ~30k-entry Map build at cold start. Used by the training page +
 // repertoireTree to recover a "line so far" when the user's tree root is
 // mid-game (and so the tree's own sans omit the opening prefix).
+//
+// Keyed on the 3-field FEN key (position + side + castling) — NOT the
+// full FEN — so a position saved with a different en passant target,
+// halfmove clock, or fullmove number still matches. The dataset only
+// represents one canonical FEN per position; without this relaxation,
+// a user-saved FEN that diverges in those fields silently fails to
+// anchor and the training page hides back-step navigation.
+function fenKey(fen: string): string {
+  return fen.split(" ").slice(0, 3).join(" ");
+}
 let sanPathByFen: Map<string, string[]> | null = null;
 function getSanPathByFen(): Map<string, string[]> {
   if (sanPathByFen) return sanPathByFen;
@@ -56,13 +66,16 @@ function getSanPathByFen(): Map<string, string[]> {
     const moves = e.key ? e.key.split(" ").filter(Boolean) : [];
     // intermediateFens[i] is the position after moves[0..i] is played.
     for (let i = 0; i < e.intermediateFens.length && i < moves.length; i++) {
-      const fen = e.intermediateFens[i];
-      if (!map.has(fen)) {
-        map.set(fen, moves.slice(0, i + 1));
+      const key = fenKey(e.intermediateFens[i]);
+      if (!map.has(key)) {
+        map.set(key, moves.slice(0, i + 1));
       }
     }
-    if (e.endFen && !map.has(e.endFen)) {
-      map.set(e.endFen, moves.slice());
+    if (e.endFen) {
+      const key = fenKey(e.endFen);
+      if (!map.has(key)) {
+        map.set(key, moves.slice());
+      }
     }
   }
   sanPathByFen = map;
@@ -88,5 +101,5 @@ export function lookupOpening(sanMoves: string[]): OpeningMatch | null {
  * resolve to the longest stored prefix.
  */
 export function sanPathToFen(fen: string): string[] | null {
-  return getSanPathByFen().get(fen) ?? null;
+  return getSanPathByFen().get(fenKey(fen)) ?? null;
 }

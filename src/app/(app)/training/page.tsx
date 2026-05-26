@@ -1,7 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildRepertoireTree } from "@/lib/repertoireTree";
 import { getTrainingEnrichment } from "@/lib/trainingEnrichment";
 import TrainingClient from "@/components/TrainingClient";
 
@@ -107,42 +106,40 @@ export default async function TrainingPage({
   const enriched = {
     ...user,
     repertoires: user.repertoires.map((r) => {
-      // Tree is still needed for the lineLeafId path expansion below.
-      // Everything else (sanMoves, priorMoves, opening name) now comes
-      // straight out of the cached enrichment.
-      const { roots, byEntryId } = buildRepertoireTree(r.entries, r.color);
+      // The enrichment cache provides the DFS-preorder of entry IDs +
+      // the parent map needed for "Practice this line". By consuming
+      // those instead of rebuilding the tree here, we skip a ~3s
+      // chess.js tree-build per training page render for ~450-entry
+      // users — a wasted recomputation since the data we'd derive from
+      // it is already in the unstable_cache result.
       const enrichmentForRep = enrichmentMapByRep.get(r.id);
       const dueOnly = mode === "review";
       const entriesById = new Map(r.entries.map((e) => [e.id, e]));
 
-      // Both modes traverse each opening from its root downward (DFS preorder)
-      // so the user always drills lines from move 1, not in random SRS order.
-      // Review mode then keeps only entries currently due for review;
-      // practice mode keeps them all.
-      //
-      // First-move entries (fullmoveNumber=1) are skipped at display time
-      // — they're kept in the tree so child SAN paths include the opener,
-      // but the user shouldn't drill "make your first move from the
-      // standard starting position" as a flash-card.
-      const ordered: typeof r.entries = [];
-      const visited = new Set<string>();
+      // Walk in the cached DFS order. Review mode keeps only due entries;
+      // practice mode keeps all. First-move entries (fullmoveNumber=1) are
+      // skipped at display time — they're kept in the tree so child SAN
+      // paths include the opener, but the user shouldn't drill "make your
+      // first move from the standard starting position" as a flash-card.
       const include = (entry: (typeof r.entries)[number]) => {
         if (entry.position.fullmoveNumber <= 1) return false;
         if (dueOnly && entry.nextReviewDate > now) return false;
         return true;
       };
-      const walk = (node: (typeof roots)[number]) => {
-        if (visited.has(node.id)) return;
-        visited.add(node.id);
-        const entry = entriesById.get(node.id);
-        if (entry && include(entry)) ordered.push(entry);
-        for (const c of node.children) walk(c);
-      };
-      for (const root of roots) walk(root);
-      // Defensive sweep: any entry not reachable from a root still gets shown
-      // (filtered the same way) so we never silently drop a card.
+      const ordered: typeof r.entries = [];
+      const orderedIds =
+        enrichmentForRep?.orderedEntryIds ?? r.entries.map((e) => e.id);
+      const seen = new Set<string>();
+      for (const id of orderedIds) {
+        const entry = entriesById.get(id);
+        if (!entry || seen.has(id)) continue;
+        seen.add(id);
+        if (include(entry)) ordered.push(entry);
+      }
+      // Defensive sweep: any entry not in the cached order still gets
+      // shown (filtered the same way) so we never silently drop a card.
       for (const e of r.entries) {
-        if (visited.has(e.id)) continue;
+        if (seen.has(e.id)) continue;
         if (include(e)) ordered.push(e);
       }
 
@@ -173,24 +170,15 @@ export default async function TrainingPage({
         : enrichedEntries;
 
       // "Practice this line": keep only the entries on the path from any
-      // root down to the leaf with id=lineLeafId. We derive the path by
-      // building a parent map over `roots` and walking up.
-      if (lineLeafId && byEntryId.has(lineLeafId)) {
-        const parentOf = new Map<string, string>();
-        const buildParentMap = (node: (typeof roots)[number]) => {
-          for (const child of node.children) {
-            parentOf.set(child.id, node.id);
-            buildParentMap(child);
-          }
-        };
-        for (const root of roots) buildParentMap(root);
-
+      // root down to the leaf with id=lineLeafId. The cached parent map
+      // gives us this in O(depth) without rebuilding the tree.
+      const parentByEntryId = enrichmentForRep?.parentByEntryId;
+      if (lineLeafId && entriesById.has(lineLeafId) && parentByEntryId) {
         const pathIds = new Set<string>([lineLeafId]);
-        let cursor: string = lineLeafId;
-        while (parentOf.has(cursor)) {
-          const pid = parentOf.get(cursor)!;
-          pathIds.add(pid);
-          cursor = pid;
+        let cursor: string | undefined = lineLeafId;
+        while (cursor && parentByEntryId[cursor]) {
+          cursor = parentByEntryId[cursor];
+          if (cursor) pathIds.add(cursor);
         }
         entries = entries.filter((e) => pathIds.has(e.id));
       }

@@ -147,6 +147,76 @@ describe("buildRepertoireTree", () => {
     expect(roots[0].rootFen).toBe(midFen);
   });
 
+  it("walks the correct path for a node reachable via multiple transposition parents", () => {
+    // A simple transposition: after 1.e4, white plans both d4 and Nf3 as
+    // potential first-move follow-ups. The position after 1.e4 e5 2.Nf3 d6
+    // 3.d4 is the same as 1.e4 e5 2.d4 d6 3.Nf3 (= 1.e4 e5 2.Nf3 d6 3.d4
+    // and 1.e4 e5 2.d4 d6 3.Nf3 both converge — wait, those don't actually
+    // converge naturally). Use a known reversible-order pair instead:
+    //   1.e4 c5 2.Nc3 d6 3.g3  vs.  1.e4 c5 2.g3 d6 3.Nc3 — both reach the
+    //   same Closed Sicilian position.
+    const root = STARTING_FEN;
+    // conv: 6 plies, white-to-move at the convergence position.
+    // Same position reached by either ordering of Nc3/g3 by white.
+    const conv = ["e4", "c5", "Nc3", "d6", "g3", "Nc6"];
+    expect(fenAfter(conv).split(" ").slice(0, 3).join(" ")).toBe(
+      fenAfter(["e4", "c5", "g3", "d6", "Nc3", "Nc6"]).split(" ").slice(0, 3).join(" "),
+    );
+
+    const entries: TreeEntryInput[] = [
+      { id: "root", expectedMove: uci("e4"), position: { fen: root } },
+      // First branch: after 1.e4 c5, user plays Nc3
+      {
+        id: "nc3-branch",
+        expectedMove: uci("Nc3", ["e4", "c5"]),
+        position: { fen: fenAfter(["e4", "c5"]) },
+      },
+      // Second branch: after 1.e4 c5, user plays g3
+      {
+        id: "g3-branch",
+        expectedMove: uci("g3", ["e4", "c5"]),
+        position: { fen: fenAfter(["e4", "c5"]) },
+      },
+      // After Nc3 d6, user plays g3 (the converging path)
+      {
+        id: "after-nc3-d6",
+        expectedMove: uci("g3", ["e4", "c5", "Nc3", "d6"]),
+        position: { fen: fenAfter(["e4", "c5", "Nc3", "d6"]) },
+      },
+      // After g3 d6, user plays Nc3 (the OTHER converging path)
+      {
+        id: "after-g3-d6",
+        expectedMove: uci("Nc3", ["e4", "c5", "g3", "d6"]),
+        position: { fen: fenAfter(["e4", "c5", "g3", "d6"]) },
+      },
+      // Convergence point — both predecessors reach this position.
+      // User plays Bg2 here.
+      {
+        id: "convergence",
+        expectedMove: uci("Bg2", conv),
+        position: { fen: fenAfter(conv) },
+      },
+    ];
+
+    const { byEntryId } = buildRepertoireTree(entries, "White");
+    const convergence = byEntryId.get("convergence")!;
+
+    // convergence has TWO parents (after-nc3-d6 and after-g3-d6). Whichever
+    // path the walk takes, the resulting sanMoves must replay cleanly into
+    // chess.js and end on the user's expected move.
+    expect(convergence.sanMoves[convergence.sanMoves.length - 1]).toBe("Bg2");
+    const game = new Chess();
+    for (const san of convergence.sanMoves) {
+      const m = game.move(san);
+      expect(m).not.toBeNull();
+    }
+    // The walked path must end at convergence position + Bg2 played.
+    const targetFen = fenAfter([...conv, "Bg2"]);
+    expect(game.fen().split(" ").slice(0, 3).join(" ")).toBe(
+      targetFen.split(" ").slice(0, 3).join(" "),
+    );
+  });
+
   it("skips an entry whose expectedMove is not legal at its FEN without crashing", () => {
     // expectedMove e2e4 is fine at the start, but the second entry says
     // 'play e2e4 from a position where e2 is empty' — illegal.

@@ -1,11 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { BarChart3, ChevronLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/Logo";
-import { MobileNav } from "@/components/MobileNav";
+import { AppPage } from "@/components/layout/AppPage";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { useNavTransition } from "@/components/NavProgress";
 
 interface FamilyStats {
   family: string;
@@ -89,7 +87,6 @@ export default function StatsClient({
   tacticsBands,
   tacticsOverall,
 }: StatsClientProps) {
-  const router = useRouter();
   // Default to "worst openings first" — low ease = struggling. Falls back
   // to family name for ties so the order is deterministic.
   const [sort, setSort] = useState<SortState>({
@@ -100,10 +97,17 @@ export default function StatsClient({
     "all",
   );
 
-  const handleBack = () => {
-    router.push("/home");
-    router.refresh();
-  };
+  // useNavTransition wraps router.push in a React transition so the
+  // global progress bar tracks the back-nav. Note: NO router.refresh
+  // here — /home's RSC payload is already in the Next router cache
+  // from the trip in, and the home page's client cache + the
+  // training-stats-updated event listener keep the dashboard fresh
+  // without a server re-render. Calling refresh used to force a full
+  // /home recompute on every back-nav (cache miss on getTrainingStats
+  // + getStatsPageData), which was the source of "back is suddenly
+  // slow".
+  const [, navigate] = useNavTransition();
+  const handleBack = () => navigate("/home");
 
   const filteredOpenings = useMemo(
     () =>
@@ -158,42 +162,12 @@ export default function StatsClient({
     sort.key === key ? (sort.direction === "asc" ? "↑" : "↓") : "";
 
   return (
-    // AppShell locks body/html overflow, so the page scroll has to live
-    // inside main. h-[100dvh] keeps the outer matched to the *current*
-    // visible viewport (not the iOS pre-collapse 100vh), and main owns
-    // the scroll with pb-safe so iOS's home indicator doesn't eat the
-    // last row.
-    <div className="h-[100dvh] flex flex-col overflow-hidden bg-background">
-      <MobileNav onLogoClick={handleBack} showMenuButton={false} />
-
-      <main className="flex-1 mt-nav lg:mt-0 overflow-y-auto pb-safe">
-        <div className="max-w-5xl mx-auto px-4 lg:px-8 py-6 lg:py-10 space-y-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="hidden lg:block">
-                <Logo size="lg" clickable={true} onLogoClick={handleBack} />
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleBack}
-                className="rounded-xl">
-                <ChevronLeft size={20} />
-              </Button>
-              <div>
-                <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">
-                  Stats
-                </h1>
-                <p className="text-xs lg:text-sm text-muted-foreground mt-1">
-                  Where you struggle and where you've mastered things.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 lg:px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium uppercase tracking-wide">
-              <BarChart3 size={12} />
-              Stats
-            </div>
-          </div>
+    <AppPage onLogoClick={handleBack}>
+      <PageHeader
+        title="Stats"
+        subtitle="Where you struggle and where you've mastered things."
+        onBack={handleBack}
+      />
 
           {/* ── Openings ───────────────────────────────────────────── */}
           <section className="space-y-3">
@@ -395,9 +369,7 @@ export default function StatsClient({
               </>
             )}
           </section>
-        </div>
-      </main>
-    </div>
+    </AppPage>
   );
 }
 

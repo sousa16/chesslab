@@ -14,6 +14,10 @@ import {
   hasPendingSave,
   whenAllSavesSettle,
 } from "@/lib/savesPending";
+import {
+  getCachedRepertoireSlot,
+  setCachedRepertoireSlot,
+} from "@/lib/repertoireCache";
 
 interface LineNode {
   id: string;
@@ -55,13 +59,21 @@ export function RepertoirePanel({
   onLearnFamily,
   onLineClick,
 }: RepertoirePanelProps) {
-  const [rootNode, setRootNode] = useState<LineNode | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Seed from the module-level cache so a return-visit to this panel
+  // (e.g. home → repertoire → home → repertoire) renders instantly.
+  // The fetch below still fires to revalidate via ETag (returns 304
+  // when nothing changed, ~50ms vs the cold-load ~3s for a large user).
+  const cachedSlot = getCachedRepertoireSlot(color);
+  const [rootNode, setRootNode] = useState<LineNode | null>(
+    (cachedSlot?.data as LineNode | null) ?? null,
+  );
+  const [isLoading, setIsLoading] = useState(!cachedSlot);
   const toast = useToast();
 
   // Cache the last etag the server sent so subsequent fetches can be 304'd
-  // without re-running the tree-build on the server.
-  const etagRef = useRef<string | null>(null);
+  // without re-running the tree-build on the server. Seeded from the
+  // module cache so the very first fetch this mount sends If-None-Match.
+  const etagRef = useRef<string | null>(cachedSlot?.etag ?? null);
 
   const fetchRepertoire = useCallback(async () => {
     try {
@@ -77,6 +89,7 @@ export function RepertoirePanel({
         if (etag) etagRef.current = etag;
         const data = await response.json();
         setRootNode(data.root);
+        setCachedRepertoireSlot(color, data.root, etag);
       } else if (response.status === 304) {
         // Tree hasn't changed — existing rootNode is still valid.
       }

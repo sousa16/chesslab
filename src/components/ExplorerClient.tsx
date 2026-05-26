@@ -9,6 +9,7 @@ import { Logo } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
 import { Board, BoardHandle } from "@/components/Board";
 import { BoardControls } from "@/components/BoardControls";
+import { useNavTransition } from "@/components/NavProgress";
 
 interface ExplorerEntry {
   fen: string; // position where the user is to move (key for lookup)
@@ -251,10 +252,11 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
   }, [analysis, currentIsUserTurn, currentHasPlan, moves.length]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
-  const handleBack = () => {
-    router.push("/home");
-    router.refresh();
-  };
+  // useNavTransition wraps router.push in a transition so the global
+  // progress bar tracks the back-nav. No router.refresh — see
+  // StatsClient.handleBack for the full rationale.
+  const [, navigate] = useNavTransition();
+  const handleBack = () => navigate("/home");
 
   // useCallback keeps the prop reference stable across renders. Without
   // it, Board's `useEffect(..., [pairedMoves, onMovesUpdated])` saw a new
@@ -358,11 +360,12 @@ export default function ExplorerClient({ repertoires }: ExplorerClientProps) {
 
   // ── UI ──────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
+    <div className="h-[100dvh] bg-background flex flex-col lg:flex-row overflow-hidden">
       <MobileNav
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         onLogoClick={handleBack}
+        onBack={handleBack}
       />
 
       {isSidebarOpen && (

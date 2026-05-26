@@ -19,7 +19,10 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { lookupOpening } from "@/lib/openings";
-import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
+import {
+  buildRepertoireTree,
+  getAnchoredSansForNode,
+} from "@/lib/repertoireTree";
 import { PieceColor } from "@prisma/client";
 
 export interface EntryEnrichment {
@@ -36,6 +39,10 @@ export interface RepertoireEnrichment {
   // skip first-move entries to match the previous behavior.
   orderedEntryIds: string[];
   enrichmentByEntryId: Record<string, EntryEnrichment>;
+  // entryId → parent entryId. Lets the training page resolve "practice
+  // this line" (= path from root to a leaf) without rebuilding the tree.
+  // Entries that are roots in the user's tree don't appear as keys.
+  parentByEntryId: Record<string, string>;
 }
 
 async function computeEnrichment(
@@ -65,13 +72,18 @@ async function computeEnrichment(
 
     const orderedEntryIds: string[] = [];
     const visited = new Set<string>();
-    const walk = (node: ReturnType<typeof byEntryId.get>) => {
+    const parentByEntryId: Record<string, string> = {};
+    const walk = (
+      node: ReturnType<typeof byEntryId.get>,
+      parentId: string | null,
+    ) => {
       if (!node || visited.has(node.id)) return;
       visited.add(node.id);
       orderedEntryIds.push(node.id);
-      for (const child of node.children) walk(child);
+      if (parentId) parentByEntryId[node.id] = parentId;
+      for (const child of node.children) walk(child, node.id);
     };
-    for (const root of roots) walk(root);
+    for (const root of roots) walk(root, null);
     // Defensive sweep — unreachable entries still get enrichment so the
     // caller can include them with the same display logic.
     for (const e of r.entries) {
@@ -81,10 +93,9 @@ async function computeEnrichment(
     const enrichmentByEntryId: Record<string, EntryEnrichment> = {};
     for (const entry of r.entries) {
       const node = byEntryId.get(entry.id);
-      const sans = node?.sanMoves ?? [];
-      const rootFen = node?.rootFen ?? entry.position.fen;
-      const priorMoves = anchorSansToStart(sans, entry.position.fen, rootFen);
-      const lookupSans = priorMoves.length > 0 ? priorMoves : sans;
+      const priorMoves = node ? getAnchoredSansForNode(node) : [];
+      const lookupSans =
+        priorMoves.length > 0 ? priorMoves : (node?.sanMoves ?? []);
       const match = lookupOpening(lookupSans);
       enrichmentByEntryId[entry.id] = {
         openingName: match?.name ?? null,
@@ -98,45 +109,61 @@ async function computeEnrichment(
       color: r.color,
       orderedEntryIds,
       enrichmentByEntryId,
+      parentByEntryId,
     };
   });
 }
 
 const cachedComputeEnrichment = unstable_cache(
-  async (userId: string, _lastChanged: number, colorFilter: PieceColor | null) =>
+  async (userId: string, _structureVersion: string, colorFilter: PieceColor | null) =>
     computeEnrichment(userId, colorFilter),
-  ["training-enrichment-v1"],
-  // 5 min matches statsPageData. Writes bust the key via lastChanged.
+  ["training-enrichment-v3"],
+  // 5 min matches statsPageData. Creates/deletes bust the key via
+  // _structureVersion; SRS review writes do not (intentional — tree
+  // shape doesn't change on review). v3 adds parentByEntryId — old v2
+  // entries don't have it and would break the training page.
   { revalidate: 300, tags: ["training-enrichment"] },
 );
 
-async function getEnrichmentLastChanged(
+async function getEnrichmentStructureVersion(
   userId: string,
   colorFilter: PieceColor | null,
-): Promise<number> {
-  const latest = await prisma.repertoireEntry.findFirst({
-    where: {
-      repertoire: {
-        userId,
-        ...(colorFilter ? { color: colorFilter } : {}),
-      },
+): Promise<string> {
+  const where = {
+    repertoire: {
+      userId,
+      ...(colorFilter ? { color: colorFilter } : {}),
     },
-    select: { updatedAt: true },
-    orderBy: { updatedAt: "desc" },
-  });
-  return latest?.updatedAt.getTime() ?? 0;
+  } as const;
+  // Tree shape + opening enrichment depend ONLY on the set of
+  // (positionId, expectedMove) tuples — i.e., on which entries exist.
+  // SRS review writes bump `updatedAt` but don't change tree shape.
+  // Using createdAt+count instead of updatedAt+count means review
+  // writes don't bust the cache, so a 457-entry user's nav back to
+  // /training after a review hits the cached enrichment (~ms) instead
+  // of recomputing the full tree (~4–5s).
+  const [latest, count] = await Promise.all([
+    prisma.repertoireEntry.findFirst({
+      where,
+      select: { createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.repertoireEntry.count({ where }),
+  ]);
+  return `${latest?.createdAt.getTime() ?? 0}-${count}`;
 }
 
 /**
  * Build (or fetch from cache) the per-entry opening-name + priorMoves
- * data needed by the training page. The cache key includes the latest
- * `updatedAt` across the user's entries, so any add/edit/delete naturally
- * invalidates without an explicit cache bust.
+ * data needed by the training page. The cache key includes a
+ * structure version (max createdAt + entry count) so the cache only
+ * busts on create/delete — not on SRS review writes, which only
+ * touch update fields irrelevant to tree shape.
  */
 export async function getTrainingEnrichment(
   userId: string,
   colorFilter: PieceColor | null,
 ): Promise<RepertoireEnrichment[]> {
-  const lastChanged = await getEnrichmentLastChanged(userId, colorFilter);
-  return cachedComputeEnrichment(userId, lastChanged, colorFilter);
+  const version = await getEnrichmentStructureVersion(userId, colorFilter);
+  return cachedComputeEnrichment(userId, version, colorFilter);
 }

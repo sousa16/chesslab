@@ -109,7 +109,26 @@ export interface RepertoireTreeNode {
   // a shallower position), callers can derive a full-from-start path by
   // prepending the canonical moves leading to rootFen.
   rootFen: string;
+  // SAN path from STANDARD START to node.fen (i.e., NOT including the
+  // user's expectedMove). Populated by the walk for the common case where
+  // rootFen === starting position; lets getAnchoredSans skip a per-entry
+  // chess.js replay. Undefined when the tree root is mid-game — callers
+  // fall back to anchorSansToStart, which adds the ECO prefix.
+  anchoredSansFromStart?: string[];
   children: RepertoireTreeNode[];
+}
+
+/**
+ * Get the SAN path from the standard starting position to a node's
+ * position FEN (i.e., the moves BEFORE the user's expectedMove). Uses
+ * the walk-populated cache when present; otherwise falls back to the
+ * generic anchor logic. Real callers (trainingEnrichment, /api routes,
+ * stats aggregation) should prefer this over calling anchorSansToStart
+ * directly on a node — it skips a ~1.3ms-per-entry chess.js replay.
+ */
+export function getAnchoredSansForNode(node: RepertoireTreeNode): string[] {
+  if (node.anchoredSansFromStart) return node.anchoredSansFromStart;
+  return anchorSansToStart(node.sanMoves, node.fen, node.rootFen);
 }
 
 export interface BuiltRepertoireTree {
@@ -147,12 +166,33 @@ export function buildRepertoireTree(
     nodesByFen.get(entry.position.fen)!.push(node);
   }
 
-  // Link parents to children by playing the user's move and then enumerating
-  // every legal opponent reply that lands on a saved position. The probe
-  // game is reused across replies via play/undo so we don't allocate a
-  // fresh Chess instance for each of the ~30 legal moves per entry —
-  // matters for users with large repertoires because this loop dominates
-  // endpoint latency for both /api/repertoires and /api/training-stats.
+  // Secondary index: 3-field FEN key → nodes. Lets the linker tolerate
+  // EP / halfmove / fullmove drift between chess.js's computed fen and a
+  // user-saved fen (different tools may produce different EP targets for
+  // the same position).
+  const nodesByFenKey = new Map<string, RepertoireTreeNode[]>();
+  for (const list of nodesByFen.values()) {
+    for (const node of list) {
+      const key = fenKey(node.fen);
+      if (!nodesByFenKey.has(key)) nodesByFenKey.set(key, []);
+      nodesByFenKey.get(key)!.push(node);
+    }
+  }
+
+  // Link parents to children. Two hot-path optimizations here vs. the
+  // earlier implementation:
+  //
+  // 1) `probe.moves()` (no `verbose: true`) — generating the full Move
+  //    objects with SAN/from/to was ~10× slower than just generating
+  //    SAN strings, and the SAN string alone is all we need to play
+  //    each candidate reply. For a ~450-entry repertoire this single
+  //    change drops buildRepertoireTree from ~3.3s to well under 1s.
+  // 2) We don't set `child.opponentMove` here anymore. The walk derives
+  //    the correct bridge move per-path at walk time (a node reachable
+  //    via two transpositions has two valid bridges — a single stored
+  //    field would lose one). Keeping the linker focused on "does this
+  //    reply land on a saved child fen?" makes the inner loop
+  //    branch-free.
   for (const list of nodesByFen.values()) {
     for (const parent of list) {
       let postUserFen: string;
@@ -166,35 +206,37 @@ export function buildRepertoireTree(
       }
 
       const probe = new Chess(postUserFen);
-      const replies = probe.moves({ verbose: true });
+      const sanList = probe.moves();
       const seen = new Set<string>();
-      for (const reply of replies) {
-        probe.move(reply.san);
+      for (const san of sanList) {
+        const m = probe.move(san);
+        if (!m) continue;
         const childFen = probe.fen();
         probe.undo();
-        const childList = nodesByFen.get(childFen);
+        const childList =
+          nodesByFen.get(childFen) ?? nodesByFenKey.get(fenKey(childFen));
         if (!childList) continue;
         for (const child of childList) {
           if (seen.has(child.id)) continue;
           seen.add(child.id);
-          child.opponentMove = `${reply.from}${reply.to}${reply.promotion ?? ""}`;
           parent.children.push(child);
         }
       }
     }
   }
 
-  // Roots are nodes whose FEN isn't referenced as anyone's child.
-  const childFens = new Set<string>();
+  // Roots are nodes whose FEN isn't referenced as anyone's child. Compare
+  // on the 3-field key for the same EP-drift tolerance as the linker.
+  const childFenKeys = new Set<string>();
   for (const list of nodesByFen.values()) {
     for (const node of list) {
-      for (const child of node.children) childFens.add(child.fen);
+      for (const child of node.children) childFenKeys.add(fenKey(child.fen));
     }
   }
   const roots: RepertoireTreeNode[] = [];
   for (const list of nodesByFen.values()) {
     for (const node of list) {
-      if (!childFens.has(node.fen)) roots.push(node);
+      if (!childFenKeys.has(fenKey(node.fen))) roots.push(node);
     }
   }
 
@@ -216,15 +258,24 @@ export function buildRepertoireTree(
   // `visitedOnPath` breaks transposition cycles (A→B→A) that would
   // otherwise recurse forever — sanMoves still gets overwritten by the
   // last legitimate visit, which is fine since every path is valid.
-  const findBridgeSan = (game: Chess, targetFen: string): string | null => {
+  // Returns the Move object for the bridge (which already exposes
+  // from / to / promotion / san), or null if no legal reply reaches
+  // `targetFen`. Uses `moves()` instead of `moves({ verbose: true })` to
+  // avoid the ~10× cost of generating full Move objects up front — we
+  // only need the verbose info for the ONE reply that bridges.
+  const findBridgeMove = (
+    game: Chess,
+    targetFen: string,
+  ): ReturnType<Chess["move"]> | null => {
     const targetKey = fenKey(targetFen);
-    if (fenKey(game.fen()) === targetKey) return null; // already there
-    const replies = game.moves({ verbose: true });
-    for (const reply of replies) {
-      game.move(reply.san);
+    if (fenKey(game.fen()) === targetKey) return null;
+    const sanList = game.moves();
+    for (const san of sanList) {
+      const m = game.move(san);
+      if (!m) continue;
       if (fenKey(game.fen()) === targetKey) {
         // Caller continues from this state, so we leave the move applied.
-        return reply.san;
+        return m;
       }
       game.undo();
     }
@@ -236,6 +287,7 @@ export function buildRepertoireTree(
     parentSans: string[],
     parentGame: Chess,
     rootFen: string,
+    rootIsStandardStart: boolean,
     visitedOnPath: Set<string>,
   ) => {
     if (visitedOnPath.has(node.id)) return;
@@ -246,16 +298,19 @@ export function buildRepertoireTree(
     const sans = [...parentSans];
 
     // Bridge from parent's post-user state to node.fen via a single opp move.
-    const bridgeSan = findBridgeSan(game, node.fen);
-    if (bridgeSan) {
-      sans.push(bridgeSan);
-      // Update the stored UCI to match the path we actually took. The /api
-      // route still exposes this field; without the update, callers would
-      // see whichever path was linked last (potentially the wrong one).
-      const lastMove = game.history({ verbose: true }).pop();
-      if (lastMove) {
-        node.opponentMove = `${lastMove.from}${lastMove.to}${lastMove.promotion ?? ""}`;
-      }
+    const bridge = findBridgeMove(game, node.fen);
+    if (bridge) {
+      sans.push(bridge.san);
+      node.opponentMove = `${bridge.from}${bridge.to}${bridge.promotion ?? ""}`;
+    }
+
+    // Memoize the anchored prefix BEFORE we play the user's move. When the
+    // tree root is the standard start, `sans` at this point is the full
+    // path from the standard starting position to node.fen — that's
+    // exactly what anchorSansToStart would replay to derive. Storing it
+    // lets per-entry callers skip a chess.js replay each (~1.3ms × N).
+    if (rootIsStandardStart) {
+      node.anchoredSansFromStart = [...sans];
     }
 
     try {
@@ -271,7 +326,8 @@ export function buildRepertoireTree(
 
     node.sanMoves = sans;
     node.rootFen = rootFen;
-    for (const child of node.children) walk(child, sans, game, rootFen, nextVisited);
+    for (const child of node.children)
+      walk(child, sans, game, rootFen, rootIsStandardStart, nextVisited);
   };
 
   const findOpeningWhiteMove = (targetFen: string): string | null => {
@@ -286,13 +342,24 @@ export function buildRepertoireTree(
     return null;
   };
 
+  const STARTING_FEN_KEY_LOCAL = fenKey(STARTING_FEN);
   for (const root of roots) {
     const game = new Chess(root.fen);
     const sans: string[] = [];
+    const rootIsStandardStart = fenKey(root.fen) === STARTING_FEN_KEY_LOCAL;
 
     if (color === "Black" && game.turn() === "b") {
       const whiteMove = findOpeningWhiteMove(root.fen);
       if (whiteMove) sans.push(whiteMove);
+    }
+
+    // Memoize the anchored prefix for the root too. For a white root at
+    // the standard start this is just [] (no moves before the user's
+    // first move); for a black root the white-opening move has already
+    // been prepended into `sans`. The anchor for the root's positionFen
+    // is the same — leave it captured before the user's move plays.
+    if (rootIsStandardStart || (color === "Black" && sans.length === 1)) {
+      root.anchoredSansFromStart = [...sans];
     }
 
     try {
@@ -309,7 +376,8 @@ export function buildRepertoireTree(
     root.sanMoves = sans;
     root.rootFen = root.fen;
     const rootVisited = new Set<string>([root.id]);
-    for (const child of root.children) walk(child, sans, game, root.fen, rootVisited);
+    for (const child of root.children)
+      walk(child, sans, game, root.fen, rootIsStandardStart, rootVisited);
   }
 
   return { roots, byEntryId };

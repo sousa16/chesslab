@@ -12,7 +12,10 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { lookupOpening } from "@/lib/openings";
-import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
+import {
+  buildRepertoireTree,
+  getAnchoredSansForNode,
+} from "@/lib/repertoireTree";
 
 export interface FamilyStats {
   family: string;
@@ -121,10 +124,9 @@ async function computeStatsPageData(userId: string): Promise<StatsPageData> {
     const familyByEntryId = new Map<string, string>();
     for (const entry of r.entries) {
       const node = byEntryId.get(entry.id);
-      const sans = node?.sanMoves ?? [];
-      const rootFen = node?.rootFen ?? entry.position.fen;
-      const anchored = anchorSansToStart(sans, entry.position.fen, rootFen);
-      const lookupSans = anchored.length > 0 ? anchored : sans;
+      const anchored = node ? getAnchoredSansForNode(node) : [];
+      const lookupSans =
+        anchored.length > 0 ? anchored : (node?.sanMoves ?? []);
       const match = lookupOpening(lookupSans);
       familyByEntryId.set(entry.id, familyOf(match?.name ?? null));
     }

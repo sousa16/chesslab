@@ -14,7 +14,10 @@ import { unstable_cache } from "next/cache";
 import { PieceColor, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { lookupOpening } from "@/lib/openings";
-import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
+import {
+  buildRepertoireTree,
+  getAnchoredSansForNode,
+} from "@/lib/repertoireTree";
 
 export interface CachedLineNode {
   id: string;
@@ -75,11 +78,7 @@ async function computeTree(
   );
 
   const decorate = (built: (typeof builtRoots)[number]): CachedLineNode => {
-    const anchoredSans = anchorSansToStart(
-      built.sanMoves,
-      built.fen,
-      built.rootFen,
-    );
+    const anchoredSans = getAnchoredSansForNode(built);
     const userMoveSan = built.sanMoves[built.sanMoves.length - 1];
     const displaySans =
       anchoredSans.length > 0 && userMoveSan

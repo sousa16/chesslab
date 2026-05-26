@@ -19,7 +19,10 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { lookupOpening } from "@/lib/openings";
-import { anchorSansToStart, buildRepertoireTree } from "@/lib/repertoireTree";
+import {
+  buildRepertoireTree,
+  getAnchoredSansForNode,
+} from "@/lib/repertoireTree";
 import { PieceColor } from "@prisma/client";
 
 export interface EntryEnrichment {
@@ -81,10 +84,9 @@ async function computeEnrichment(
     const enrichmentByEntryId: Record<string, EntryEnrichment> = {};
     for (const entry of r.entries) {
       const node = byEntryId.get(entry.id);
-      const sans = node?.sanMoves ?? [];
-      const rootFen = node?.rootFen ?? entry.position.fen;
-      const priorMoves = anchorSansToStart(sans, entry.position.fen, rootFen);
-      const lookupSans = priorMoves.length > 0 ? priorMoves : sans;
+      const priorMoves = node ? getAnchoredSansForNode(node) : [];
+      const lookupSans =
+        priorMoves.length > 0 ? priorMoves : (node?.sanMoves ?? []);
       const match = lookupOpening(lookupSans);
       enrichmentByEntryId[entry.id] = {
         openingName: match?.name ?? null,

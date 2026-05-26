@@ -204,8 +204,8 @@ export default function HomeClient({ statsPromise }: HomeClientProps) {
         <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
           {/* Opening name banner (shown when viewing a saved line) */}
           {lineOpening && initialMoves.length > 0 && (
-            <div className="px-3 py-1.5 rounded-full bg-surface-2/60 border border-border/50 flex-shrink-0 max-w-full">
-              <span className="text-sm font-medium text-foreground truncate">
+            <div className="px-3 py-1.5 rounded-full bg-surface-2/60 border border-border/50 flex-shrink-0 max-w-full overflow-hidden">
+              <span className="block text-sm font-medium text-foreground truncate">
                 {lineOpening.name}
               </span>
             </div>

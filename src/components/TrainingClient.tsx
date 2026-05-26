@@ -67,15 +67,15 @@ interface TrainingClientProps {
 
 /**
  * Normalize a FEN for equality comparison. chess.js's FEN includes the
- * halfmove clock and fullmove number, which can disagree between the
- * repertoire-tree replay and the entry's stored FEN even when the actual
- * position (pieces, castling, en passant) is identical. Stripping those
- * trailing fields gives a stable identity for position comparisons.
+ * halfmove clock, fullmove number, and en passant target. The first two
+ * trivially drift between replay and stored FEN; the EP target can also
+ * drift between tools that follow the FIDE rule vs chess.js's Hybrid
+ * rule. For navigation we only need piece placement + side + castling.
  */
 function fenKey(fen: string | undefined | null): string {
   if (!fen) return "";
   const parts = fen.split(" ");
-  return parts.slice(0, 4).join(" ");
+  return parts.slice(0, 3).join(" ");
 }
 
 export default function TrainingClient({
@@ -606,8 +606,8 @@ export default function TrainingClient({
         <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
           {/* Opening name banner */}
           {currentEntry?.openingName && (
-            <div className="px-3 py-1.5 rounded-full bg-surface-2/60 border border-border/50 flex-shrink-0 max-w-full">
-              <span className="text-sm font-medium text-foreground truncate">
+            <div className="px-3 py-1.5 rounded-full bg-surface-2/60 border border-border/50 flex-shrink-0 max-w-full overflow-hidden">
+              <span className="block text-sm font-medium text-foreground truncate">
                 {currentEntry.openingName}
               </span>
             </div>

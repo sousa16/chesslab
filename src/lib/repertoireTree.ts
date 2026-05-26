@@ -17,12 +17,15 @@
 import { Chess } from "chess.js";
 import { sanPathToFen } from "./openings";
 
-// Compare FENs ignoring halfmove clock and fullmove number — those fields
-// can drift between repertoire-tree replay and stored FEN even when the
-// position itself is identical.
+// Compare FENs ignoring halfmove clock, fullmove number, and en passant
+// target. The first two drift between replay and stored FEN trivially;
+// the EP square also drifts because some tools follow the FIDE rule (set
+// after any pawn double-push) while chess.js follows the Hybrid rule
+// (set only when a capture is actually possible). For navigation /
+// anchoring we only care about piece placement + side to move + castling.
 function fenKey(fen: string | null | undefined): string {
   if (!fen) return "";
-  return fen.split(" ").slice(0, 4).join(" ");
+  return fen.split(" ").slice(0, 3).join(" ");
 }
 
 function replayToTarget(
@@ -197,27 +200,64 @@ export function buildRepertoireTree(
 
   // Walk each root computing SAN paths. For Black roots, prepend the white
   // move that produced the root FEN.
+  //
+  // For each child we DERIVE the opponent bridge move from the parent's
+  // post-user-move state instead of relying on `child.opponentMove`. The
+  // linker stored `opponentMove` per child globally and overwrote it
+  // across parent iterations, so a node reachable via a real transposition
+  // (e.g., d4 then Nc6 vs. Nc6 then d4) ended up with only ONE parent's
+  // bridge stored. When the walk arrived via the OTHER parent, the stored
+  // SAN was illegal in the current game state, chess.js's move() returned
+  // null, the try/catch silently swallowed it, and the chain's sanMoves
+  // came out partial. anchorSansToStart then couldn't anchor and the
+  // training UI hid the back-step nav. Recomputing the bridge per-path
+  // guarantees a valid SAN list for whichever parent reaches the node.
+  //
+  // `visitedOnPath` breaks transposition cycles (A→B→A) that would
+  // otherwise recurse forever — sanMoves still gets overwritten by the
+  // last legitimate visit, which is fine since every path is valid.
+  const findBridgeSan = (game: Chess, targetFen: string): string | null => {
+    const targetKey = fenKey(targetFen);
+    if (fenKey(game.fen()) === targetKey) return null; // already there
+    const replies = game.moves({ verbose: true });
+    for (const reply of replies) {
+      game.move(reply.san);
+      if (fenKey(game.fen()) === targetKey) {
+        // Caller continues from this state, so we leave the move applied.
+        return reply.san;
+      }
+      game.undo();
+    }
+    return null;
+  };
+
   const walk = (
     node: RepertoireTreeNode,
     parentSans: string[],
     parentGame: Chess,
     rootFen: string,
+    visitedOnPath: Set<string>,
   ) => {
+    if (visitedOnPath.has(node.id)) return;
+    const nextVisited = new Set(visitedOnPath);
+    nextVisited.add(node.id);
+
     const game = new Chess(parentGame.fen());
     const sans = [...parentSans];
 
-    if (node.opponentMove) {
-      try {
-        const m = game.move({
-          from: node.opponentMove.slice(0, 2),
-          to: node.opponentMove.slice(2, 4),
-          promotion: node.opponentMove.slice(4) || undefined,
-        });
-        if (m) sans.push(m.san);
-      } catch {
-        /* skip */
+    // Bridge from parent's post-user state to node.fen via a single opp move.
+    const bridgeSan = findBridgeSan(game, node.fen);
+    if (bridgeSan) {
+      sans.push(bridgeSan);
+      // Update the stored UCI to match the path we actually took. The /api
+      // route still exposes this field; without the update, callers would
+      // see whichever path was linked last (potentially the wrong one).
+      const lastMove = game.history({ verbose: true }).pop();
+      if (lastMove) {
+        node.opponentMove = `${lastMove.from}${lastMove.to}${lastMove.promotion ?? ""}`;
       }
     }
+
     try {
       const userMove = game.move({
         from: node.expectedMove.slice(0, 2),
@@ -231,7 +271,7 @@ export function buildRepertoireTree(
 
     node.sanMoves = sans;
     node.rootFen = rootFen;
-    for (const child of node.children) walk(child, sans, game, rootFen);
+    for (const child of node.children) walk(child, sans, game, rootFen, nextVisited);
   };
 
   const findOpeningWhiteMove = (targetFen: string): string | null => {
@@ -268,7 +308,8 @@ export function buildRepertoireTree(
 
     root.sanMoves = sans;
     root.rootFen = root.fen;
-    for (const child of root.children) walk(child, sans, game, root.fen);
+    const rootVisited = new Set<string>([root.id]);
+    for (const child of root.children) walk(child, sans, game, root.fen, rootVisited);
   }
 
   return { roots, byEntryId };

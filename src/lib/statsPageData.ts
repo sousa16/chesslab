@@ -11,11 +11,7 @@
 
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { lookupOpening } from "@/lib/openings";
-import {
-  buildRepertoireTree,
-  getAnchoredSansForNode,
-} from "@/lib/repertoireTree";
+import { getCachedRepertoireFamilies } from "@/lib/repertoireTreeCache";
 
 export interface FamilyStats {
   family: string;
@@ -62,14 +58,15 @@ const RATING_BANDS: { label: string; min: number; max: number }[] = [
   { label: "Advanced (1800–2400)", min: 1800, max: 2400 },
 ];
 
-function familyOf(openingName: string | null): string {
-  if (!openingName) return "Other Lines";
-  const colon = openingName.indexOf(":");
-  return colon === -1 ? openingName : openingName.slice(0, colon).trim();
-}
-
 async function computeStatsPageData(userId: string): Promise<StatsPageData> {
-  const [repertoires, reviews] = await Promise.all([
+  // Tree-derived data (family per entry + which families are
+  // represented at leaves below each node) is pulled from the shared
+  // structure cache — see repertoireTreeCache.ts. SRS-derived data
+  // (phase, easeFactor, repetitions, etc) comes from a fresh per-request
+  // projection. Splitting these means SRS review writes don't bust the
+  // expensive tree-build but still produce up-to-date aggregates.
+  const [families, repertoires, reviews] = await Promise.all([
+    getCachedRepertoireFamilies(userId),
     prisma.repertoire.findMany({
       where: { userId },
       select: {
@@ -77,13 +74,11 @@ async function computeStatsPageData(userId: string): Promise<StatsPageData> {
         entries: {
           select: {
             id: true,
-            expectedMove: true,
             easeFactor: true,
             repetitions: true,
             phase: true,
             nextReviewDate: true,
             lastReviewDate: true,
-            position: { select: { fen: true } },
           },
         },
       },
@@ -119,43 +114,12 @@ async function computeStatsPageData(userId: string): Promise<StatsPageData> {
   for (const r of repertoires) {
     const repColor: "white" | "black" =
       r.color === "White" ? "white" : "black";
-    const { roots, byEntryId } = buildRepertoireTree(r.entries, r.color);
-
-    const familyByEntryId = new Map<string, string>();
-    for (const entry of r.entries) {
-      const node = byEntryId.get(entry.id);
-      const anchored = node ? getAnchoredSansForNode(node) : [];
-      const lookupSans =
-        anchored.length > 0 ? anchored : (node?.sanMoves ?? []);
-      const match = lookupOpening(lookupSans);
-      familyByEntryId.set(entry.id, familyOf(match?.name ?? null));
-    }
-
-    const leafFamiliesByNode = new Map<string, Set<string>>();
-    const collectLeafFamilies = (
-      node: ReturnType<typeof byEntryId.get>,
-    ): Set<string> => {
-      if (!node) return new Set();
-      const cached = leafFamiliesByNode.get(node.id);
-      if (cached) return cached;
-      const out = new Set<string>();
-      if (node.children.length === 0) {
-        const fam = familyByEntryId.get(node.id);
-        if (fam) out.add(fam);
-      } else {
-        for (const child of node.children) {
-          for (const f of collectLeafFamilies(child)) out.add(f);
-        }
-      }
-      leafFamiliesByNode.set(node.id, out);
-      return out;
-    };
-    for (const root of roots) collectLeafFamilies(root);
+    const familyInfo = families[repColor];
 
     for (const entry of r.entries) {
-      const family = familyByEntryId.get(entry.id) ?? "Other Lines";
-      const leafFams = leafFamiliesByNode.get(entry.id);
-      if (!leafFams || !leafFams.has(family)) continue;
+      const family = familyInfo.familyByEntryId[entry.id] ?? "Other Lines";
+      const leafFams = familyInfo.leafFamiliesByEntryId[entry.id];
+      if (!leafFams || !leafFams.includes(family)) continue;
 
       const key = `${repColor}::${family}`;
       let agg = familyAccum.get(key);

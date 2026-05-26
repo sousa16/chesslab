@@ -38,6 +38,29 @@ export interface CachedRepertoireTree {
   root: CachedLineNode | null;
 }
 
+/**
+ * Per-entry family + "is this entry's family represented at a leaf in
+ * its subtree?" — both are pure structure-derived facts (depend only on
+ * positionId + expectedMove + opening lookup, not on SRS state). Lifted
+ * out of statsPageData so the stats page hits the same cache as
+ * /api/repertoires on review writes instead of rebuilding the tree.
+ */
+export interface CachedFamilyInfo {
+  // entryId → family name (e.g. "Vienna Game", "Caro-Kann Defense", or
+  // "Other Lines" when the opening lookup misses).
+  familyByEntryId: Record<string, string>;
+  // entryId → list of families that appear as leaves below this node in
+  // the user's tree. Used by stats to skip non-leaf-representative
+  // entries when counting "lines" per family.
+  leafFamiliesByEntryId: Record<string, string[]>;
+}
+
+export interface CachedRepertoireFamilies {
+  // color → family info
+  white: CachedFamilyInfo;
+  black: CachedFamilyInfo;
+}
+
 function formatSanSequence(moves: string[]): string {
   if (moves.length === 0) return "Initial Position";
   const parts: string[] = [];
@@ -160,4 +183,100 @@ export async function getCachedRepertoireTree(
 ): Promise<CachedRepertoireTree> {
   const version = await getStructureVersion(userId, color);
   return cachedComputeTree(userId, color, version);
+}
+
+/**
+ * Compute the per-color family info from the same fetched entries that
+ * computeTree consumes. Lifted into its own function so both consumers
+ * (the tree cache + the stats family cache) share the cost when called
+ * in a single request — but each has its own cache slot.
+ */
+async function computeFamilyInfo(
+  userId: string,
+  color: PieceColor,
+): Promise<CachedFamilyInfo> {
+  const repertoire = await prisma.repertoire.findUnique({
+    where: { userId_color: { userId, color } },
+    select: {
+      entries: {
+        select: {
+          id: true,
+          expectedMove: true,
+          position: { select: { fen: true } },
+        },
+      },
+    },
+  });
+  if (!repertoire || repertoire.entries.length === 0) {
+    return { familyByEntryId: {}, leafFamiliesByEntryId: {} };
+  }
+  const { roots, byEntryId } = buildRepertoireTree(
+    repertoire.entries,
+    color,
+  );
+  const familyOf = (openingName: string | null): string => {
+    if (!openingName) return "Other Lines";
+    const colon = openingName.indexOf(":");
+    return colon === -1 ? openingName : openingName.slice(0, colon).trim();
+  };
+  const familyByEntryId: Record<string, string> = {};
+  for (const entry of repertoire.entries) {
+    const node = byEntryId.get(entry.id);
+    const anchored = node ? getAnchoredSansForNode(node) : [];
+    const lookupSans =
+      anchored.length > 0 ? anchored : (node?.sanMoves ?? []);
+    const match = lookupOpening(lookupSans);
+    familyByEntryId[entry.id] = familyOf(match?.name ?? null);
+  }
+  const leafFamiliesByEntryId: Record<string, string[]> = {};
+  const collect = (
+    n: ReturnType<typeof byEntryId.get>,
+    memo: Map<string, Set<string>>,
+  ): Set<string> => {
+    if (!n) return new Set();
+    const cached = memo.get(n.id);
+    if (cached) return cached;
+    const out = new Set<string>();
+    if (n.children.length === 0) {
+      const fam = familyByEntryId[n.id];
+      if (fam) out.add(fam);
+    } else {
+      for (const c of n.children) for (const f of collect(c, memo)) out.add(f);
+    }
+    memo.set(n.id, out);
+    return out;
+  };
+  const memo = new Map<string, Set<string>>();
+  for (const root of roots) collect(root, memo);
+  for (const [id, set] of memo) {
+    leafFamiliesByEntryId[id] = Array.from(set);
+  }
+  return { familyByEntryId, leafFamiliesByEntryId };
+}
+
+const cachedComputeFamilies = unstable_cache(
+  async (userId: string, _structureVersion: string) => {
+    const [white, black] = await Promise.all([
+      computeFamilyInfo(userId, "White" as PieceColor),
+      computeFamilyInfo(userId, "Black" as PieceColor),
+    ]);
+    return { white, black };
+  },
+  ["repertoire-families-v1"],
+  { revalidate: 300, tags: ["repertoire-tree"] },
+);
+
+/**
+ * Per-color family + leaf-family info, cached by structure version.
+ * The /stats page uses this with fresh SRS aggregates patched on top
+ * to avoid rebuilding the tree on every nav after a review.
+ */
+export async function getCachedRepertoireFamilies(
+  userId: string,
+): Promise<CachedRepertoireFamilies> {
+  const [vw, vb] = await Promise.all([
+    getStructureVersion(userId, "White" as PieceColor),
+    getStructureVersion(userId, "Black" as PieceColor),
+  ]);
+  return cachedComputeFamilies(userId, `${vw}|${vb}`);
 }

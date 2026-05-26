@@ -39,6 +39,10 @@ export interface RepertoireEnrichment {
   // skip first-move entries to match the previous behavior.
   orderedEntryIds: string[];
   enrichmentByEntryId: Record<string, EntryEnrichment>;
+  // entryId → parent entryId. Lets the training page resolve "practice
+  // this line" (= path from root to a leaf) without rebuilding the tree.
+  // Entries that are roots in the user's tree don't appear as keys.
+  parentByEntryId: Record<string, string>;
 }
 
 async function computeEnrichment(
@@ -68,13 +72,18 @@ async function computeEnrichment(
 
     const orderedEntryIds: string[] = [];
     const visited = new Set<string>();
-    const walk = (node: ReturnType<typeof byEntryId.get>) => {
+    const parentByEntryId: Record<string, string> = {};
+    const walk = (
+      node: ReturnType<typeof byEntryId.get>,
+      parentId: string | null,
+    ) => {
       if (!node || visited.has(node.id)) return;
       visited.add(node.id);
       orderedEntryIds.push(node.id);
-      for (const child of node.children) walk(child);
+      if (parentId) parentByEntryId[node.id] = parentId;
+      for (const child of node.children) walk(child, node.id);
     };
-    for (const root of roots) walk(root);
+    for (const root of roots) walk(root, null);
     // Defensive sweep — unreachable entries still get enrichment so the
     // caller can include them with the same display logic.
     for (const e of r.entries) {
@@ -100,6 +109,7 @@ async function computeEnrichment(
       color: r.color,
       orderedEntryIds,
       enrichmentByEntryId,
+      parentByEntryId,
     };
   });
 }
@@ -107,10 +117,11 @@ async function computeEnrichment(
 const cachedComputeEnrichment = unstable_cache(
   async (userId: string, _structureVersion: string, colorFilter: PieceColor | null) =>
     computeEnrichment(userId, colorFilter),
-  ["training-enrichment-v2"],
+  ["training-enrichment-v3"],
   // 5 min matches statsPageData. Creates/deletes bust the key via
   // _structureVersion; SRS review writes do not (intentional — tree
-  // shape doesn't change on review).
+  // shape doesn't change on review). v3 adds parentByEntryId — old v2
+  // entries don't have it and would break the training page.
   { revalidate: 300, tags: ["training-enrichment"] },
 );
 

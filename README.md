@@ -24,10 +24,22 @@ A personal chess training app for serious improvement. Build your opening repert
 
 ### Tactics
 
-- Pulls puzzles from a precomputed Lichess dump, gated by user-configurable **rating band** + **categories** (mate, fork, pin, endgame, etc.).
+- Pulls puzzles from a precomputed Lichess dump, filtered by user-configurable **categories** (Mates / Motifs / Middlegame / Endgame).
+- **Auto-detect on the board** — play the move; correct → opponent's reply auto-plays with a brief green ring, wrong → red ring and the drag is rejected. No "show answer + self-rate" step; SRS rating is derived from attempts (1st try clean → easy, 1 wrong → effort, 2+ → partial, gave up → forgot).
+- **Adaptive difficulty** targeting ~85% success — the "Eighty Five Percent Rule" (Wilson et al., *Nature Communications* 2019). A per-user, per-motif EWMA controller raises or lowers the rating setpoint after every attempt, so the user is always being challenged without being stuck.
+- **Blocked-then-interleaved** by motif (Shea & Morgan contextual-interference effect): `auto` mode drills the user's weakest unlocked motif until 20 attempts at ≥80%, then folds it into the mixed pool. Manual `blocked` / `mixed` modes available behind a settings cog.
+- **Promotion picker** anywhere a pawn can reach the last rank — no silent auto-queen in tactics, build, or training.
+- **"Review" chip** appears on puzzles served by the SRS due queue so the user knows why an old puzzle is back.
 - SM-2 reviews shared with the opening engine, so the home dashboard's daily counters cover both.
-- **Prefetches the next puzzle** as soon as the current one lands; rating a card is instant, no spinner between cards.
-- **Engine analysis after reveal**: an "Analyze" toggle turns the board into a Lichess-style scratchpad. Navigate any position in the solution with the board arrows, drag pieces to branch into your own variation, and a Stockfish eval (best move + principal variation) updates per position. Built to answer "why wasn't *my* move the right one?" — try the candidate you had in mind, see how the engine refutes it, then snap back to the main line.
+- **Prefetches the next puzzle** as soon as the current one lands; the solve-to-next-puzzle transition is ~280ms with no layout shift.
+- **Engine analysis after reveal**: an "Analyze" toggle turns the board into a Lichess-style scratchpad. Navigate any position in the solution with the board arrows, drag pieces to branch into your own variation (the promotion picker is wired up here too), and a Stockfish eval (best move + principal variation) updates per position. Built to answer "why wasn't *my* move the right one?" — try the candidate you had in mind, see how the engine refutes it, then snap back to the main line.
+
+### Woodpecker drills (`/tactics/drills`)
+
+- A focused acquisition mode based on the [Woodpecker Method](https://www.qualitychess.co.uk/products/2/335/the_woodpecker_method_by_axel_smith_and_hans_tikkanen/) (Smith & Tikkanen 2018): pick a fixed set of puzzles for a single motif (or mixed), cycle through them 5 times, and the cycle time drops 4–8× as the pattern moves from calculation to recognition.
+- Set sizes: 20 (try it out), 50 (standard), 100 (serious). Puzzle selection seeds from the user's per-motif rating so the set sits at the right difficulty.
+- On graduation all puzzles enter the SRS in exponential phase at 14d, so the pattern doesn't decay — Woodpecker burns it in, SRS keeps it alive.
+- Per-cycle wall time is tracked; the UI shows baseline-vs-current ratio so the speedup curve is visible session over session.
 
 ### Gap analysis (`/gaps`)
 
@@ -142,16 +154,18 @@ npm run precompute:eco   # rebuild the ECO precomputed dataset
 ```
 src/
   app/
-    (app)/                  Authenticated routes — home, training, tactics,
-                            build/[color], explorer, gaps, stats, settings
+    (app)/                  Authenticated routes — home, training, tactics
+                            (+ tactics/drills), build/[color], explorer,
+                            gaps, stats, settings
     (auth)/auth/            Sign-in / sign-up page
     reset-password/         Password reset landing page
     api/
       auth/[...nextauth]/   NextAuth handlers
       repertoires/          GET /api/repertoires (ETag-cached tree)
       repertoire-entries/   PATCH/DELETE, save-line, family delete, review
-      puzzles/              next + review
-      puzzle-prefs/         user puzzle config
+      puzzles/              next + review + motif-progress
+      puzzle-prefs/         user puzzle config (adaptive controller state)
+      drills/               Woodpecker drill sessions + per-attempt recording
       training-stats/       SQL-aggregated dashboard counts
       gap-analysis/         NDJSON-streaming game analyzer
       analysis/             Stockfish proxy for puzzle-side engine analysis
@@ -159,14 +173,19 @@ src/
       user/                 update-profile, update-settings, change-password, delete-account
       cron/                 daily reminder email
   components/               Board, BuildPanel, TrainingClient, TacticsClient,
-                            RepertoirePanel, HomePanel, GapAnalysisClient,
-                            ExplorerClient, StatsClient, plus shared UI
+                            DrillsClient, DrillSessionClient, PuzzleBoard,
+                            PromotionPicker (shared overlay), RepertoirePanel,
+                            HomePanel, GapAnalysisClient, ExplorerClient,
+                            StatsClient, plus shared UI
   contexts/                 Settings, Theme
   lib/
+    adaptiveRating.ts       EWMA controller targeting 85% success (Wilson et al. 2019)
     auth.ts                 NextAuth config
     chessMoves.ts           Pure chess.js helpers — safe to import from client
+    drillSelection.ts       Picks the puzzle set for a Woodpecker drill
     email.ts                Resend wrapper + templates
     gapAnalysis.ts          Game pull + sub-line aggregator
+    motifs.ts               Canonical tactical motif taxonomy
     openings.ts             ECO lookup over precomputed dataset
     prisma.ts               Singleton Prisma client
     puzzleCategories.ts     Puzzle category whitelist

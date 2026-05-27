@@ -11,10 +11,10 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   Brain,
   BookOpen,
-  Zap,
   BarChart3,
   ChevronRight,
   Eye,
+  Repeat2,
   Target,
   Radar,
 } from "lucide-react";
@@ -174,12 +174,28 @@ export default function LandingClient() {
                 <Target className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                Tactics Trainer
+                Adaptive Tactics
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                A Lichess-sourced puzzle pool you can filter by rating band
-                and theme — fork, pin, endgame, mate-in-N. Shares the same
-                SRS scheduler as your openings.
+                Play moves directly on the board — no self-rating. An
+                EWMA controller holds you at ~85% success (Wilson et al.
+                2019), blocks on weak motifs until you&apos;ve solved 20 at
+                80%, then mixes. SRS keeps everything fresh.
+              </p>
+            </div>
+
+            <div className="bg-stone-50/70 dark:bg-slate-800/50 backdrop-blur-sm border border-stone-200/80 dark:border-slate-700/50 rounded-xl p-6 space-y-4 hover:border-emerald-400/60 dark:hover:border-emerald-500/50 hover:bg-stone-50 dark:hover:bg-slate-800/80 hover:shadow-lg hover:shadow-emerald-500/5 transition-all group">
+              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 dark:group-hover:bg-emerald-500/30 transition-colors">
+                <Repeat2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+                Woodpecker Drills
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400">
+                Cycle a fixed set of 20–100 puzzles five times to burn the
+                pattern from calculation into recognition (Smith &amp;
+                Tikkanen 2018). Watch your cycle time drop 4–8×. Graduated
+                puzzles enter the SRS at 14d so they don&apos;t decay.
               </p>
             </div>
 
@@ -200,29 +216,16 @@ export default function LandingClient() {
 
             <div className="bg-stone-50/70 dark:bg-slate-800/50 backdrop-blur-sm border border-stone-200/80 dark:border-slate-700/50 rounded-xl p-6 space-y-4 hover:border-emerald-400/60 dark:hover:border-emerald-500/50 hover:bg-stone-50 dark:hover:bg-slate-800/80 hover:shadow-lg hover:shadow-emerald-500/5 transition-all group">
               <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 dark:group-hover:bg-emerald-500/30 transition-colors">
-                <Zap className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                Daily Dashboard
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400">
-                See what&apos;s due at a glance, with your streak,
-                accuracy, time-on-task, and positions-reviewed-today
-                updated live as you train.
-              </p>
-            </div>
-
-            <div className="bg-stone-50/70 dark:bg-slate-800/50 backdrop-blur-sm border border-stone-200/80 dark:border-slate-700/50 rounded-xl p-6 space-y-4 hover:border-emerald-400/60 dark:hover:border-emerald-500/50 hover:bg-stone-50 dark:hover:bg-slate-800/80 hover:shadow-lg hover:shadow-emerald-500/5 transition-all group">
-              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 dark:group-hover:bg-emerald-500/30 transition-colors">
                 <BarChart3 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                Stats & Progress
+                Dashboard &amp; Stats
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                Mastery %, average ease, and due counts per opening family
-                — plus per-theme and per-rating breakdowns on the tactics
-                side. See where you&apos;re strong, see where you&apos;re leaking.
+                Streak, accuracy, time-on-task, and what&apos;s due today —
+                updated live as you train. Drill down per opening family
+                or puzzle motif for mastery %, average ease, and due
+                counts.
               </p>
             </div>
           </div>

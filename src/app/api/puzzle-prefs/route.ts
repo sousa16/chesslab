@@ -1,5 +1,10 @@
 /**
- * Read/update the user's puzzle preferences (rating band + enabled categories).
+ * Read/update the user's puzzle preferences.
+ *
+ * The shape changed in the adaptive-tactics migration: instead of a static
+ * rating band the user picks a mode (auto / blocked / mixed) and the
+ * server-side controller maintains the rating setpoint. The response also
+ * exposes the global EWMA so the UI can render an "85% target" indicator.
  *
  * On first read, lazily provisions a row using the schema defaults, so the
  * client never has to special-case "no prefs yet".
@@ -10,6 +15,9 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PUZZLE_CATEGORIES, type PuzzleCategory } from "@/lib/puzzleCategories";
+import { isCanonicalMotif } from "@/lib/motifs";
+
+type PrefsRow = Awaited<ReturnType<typeof getOrCreatePrefs>>;
 
 async function getOrCreatePrefs(userId: string) {
   return prisma.userPuzzlePrefs.upsert({
@@ -19,6 +27,18 @@ async function getOrCreatePrefs(userId: string) {
   });
 }
 
+function serializePrefs(prefs: PrefsRow) {
+  return {
+    mode: prefs.mode,
+    blockedFilterMotif: prefs.blockedFilterMotif,
+    enabledCategories: prefs.enabledCategories,
+    currentTargetRating: prefs.currentTargetRating,
+    globalEwmaSuccess: prefs.globalEwmaSuccess,
+    globalAttempts: prefs.globalAttempts,
+    globalCorrect: prefs.globalCorrect,
+  };
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -26,11 +46,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const prefs = await getOrCreatePrefs(session.user.id);
-    return NextResponse.json({
-      ratingMin: prefs.ratingMin,
-      ratingMax: prefs.ratingMax,
-      enabledCategories: prefs.enabledCategories,
-    });
+    return NextResponse.json(serializePrefs(prefs));
   } catch (err) {
     console.error("Error reading puzzle prefs:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -47,26 +63,30 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json();
     const data: {
-      ratingMin?: number;
-      ratingMax?: number;
+      mode?: string;
+      blockedFilterMotif?: string | null;
       enabledCategories?: PuzzleCategory[];
     } = {};
 
-    if (typeof body.ratingMin === "number") {
-      data.ratingMin = Math.max(400, Math.min(3000, body.ratingMin));
+    if (typeof body.mode === "string") {
+      if (!["auto", "blocked", "mixed"].includes(body.mode)) {
+        return NextResponse.json(
+          { error: "mode must be 'auto', 'blocked' or 'mixed'" },
+          { status: 400 },
+        );
+      }
+      data.mode = body.mode;
     }
-    if (typeof body.ratingMax === "number") {
-      data.ratingMax = Math.max(400, Math.min(3000, body.ratingMax));
-    }
-    if (
-      data.ratingMin !== undefined &&
-      data.ratingMax !== undefined &&
-      data.ratingMin > data.ratingMax
-    ) {
-      return NextResponse.json(
-        { error: "ratingMin must be <= ratingMax" },
-        { status: 400 },
-      );
+    if (body.blockedFilterMotif === null) {
+      data.blockedFilterMotif = null;
+    } else if (typeof body.blockedFilterMotif === "string") {
+      if (!isCanonicalMotif(body.blockedFilterMotif)) {
+        return NextResponse.json(
+          { error: "blockedFilterMotif is not a canonical motif" },
+          { status: 400 },
+        );
+      }
+      data.blockedFilterMotif = body.blockedFilterMotif;
     }
     if (Array.isArray(body.enabledCategories)) {
       const valid = body.enabledCategories.filter((c: unknown): c is PuzzleCategory =>
@@ -86,11 +106,7 @@ export async function PATCH(request: NextRequest) {
       where: { userId },
       data,
     });
-    return NextResponse.json({
-      ratingMin: prefs.ratingMin,
-      ratingMax: prefs.ratingMax,
-      enabledCategories: prefs.enabledCategories,
-    });
+    return NextResponse.json(serializePrefs(prefs));
   } catch (err) {
     console.error("Error updating puzzle prefs:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

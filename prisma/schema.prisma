@@ -37,21 +37,23 @@ model Session {
 }
 
 model User {
-  id             String           @id @default(cuid())
+  id             String            @id @default(cuid())
   name           String?
-  email          String           @unique
+  email          String            @unique
   emailVerified  DateTime?
   image          String?
   hashedPassword String?
-  dailyReminder  Boolean          @default(false)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  dailyReminder  Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
   accounts       Account[]
   repertoires    Repertoire[]
   sessions       Session[]
   dailyActivity  DailyActivity[]
   puzzleReviews  PuzzleReview[]
   puzzlePrefs    UserPuzzlePrefs?
+  motifRatings   UserMotifRating[]
+  drillSessions  DrillSession[]
 }
 
 model VerificationToken {
@@ -200,14 +202,114 @@ model PuzzleReview {
 }
 
 model UserPuzzlePrefs {
-  id                String   @id @default(cuid())
-  userId            String   @unique
-  ratingMin         Int      @default(1200)
-  ratingMax         Int      @default(1600)
+  id String @id @default(cuid())
+
+  userId String @unique
+  // Adaptive controller setpoint — replaces the old static ratingMin/ratingMax band.
+  // Used as the puzzle-rating target when no specific motif is being trained
+  // (mixed mode, or a motif with no UserMotifRating yet). Updated after each
+  // attempt by the EWMA controller in src/lib/adaptiveRating.ts.
+  currentTargetRating Int @default(1200)
+  // Global EWMA controller state — updated on every attempt regardless of
+  // mode. Per-motif state lives in UserMotifRating; these three are the
+  // "overall how am I doing" counters that drive currentTargetRating.
+  globalEwmaSuccess Float @default(0.5)
+  globalAttempts    Int   @default(0)
+  globalCorrect     Int   @default(0)
+  // Selection mode:
+  //   "auto"    = blocked-then-interleaved; the server picks a locked motif
+  //               to drill until it unlocks, then mixes
+  //   "blocked" = force one motif (blockedFilterMotif). Used by the
+  //               adaptive flow internally and by the user when manually
+  //               drilling a weakness.
+  //   "mixed"   = ignore motif gating, sample across the whole catalog
+  mode               String  @default("auto")
+  blockedFilterMotif String?
+
   enabledCategories String[] @default(["Mates", "Motifs", "Middlegame", "Endgame"])
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Per-user, per-motif adaptive state. Lazily created on first attempt of a
+// motif (see src/app/api/puzzles/review/route.ts). One row per major motif
+// listed in src/lib/motifs.ts; minor themes are not tracked here.
+model UserMotifRating {
+  id     String @id @default(cuid())
+  userId String
+  motif  String
+
+  // Target puzzle rating for this motif. Controller bumps ±25 when the
+  // EWMA leaves the [0.80, 0.90] window.
+  rating Int @default(1200)
+  // Exponentially-weighted success rate. EWMA ← (1-α)·EWMA + α·hit, α≈0.15.
+  // Decay half-life is ~5 attempts; "recent form" rather than lifetime accuracy.
+  ewmaSuccess Float @default(0.5)
+  attempts    Int   @default(0)
+  correct     Int   @default(0)
+
+  // Sticky: once a user has ≥20 attempts AND EWMA ≥ 0.80 at this motif, it's
+  // unlocked into the mixed pool. Stays unlocked even after a bad streak so
+  // we don't oscillate the user back into blocked mode.
+  unlocked Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, motif])
+  @@index([userId])
+  @@index([userId, unlocked])
+}
+
+// A Woodpecker-style drill: a fixed set of puzzles repeated across cycles
+// until automatic, then handed to the SRS with a long first interval.
+model DrillSession {
+  id     String @id @default(cuid())
+  userId String
+
+  // Canonical motif name from src/lib/motifs.ts, or "mixed" for cross-motif
+  // sets. The puzzle set is frozen at creation time.
+  motif        String
+  size         Int
+  puzzleIds    String[]
+  cycle        Int @default(1)
+  targetCycles Int @default(5)
+  // Position within the current cycle's permutation, 0-indexed.
+  position     Int @default(0)
+  // Wall time for cycle 1 (the baseline) — drill UX shows ratio vs. this.
+  baselineMs   Int?
+  // Last completed cycle's wall time, for the in-progress comparison chip.
+  lastCycleMs  Int?
+
+  // active | completed | abandoned. "completed" sets completedAt and seeds
+  // PuzzleReview rows in the exponential phase at ~14d interval.
+  status      String    @default("active")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts DrillAttempt[]
+
+  @@index([userId, status])
+}
+
+model DrillAttempt {
+  id        String   @id @default(cuid())
+  sessionId String
+  puzzleId  String
+  cycle     Int
+  correct   Boolean
+  timeMs    Int
+  attemptedAt DateTime @default(now())
+
+  session DrillSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, cycle])
 }
 
 enum PieceColor {

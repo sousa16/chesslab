@@ -1,5 +1,6 @@
 /**
- * Records a puzzle review using the shared SM-2 scheduler.
+ * Records a puzzle review using the shared SM-2 scheduler AND advances the
+ * adaptive difficulty controller for the global and per-motif states.
  *
  * Accepts either an existing reviewId (when the puzzle was already in the
  * user's review queue) or a puzzleId for a first-time review — in that
@@ -19,6 +20,12 @@ import {
   type ReviewResponse,
   type CardState,
 } from "@/lib/sm2";
+import { canonicalMotifsFromThemes } from "@/lib/motifs";
+import {
+  updateMotifRating,
+  seedMotifRating,
+  type MotifRatingState,
+} from "@/lib/adaptiveRating";
 
 async function recordDailyActivity(
   userId: string,
@@ -46,6 +53,96 @@ async function recordDailyActivity(
       positionsReviewed: 1,
     },
   });
+}
+
+/**
+ * Advance the global controller (UserPuzzlePrefs counters + currentTargetRating)
+ * and every applicable per-motif controller for this puzzle.
+ *
+ * `unlocked` on the global state is meaningless — only meaningful on motif rows.
+ * `seedMotifRating` for new motif rows uses the user's current global target
+ * rating so fresh motifs start at a sensible difficulty rather than 1200.
+ */
+async function advanceAdaptiveState(
+  userId: string,
+  isCorrect: boolean,
+  puzzleThemes: string[],
+) {
+  // Global controller lives on UserPuzzlePrefs. Upsert ensures the row
+  // exists even if the user never opened the FiltersPanel.
+  const prefs = await prisma.userPuzzlePrefs.upsert({
+    where: { userId },
+    update: {},
+    create: { userId },
+  });
+
+  const globalPrior: MotifRatingState = {
+    rating: prefs.currentTargetRating,
+    ewmaSuccess: prefs.globalEwmaSuccess,
+    attempts: prefs.globalAttempts,
+    correct: prefs.globalCorrect,
+    unlocked: false,
+  };
+  const globalNext = updateMotifRating(globalPrior, isCorrect);
+
+  await prisma.userPuzzlePrefs.update({
+    where: { userId },
+    data: {
+      currentTargetRating: globalNext.rating,
+      globalEwmaSuccess: globalNext.ewmaSuccess,
+      globalAttempts: globalNext.attempts,
+      globalCorrect: globalNext.correct,
+    },
+  });
+
+  // Per-motif controllers: one update per canonical motif the puzzle is
+  // tagged with. A single puzzle can credit several (e.g. a fork+pin) —
+  // that's fine, both motifs really did get practiced.
+  const motifs = canonicalMotifsFromThemes(puzzleThemes);
+  if (motifs.length === 0) return;
+
+  const existing = await prisma.userMotifRating.findMany({
+    where: { userId, motif: { in: motifs } },
+  });
+  const byMotif = new Map(existing.map((m) => [m.motif, m]));
+
+  // No transaction here: each motif row is independent and a partial
+  // failure just means the next attempt re-converges. Avoids
+  // serialization contention when multiple users review concurrently.
+  await Promise.all(
+    motifs.map(async (motif) => {
+      const row = byMotif.get(motif);
+      const prior: MotifRatingState = row
+        ? {
+            rating: row.rating,
+            ewmaSuccess: row.ewmaSuccess,
+            attempts: row.attempts,
+            correct: row.correct,
+            unlocked: row.unlocked,
+          }
+        : seedMotifRating(globalNext.rating);
+      const next = updateMotifRating(prior, isCorrect);
+      await prisma.userMotifRating.upsert({
+        where: { userId_motif: { userId, motif } },
+        update: {
+          rating: next.rating,
+          ewmaSuccess: next.ewmaSuccess,
+          attempts: next.attempts,
+          correct: next.correct,
+          unlocked: next.unlocked,
+        },
+        create: {
+          userId,
+          motif,
+          rating: next.rating,
+          ewmaSuccess: next.ewmaSuccess,
+          attempts: next.attempts,
+          correct: next.correct,
+          unlocked: next.unlocked,
+        },
+      });
+    }),
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -77,6 +174,7 @@ export async function POST(request: NextRequest) {
 
     let priorState: CardState;
     let resolvedPuzzleId: string;
+    let puzzleThemes: string[] = [];
 
     if (reviewId) {
       const existing = await prisma.puzzleReview.findUnique({
@@ -91,6 +189,7 @@ export async function POST(request: NextRequest) {
           phase: true,
           learningStepIndex: true,
           lastReviewDate: true,
+          puzzle: { select: { themes: true } },
         },
       });
       if (!existing) {
@@ -109,10 +208,11 @@ export async function POST(request: NextRequest) {
         lastReviewDate: existing.lastReviewDate,
       };
       resolvedPuzzleId = existing.puzzleId;
+      puzzleThemes = existing.puzzle.themes;
     } else {
       const puzzle = await prisma.puzzle.findUnique({
         where: { id: puzzleId },
-        select: { id: true },
+        select: { id: true, themes: true },
       });
       if (!puzzle) {
         return NextResponse.json({ error: "Puzzle not found" }, { status: 404 });
@@ -127,6 +227,7 @@ export async function POST(request: NextRequest) {
         lastReviewDate: null,
       };
       resolvedPuzzleId = puzzle.id;
+      puzzleThemes = puzzle.themes;
     }
 
     const result = processReview(
@@ -165,6 +266,7 @@ export async function POST(request: NextRequest) {
         select: { id: true },
       }),
       recordDailyActivity(user.id, isCorrect, timeSpentMs),
+      advanceAdaptiveState(user.id, isCorrect, puzzleThemes),
     ]);
 
     return NextResponse.json({

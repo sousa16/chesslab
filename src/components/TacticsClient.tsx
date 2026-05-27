@@ -1,17 +1,40 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useNavTransition } from "@/components/NavProgress";
+/**
+ * TacticsClient — the single-mode tactics screen.
+ *
+ * The user plays the move on the board. The board validates it against the
+ * puzzle solution: correct → opponent auto-replies, advance; wrong → red
+ * flash, try again. No self-rating, no manual reveal.
+ *
+ * Scoring is derived from how the puzzle was completed:
+ *   - 1st try, no help, no wrong drops → "easy"
+ *   - 1 wrong drop before solving      → "effort"
+ *   - 2+ wrong drops before solving    → "partial"
+ *   - User asked to see the solution   → "partial" (or "forgot" if 0 attempts)
+ *   - User skipped                     → "forgot"
+ *
+ * Adaptive difficulty and motif blocking run on the server (auto mode is
+ * the default). The settings drawer exposes manual mode/category overrides
+ * for users who want them, but the primary surface is intentionally bare.
+ */
+
 import { Chess } from "chess.js";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   Cpu,
   Eye,
   Flame,
+  Repeat2,
+  Settings,
+  SkipForward,
   Target,
   Trophy,
+  X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useNavTransition } from "@/components/NavProgress";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
@@ -21,6 +44,11 @@ import {
   type PuzzleBoardHandle,
 } from "@/components/PuzzleBoard";
 import { PUZZLE_CATEGORIES, type PuzzleCategory } from "@/lib/puzzleCategories";
+import {
+  CANONICAL_MOTIFS,
+  MOTIF_LABELS,
+  type CanonicalMotif,
+} from "@/lib/motifs";
 import type { ReviewResponse } from "@/lib/sm2";
 import { recordReview } from "@/lib/statsCache";
 import type { AnalysisResponse } from "@/app/api/analysis/route";
@@ -44,70 +72,79 @@ interface NextPuzzleResponse {
   review: ReviewData | null;
   dueCount: number;
   source: "due" | "new" | "empty";
+  focusMotif: string | null;
+  targetRating: number | null;
 }
+
+type SelectionMode = "auto" | "blocked" | "mixed";
 
 interface Prefs {
-  ratingMin: number;
-  ratingMax: number;
+  mode: SelectionMode;
+  blockedFilterMotif: string | null;
   enabledCategories: PuzzleCategory[];
+  currentTargetRating: number;
+  globalEwmaSuccess: number;
+  globalAttempts: number;
+  globalCorrect: number;
 }
 
-type DifficultyBand = "beginner" | "intermediate" | "advanced" | "custom";
-
-const DIFFICULTY_BANDS: Record<
-  Exclude<DifficultyBand, "custom">,
-  { label: string; ratingMin: number; ratingMax: number }
-> = {
-  beginner: { label: "Beginner (800–1399)", ratingMin: 800, ratingMax: 1399 },
-  intermediate: {
-    label: "Intermediate (1400–1799)",
-    ratingMin: 1400,
-    ratingMax: 1799,
-  },
-  advanced: { label: "Advanced (1800–2400)", ratingMin: 1800, ratingMax: 2400 },
-};
-
-function bandForPrefs(p: Prefs | null): DifficultyBand {
-  if (!p) return "intermediate";
-  for (const key of Object.keys(DIFFICULTY_BANDS) as Array<
-    keyof typeof DIFFICULTY_BANDS
-  >) {
-    const b = DIFFICULTY_BANDS[key];
-    if (p.ratingMin === b.ratingMin && p.ratingMax === b.ratingMax) return key;
-  }
-  return "custom";
+interface MotifProgress {
+  motif: CanonicalMotif;
+  label: string;
+  attempts: number;
+  correct: number;
+  ewmaSuccess: number | null;
+  rating: number | null;
+  unlocked: boolean;
 }
+
+interface MotifProgressResponse {
+  motifs: MotifProgress[];
+}
+
+const UNLOCK_ATTEMPTS = 20;
+// Tiny pause after onSolved fires so the green-flash in PuzzleBoard has a
+// moment to land before the next puzzle slides in. Kept short — the
+// next-puzzle load IS the success signal; lingering on a "solved" state
+// just causes layout shift as the controls swap.
+const ADVANCE_DELAY_MS = 280;
 
 export default function TacticsClient() {
   const router = useRouter();
+  void router;
   const [, navigate] = useNavTransition();
+
+  // Puzzle stream state
   const [puzzle, setPuzzle] = useState<PuzzleData | null>(null);
   const [review, setReview] = useState<ReviewData | null>(null);
   const [dueCount, setDueCount] = useState(0);
-  const [revealed, setRevealed] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [empty, setEmpty] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [prefs, setPrefs] = useState<Prefs | null>(null);
-  const [streak, setStreak] = useState(0);
-  const cardStartRef = useRef<number>(Date.now());
-  const boardRef = useRef<PuzzleBoardHandle | null>(null);
-  // Holds an in-flight fetch for the puzzle the user will see *after* the
-  // one currently on screen. Populated by the effect below whenever a new
-  // puzzle lands; consumed (or cleared) in handleRate and updatePrefs.
-  const prefetchRef = useRef<Promise<NextPuzzleResponse | null> | null>(null);
-  // Bounded list of just-rated puzzle ids. The review POST is fire-and-
-  // forget, so the prefetch can race a not-yet-committed write and serve
-  // the same puzzle back. Passing the recent ids as additional excludes
-  // closes that window — by the time IDs roll off this list the server
-  // has long since persisted them and SRS will have pushed them forward.
-  const recentlyRatedRef = useRef<string[]>([]);
-  const RECENT_RATED_CAP = 20;
 
-  // Engine analysis (only available after reveal). The board fires
-  // `onPositionChange` for every FEN it shows in analysis mode; we
-  // debounce-fetch eval for that FEN and ignore stale responses.
+  // Adaptive state
+  const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [motifProgress, setMotifProgress] = useState<MotifProgress[] | null>(
+    null,
+  );
+  const [focusMotif, setFocusMotif] = useState<string | null>(null);
+  const [streak, setStreak] = useState(0);
+
+  // Per-puzzle solving state
+  const [wrongAttempts, setWrongAttempts] = useState(0);
+  const [solutionShown, setSolutionShown] = useState(false);
+  // Tracks where the current puzzle came from (SRS due queue vs new pick)
+  // so we can render a small "Review" chip — explains to the user that
+  // re-seeing an old puzzle is intentional, not a bug.
+  const [puzzleSource, setPuzzleSource] = useState<"due" | "new" | "empty">(
+    "new",
+  );
+
+  // UI overlays
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Engine analysis (only available after a puzzle is finished / solution shown)
   const [analysisOn, setAnalysisOn] = useState(false);
   const [analysisFen, setAnalysisFen] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(
@@ -115,9 +152,13 @@ export default function TacticsClient() {
   );
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  // Monotonic request id — only the latest in-flight fetch wins. Without
-  // this, a slow eval for an earlier position can overwrite a fresh one.
   const analysisReqRef = useRef(0);
+
+  const cardStartRef = useRef<number>(Date.now());
+  const boardRef = useRef<PuzzleBoardHandle | null>(null);
+  const prefetchRef = useRef<Promise<NextPuzzleResponse | null> | null>(null);
+  const recentlyRatedRef = useRef<string[]>([]);
+  const RECENT_RATED_CAP = 20;
 
   const handleBack = () => navigate("/home");
 
@@ -142,21 +183,25 @@ export default function TacticsClient() {
 
   const applyNext = useCallback((data: NextPuzzleResponse | null) => {
     if (!data) return;
-    // Swap puzzle + reset reveal atomically. Flipping `revealed` before
-    // the new puzzle is in state would briefly show the previous puzzle's
-    // (already-played) board paired with the "Show Answer" button.
     setPuzzle(data.puzzle);
     setReview(data.review);
     setDueCount(data.dueCount);
     setEmpty(data.puzzle === null);
-    setRevealed(false);
+    setFocusMotif(data.focusMotif);
+    // Per-puzzle reset
+    setWrongAttempts(0);
+    setSolutionShown(false);
+    setPuzzleSource(data.source);
+    setAnalysisOn(false);
+    setAnalysisFen(null);
+    setAnalysisResult(null);
+    setAnalysisError(null);
+    setAnalysisLoading(false);
     cardStartRef.current = Date.now();
   }, []);
 
   const loadNext = useCallback(
     async (excludeId?: string) => {
-      // Any in-flight prefetch is now stale — the caller wants a fresh
-      // pull (filters changed, initial load, etc.).
       prefetchRef.current = null;
       try {
         const excludes = excludeId
@@ -171,12 +216,24 @@ export default function TacticsClient() {
     [fetchNext, applyNext],
   );
 
-  // Initial fetch: prefs + first puzzle in parallel.
+  const refreshMotifProgress = useCallback(async () => {
+    try {
+      const res = await fetch("/api/puzzles/motif-progress");
+      if (!res.ok) return;
+      const data = (await res.json()) as MotifProgressResponse;
+      setMotifProgress(data.motifs);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  // Initial fetch: prefs + motif progress + first puzzle in parallel.
   useEffect(() => {
     (async () => {
       try {
         const [prefsRes] = await Promise.all([
           fetch("/api/puzzle-prefs").then((r) => (r.ok ? r.json() : null)),
+          refreshMotifProgress(),
           loadNext(),
         ]);
         if (prefsRes) setPrefs(prefsRes);
@@ -184,14 +241,10 @@ export default function TacticsClient() {
         setInitialLoading(false);
       }
     })();
-  }, [loadNext]);
+  }, [loadNext, refreshMotifProgress]);
 
-  // Prefetch the next puzzle in the background as soon as the current one
-  // lands, so that when the user rates we can swap to it instantly instead
-  // of awaiting the GET. Excludes both the current puzzle AND every
-  // recently-rated id — the prefetch can fire before a previous review
-  // POST has committed, and without the recent-rated filter the server
-  // would happily return the not-yet-committed puzzle as the "next due".
+  // Prefetch the next puzzle while the current one is on screen so the
+  // hand-off after a solve feels instant.
   useEffect(() => {
     if (!puzzle || empty) {
       prefetchRef.current = null;
@@ -203,24 +256,138 @@ export default function TacticsClient() {
     ]);
   }, [puzzle?.id, empty, fetchNext]);
 
-  const handleShowAnswer = () => {
-    setRevealed(true);
+  /**
+   * Derive an SRS response from the user's path through the puzzle.
+   * Mapping is intentionally conservative: a single wrong attempt counts
+   * as "effort", not "easy", to keep the SRS honest. Solution viewed = at
+   * best "partial" — you weren't tested.
+   */
+  const deriveResponse = useCallback(
+    (
+      attempts: number,
+      shown: boolean,
+      gaveUp: boolean,
+    ): ReviewResponse => {
+      if (gaveUp) return "forgot";
+      if (shown) return attempts === 0 ? "forgot" : "partial";
+      if (attempts === 0) return "easy";
+      if (attempts === 1) return "effort";
+      return "partial";
+    },
+    [],
+  );
+
+  const submitAndAdvance = useCallback(
+    (response: ReviewResponse) => {
+      if (!puzzle) return;
+      setSubmitting(true);
+      const isCorrect = response === "effort" || response === "easy";
+      if (isCorrect) setStreak((s) => s + 1);
+      else setStreak(0);
+      const timeSpentMs = Date.now() - cardStartRef.current;
+
+      try {
+        recordReview({ wasDue: false });
+        window.dispatchEvent(
+          new CustomEvent("training-stats-updated", {
+            detail: { timeSpentMs, positionsReviewed: 1 },
+          }),
+        );
+      } catch {}
+
+      const ratedId = puzzle.id;
+      fetch("/api/puzzles/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reviewId: review?.id,
+          puzzleId: review ? undefined : puzzle.id,
+          response,
+          timeSpentMs,
+        }),
+      })
+        .then(async () => {
+          await Promise.all([
+            refreshMotifProgress(),
+            fetch("/api/puzzle-prefs")
+              .then((r) => (r.ok ? r.json() : null))
+              .then((p) => p && setPrefs(p))
+              .catch(() => {}),
+          ]);
+        })
+        .catch((err) => console.error(err));
+
+      recentlyRatedRef.current.push(ratedId);
+      if (recentlyRatedRef.current.length > RECENT_RATED_CAP) {
+        recentlyRatedRef.current.shift();
+      }
+
+      const pending = prefetchRef.current;
+      prefetchRef.current = null;
+      const advance = () => {
+        if (pending) {
+          pending
+            .then((data) => applyNext(data))
+            .finally(() => setSubmitting(false));
+        } else {
+          loadNext(ratedId);
+        }
+      };
+      // Tiny pause so the user can register the outcome before the board
+      // swaps. Skipped if they explicitly hit Skip — that's a "get me out".
+      if (response === "forgot") {
+        advance();
+      } else {
+        setTimeout(advance, ADVANCE_DELAY_MS);
+      }
+    },
+    [puzzle, review, applyNext, loadNext, refreshMotifProgress],
+  );
+
+  // Board callbacks
+  const handleBoardIncorrect = useCallback(() => {
+    setWrongAttempts((n) => n + 1);
+  }, []);
+
+  const handleBoardSolved = useCallback(() => {
+    if (submitting) return;
+    // No interim UI state — the board's own green flash is the feedback,
+    // and submitAndAdvance schedules a short pause before the next puzzle
+    // slides in. Keeps the layout stable.
+    const response = deriveResponse(wrongAttempts, solutionShown, false);
+    submitAndAdvance(response);
+  }, [submitting, wrongAttempts, solutionShown, deriveResponse, submitAndAdvance]);
+
+  const handleShowSolution = () => {
+    if (submitting || solutionShown || !boardRef.current) return;
+    setSolutionShown(true);
+    boardRef.current
+      .revealRemaining()
+      .then(() => {
+        const response = deriveResponse(wrongAttempts, true, false);
+        // submitAndAdvance schedules its own ADVANCE_DELAY_MS pause.
+        submitAndAdvance(response);
+      })
+      .catch(() => {
+        // If the reveal animation fails, still submit so the user isn't stuck.
+        submitAndAdvance(deriveResponse(wrongAttempts, true, false));
+      });
   };
 
-  // Reset analysis whenever the puzzle changes or the user un-reveals.
-  // PuzzleBoard remounts on puzzle.id, but the parent-level analysis state
-  // doesn't unless we clear it here.
-  useEffect(() => {
-    setAnalysisOn(false);
-    setAnalysisFen(null);
-    setAnalysisResult(null);
-    setAnalysisError(null);
-    setAnalysisLoading(false);
-  }, [puzzle?.id, revealed]);
+  const handleSkip = () => {
+    if (submitting) return;
+    submitAndAdvance("forgot");
+  };
 
-  // Debounced eval fetch on FEN change. 300ms is long enough that a quick
-  // sequence of takeback-then-replay-same-move collapses to one request,
-  // but short enough that single drops feel instant.
+  const toggleAnalysis = () => {
+    if (!solutionShown && wrongAttempts === 0) return; // analysis only after exposure
+    setAnalysisOn((on) => !on);
+  };
+
+  // Analysis-mode fen change → debounced eval fetch.
+  const handleAnalysisPositionChange = useCallback((fen: string) => {
+    setAnalysisFen(fen);
+  }, []);
   useEffect(() => {
     if (!analysisOn || !analysisFen) return;
     const myReqId = ++analysisReqRef.current;
@@ -251,15 +418,7 @@ export default function TacticsClient() {
     return () => clearTimeout(t);
   }, [analysisOn, analysisFen]);
 
-  const handleAnalysisPositionChange = useCallback((fen: string) => {
-    setAnalysisFen(fen);
-  }, []);
-
-  const toggleAnalysis = () => {
-    setAnalysisOn((on) => !on);
-  };
-
-  // Keyboard shortcuts: Enter = Show Answer, 1-4 = recall rating after reveal.
+  // Keyboard: Space = Show Solution, S = Skip.
   useEffect(() => {
     if (empty || !puzzle) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -270,104 +429,30 @@ export default function TacticsClient() {
           target.tagName === "TEXTAREA" ||
           target.tagName === "SELECT" ||
           target.isContentEditable)
-      ) {
+      )
         return;
-      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-
-      if (!revealed) {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          handleShowAnswer();
-        }
-        return;
-      }
-      if (submitting) return;
-      const ratings: Record<string, ReviewResponse> = {
-        "1": "forgot",
-        "2": "partial",
-        "3": "effort",
-        "4": "easy",
-      };
-      const rating = ratings[e.key];
-      if (rating) {
+      if (e.key === " " && !solutionShown) {
         e.preventDefault();
-        handleRate(rating);
+        handleShowSolution();
+      } else if ((e.key === "s" || e.key === "S") && !solutionShown) {
+        e.preventDefault();
+        handleSkip();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealed, submitting, empty, puzzle?.id]);
+  }, [empty, puzzle?.id, solutionShown, submitting, wrongAttempts]);
 
-  const handleRate = (response: ReviewResponse) => {
-    if (!puzzle || submitting) return;
-    setSubmitting(true);
-    // Session-only streak: Good/Easy keep it growing, Hard/Forgot break it.
-    // Same semantics as opening practice.
-    if (response === "easy" || response === "effort") {
-      setStreak((s) => s + 1);
-    } else {
-      setStreak(0);
-    }
-    const timeSpentMs = Date.now() - cardStartRef.current;
-
-    try {
-      // wasDue is intentionally omitted/false: puzzle reviews count
-      // toward positionsReviewedToday (via DailyActivity) but NOT toward
-      // the home dashboard's "moves to practice" number (which is
-      // repertoire-only). Patch the module cache up front so /home shows
-      // the new count when the user returns — HomePanel is unmounted for
-      // the duration of the tactics session.
-      recordReview({ wasDue: false });
-      window.dispatchEvent(
-        new CustomEvent("training-stats-updated", {
-          detail: { timeSpentMs, positionsReviewed: 1 },
-        }),
-      );
-    } catch {}
-
-    // Fire-and-forget: don't make the user wait for the SRS write to finish
-    // before the next puzzle appears.
-    const ratedId = puzzle.id;
-    fetch("/api/puzzles/review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        reviewId: review?.id,
-        puzzleId: review ? undefined : puzzle.id,
-        response,
-        timeSpentMs,
-      }),
-    }).catch((err) => console.error(err));
-
-    // Record the rated id so subsequent prefetches exclude it. The list
-    // is bounded so it doesn't grow unbounded across long sessions; by
-    // the time the cap rolls an id off, the review write is committed
-    // and SRS has bumped nextReviewDate forward.
-    recentlyRatedRef.current.push(ratedId);
-    if (recentlyRatedRef.current.length > RECENT_RATED_CAP) {
-      recentlyRatedRef.current.shift();
-    }
-
-    // Consume the prefetched next puzzle if it's ready (or about to be).
-    const pending = prefetchRef.current;
-    prefetchRef.current = null;
-    if (pending) {
-      pending
-        .then((data) => {
-          applyNext(data);
-        })
-        .finally(() => setSubmitting(false));
-    } else {
-      loadNext(ratedId);
-    }
-  };
-
-  const updatePrefs = async (patch: Partial<Prefs>) => {
+  // Prefs mutators
+  const updatePrefs = async (patch: {
+    mode?: SelectionMode;
+    blockedFilterMotif?: string | null;
+    enabledCategories?: PuzzleCategory[];
+  }) => {
     if (!prefs) return;
-    const next: Prefs = { ...prefs, ...patch };
-    setPrefs(next); // optimistic
+    setPrefs({ ...prefs, ...patch });
     try {
       const res = await fetch("/api/puzzle-prefs", {
         method: "PATCH",
@@ -381,23 +466,7 @@ export default function TacticsClient() {
     } catch (err) {
       console.error(err);
     }
-    // New filter → fresh puzzle pulled from the new pool.
     loadNext();
-  };
-
-  const handleDifficultyChange = (band: DifficultyBand) => {
-    if (band === "custom") return;
-    const b = DIFFICULTY_BANDS[band];
-    updatePrefs({ ratingMin: b.ratingMin, ratingMax: b.ratingMax });
-  };
-
-  const handleCategoryToggle = (cat: PuzzleCategory, on: boolean) => {
-    if (!prefs) return;
-    const next = on
-      ? Array.from(new Set([...prefs.enabledCategories, cat]))
-      : prefs.enabledCategories.filter((c) => c !== cat);
-    if (next.length === 0) return; // at least one category required
-    updatePrefs({ enabledCategories: next });
   };
 
   if (initialLoading) {
@@ -408,8 +477,6 @@ export default function TacticsClient() {
     );
   }
 
-  const currentBand = bandForPrefs(prefs);
-
   if (empty || !puzzle) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -418,35 +485,37 @@ export default function TacticsClient() {
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onLogoClick={handleBack}
         />
-        <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-6 min-h-[50vh] lg:min-h-screen relative">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
           <div className="absolute top-4 left-4 hidden lg:block">
             <Logo size="xl" clickable={true} onLogoClick={handleBack} />
           </div>
-          <div className="text-center space-y-4 max-w-md">
-            <Trophy className="w-12 h-12 lg:w-16 lg:h-16 text-primary mx-auto" />
-            <h2 className="text-xl lg:text-2xl font-semibold text-foreground">
-              No puzzles to solve right now
-            </h2>
-            <p className="text-sm lg:text-base text-muted-foreground">
-              You&apos;ve worked through every puzzle in your selected categories
-              and rating range. Widen the filters below or come back when
-              reviews are due.
-            </p>
-            {prefs && (
-              <div className="text-left mt-6 space-y-4">
-                <FiltersPanel
-                  prefs={prefs}
-                  band={currentBand}
-                  onDifficultyChange={handleDifficultyChange}
-                  onCategoryToggle={handleCategoryToggle}
-                />
-              </div>
-            )}
-            <Button onClick={handleBack} className="mt-4 btn-primary-gradient">
-              Back to Home
+          <Trophy className="w-12 h-12 text-primary mb-3" />
+          <h2 className="text-xl font-semibold text-foreground">
+            No puzzles to solve right now
+          </h2>
+          <p className="text-sm text-muted-foreground mt-2 max-w-md">
+            You&apos;ve worked through every puzzle in your enabled categories.
+            Widen the filters or come back when reviews are due.
+          </p>
+          <div className="flex gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsSettingsOpen(true)}>
+              Settings
+            </Button>
+            <Button onClick={handleBack} className="btn-primary-gradient">
+              Back to home
             </Button>
           </div>
         </div>
+        {prefs && isSettingsOpen && (
+          <SettingsDrawer
+            prefs={prefs}
+            motifProgress={motifProgress}
+            onClose={() => setIsSettingsOpen(false)}
+            onUpdate={updatePrefs}
+          />
+        )}
       </div>
     );
   }
@@ -470,172 +539,106 @@ export default function TacticsClient() {
         />
       )}
 
-      {/* Left panel — board */}
-      <div className="flex-1 flex flex-col items-center px-4 lg:px-6 min-w-0 h-below-nav lg:h-screen mt-nav lg:mt-0 pb-2 lg:pb-6 relative overflow-hidden">
+      {/* Board column */}
+      <div className="flex-1 flex flex-col items-center px-3 lg:px-6 min-w-0 h-below-nav lg:h-screen mt-nav lg:mt-0 pb-2 lg:pb-6 relative overflow-hidden">
         <div className="absolute top-4 left-4 hidden lg:block">
           <Logo size="xl" clickable={true} onLogoClick={handleBack} />
         </div>
 
-        <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-4 lg:justify-center lg:pt-0">
-          <div className="px-3 py-1.5 rounded-full bg-surface-2/60 border border-border/50 flex-shrink-0">
-            <span className="text-sm font-medium text-foreground">
-              {orientation === "white" ? "White" : "Black"} to move
-            </span>
+        <div className="w-full max-w-xl flex-1 flex flex-col items-center gap-2 lg:gap-3 min-h-0 justify-start pt-3 lg:justify-center lg:pt-0">
+          <div className="flex items-center gap-2 flex-wrap justify-center">
+            <div className="px-3 py-1.5 rounded-full bg-surface-2/60 border border-border/50">
+              <span className="text-sm font-medium text-foreground">
+                {orientation === "white" ? "White" : "Black"} to move
+              </span>
+            </div>
+            {puzzleSource === "due" && (
+              <div
+                className="px-3 py-1.5 rounded-full bg-sky-500/15 border border-sky-500/40 text-sky-300 text-xs font-medium"
+                title="A puzzle you've seen before — your SRS scheduled it for review today.">
+                Review
+              </div>
+            )}
+            {wrongAttempts > 0 && !solutionShown && (
+              <div className="px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-medium tabular-nums">
+                {wrongAttempts} wrong {wrongAttempts === 1 ? "try" : "tries"}
+              </div>
+            )}
           </div>
 
           <div
             className="flex-shrink-0 w-full"
             style={{
-              maxWidth: "min(100%, calc(100dvh - var(--mobile-nav-h) - 280px))",
+              maxWidth: "min(100%, calc(100dvh - var(--mobile-nav-h) - 240px))",
             }}>
             <PuzzleBoard
               ref={boardRef}
               key={puzzle.id}
               initialFen={puzzle.fen}
               moves={movesArr}
-              revealSolution={revealed}
+              revealSolution={false}
+              playMode={!analysisOn && !solutionShown}
               orientation={orientation}
               analysisMode={analysisOn}
               onPositionChange={
                 analysisOn ? handleAnalysisPositionChange : undefined
               }
+              onIncorrect={handleBoardIncorrect}
+              onSolved={handleBoardSolved}
             />
           </div>
 
-          {revealed && (
-            <div className="flex items-center justify-center gap-2 flex-shrink-0">
-              <BoardControls
-                onFirstMove={() => boardRef.current?.goToFirst()}
-                onPreviousMove={() => boardRef.current?.goToPrevious()}
-                onNextMove={() => boardRef.current?.goToNext()}
-                onLastMove={() => boardRef.current?.goToLast()}
-                // Reset = jump back to the start of whichever line is
-                // active: solution mode → puzzle position; analysis mode
-                // → the anchor (position when analysis was toggled on).
-                onReset={() => boardRef.current?.goToFirst()}
-              />
+          {/* Bottom controls. When solving (incl. just after a clean solve
+              while we're about to swap puzzles): Skip + Show Solution.
+              The "post-solve" tree only renders when the user explicitly
+              hit Show Solution — keeps the layout stable on auto-solve. */}
+          {!solutionShown ? (
+            <div className="w-full flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={toggleAnalysis}
-                className={`h-9 px-3 rounded-lg text-xs font-medium border transition-colors ${
-                  analysisOn
-                    ? "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30"
-                    : "bg-surface-2/60 border-border/50 text-muted-foreground hover:bg-surface-2"
-                }`}
-                aria-pressed={analysisOn}>
-                <Cpu size={14} className="mr-1.5" />
-                {analysisOn ? "Stop" : "Analyze"}
+                onClick={handleSkip}
+                disabled={submitting}
+                className="flex-1 h-10 rounded-xl text-muted-foreground hover:text-foreground hover:bg-surface-2 border border-border/40">
+                <SkipForward size={14} className="mr-1.5" />
+                Skip
               </Button>
-            </div>
-          )}
-
-          <div className="w-full flex-shrink-0 lg:min-h-[2.75rem]">
-            {!revealed ? (
               <Button
                 variant="outline"
-                className="w-full h-11 text-sm rounded-xl border-border/50 hover:bg-surface-2"
-                onClick={handleShowAnswer}>
-                <Eye size={16} className="mr-2" />
-                Show Answer
+                size="sm"
+                onClick={handleShowSolution}
+                disabled={submitting}
+                className="flex-1 h-10 rounded-xl border-border/50 hover:bg-surface-2">
+                <Eye size={14} className="mr-1.5" />
+                Show solution
               </Button>
-            ) : (
-              <div className="lg:hidden space-y-2">
-                <div className="glass-card rounded-xl p-2.5 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Solution</p>
-                  <p className="text-base font-mono font-bold text-foreground break-words">
-                    {solutionSan.join(" ")}
-                  </p>
-                </div>
-                {analysisOn && (
-                  <AnalysisPanel
-                    fen={analysisFen}
-                    result={analysisResult}
-                    loading={analysisLoading}
-                    error={analysisError}
-                    compact
-                  />
-                )}
-                <p className="text-xs text-muted-foreground text-center">
-                  How well did you know this?
-                </p>
-                <RatingButtons onRate={handleRate} disabled={submitting} />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Right sidebar */}
-      <aside
-        className={`fixed lg:relative top-[var(--mobile-nav-h)] lg:top-0 right-0 z-40 w-80 lg:w-96 xl:w-[28rem] h-below-nav lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-hidden pb-safe transition-transform duration-300 ease-in-out ${
-          isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
-        }`}>
-        <div className="p-4 lg:p-5 border-b border-border/50 glass-panel">
-          <div className="flex items-center justify-between mb-3 lg:mb-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground hover:bg-surface-2 rounded-xl -ml-2"
-              onClick={handleBack}>
-              <ChevronLeft size={20} />
-            </Button>
-            <div className="flex items-center gap-1.5 px-2.5 lg:px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium uppercase tracking-wide">
-              <Target size={12} />
-              Tactics
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 lg:gap-4">
-            <div className="relative w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center shadow-lg bg-gradient-to-br from-purple-500/30 to-blue-500/30 border border-purple-400/30">
-              <Target className="w-6 h-6 lg:w-7 lg:h-7 text-purple-300" />
-            </div>
-            <div>
-              <h2 className="text-lg lg:text-xl font-semibold text-foreground">
-                Puzzle #{puzzle.lichessId}
-              </h2>
-              <p className="text-xs lg:text-sm text-muted-foreground mt-0.5">
-                Rating {puzzle.rating} • {puzzle.categories.join(", ")}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 p-4 lg:p-5 flex flex-col overflow-y-auto gap-4 lg:gap-5">
-          <div className="grid grid-cols-2 gap-3 lg:gap-4">
-            <div className="glass-card rounded-xl p-3 lg:p-4">
-              <p className="text-xs text-muted-foreground mb-1">Due reviews</p>
-              <p className="text-2xl font-semibold text-foreground">
-                {dueCount}
-              </p>
-            </div>
-            <div className="glass-card rounded-xl p-3 lg:p-4">
-              <p className="text-xs text-muted-foreground mb-1">Streak</p>
-              <div className="flex items-center gap-2">
-                <Flame
-                  className={`w-5 h-5 ${streak > 0 ? "text-orange-500" : "text-muted-foreground"}`}
+          ) : (
+            <div className="w-full flex flex-col gap-2">
+              <div className="flex items-center justify-center gap-2">
+                <BoardControls
+                  onFirstMove={() => boardRef.current?.goToFirst()}
+                  onPreviousMove={() => boardRef.current?.goToPrevious()}
+                  onNextMove={() => boardRef.current?.goToNext()}
+                  onLastMove={() => boardRef.current?.goToLast()}
+                  onReset={() => boardRef.current?.goToFirst()}
                 />
-                <p className="text-2xl font-semibold text-foreground">
-                  {streak}
-                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleAnalysis}
+                  className={`h-9 px-3 rounded-lg text-xs font-medium border transition-colors ${
+                    analysisOn
+                      ? "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30"
+                      : "bg-surface-2/60 border-border/50 text-muted-foreground hover:bg-surface-2"
+                  }`}>
+                  <Cpu size={14} className="mr-1.5" />
+                  {analysisOn ? "Stop" : "Analyze"}
+                </Button>
               </div>
-            </div>
-          </div>
-
-          {prefs && (
-            <FiltersPanel
-              prefs={prefs}
-              band={currentBand}
-              onDifficultyChange={handleDifficultyChange}
-              onCategoryToggle={handleCategoryToggle}
-            />
-          )}
-
-          {revealed && (
-            <div className="hidden lg:flex flex-col gap-3">
-              <div className="glass-card rounded-xl p-4 text-center">
-                <p className="text-xs text-muted-foreground mb-2">Solution</p>
-                <p className="text-lg font-mono font-bold text-foreground break-words">
+              <div className="glass-card rounded-xl p-2.5 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Solution</p>
+                <p className="text-base font-mono font-bold text-foreground break-words">
                   {solutionSan.join(" ")}
                 </p>
               </div>
@@ -645,144 +648,352 @@ export default function TacticsClient() {
                   result={analysisResult}
                   loading={analysisLoading}
                   error={analysisError}
+                  compact
                 />
               )}
-              <p className="text-xs text-muted-foreground text-center">
-                How well did you know this?
-              </p>
-              <RatingButtons onRate={handleRate} disabled={submitting} />
             </div>
           )}
         </div>
+      </div>
+
+      {/* Sidebar — kept lightweight. Heavy controls live in the drawer. */}
+      <aside
+        className={`fixed lg:relative top-[var(--mobile-nav-h)] lg:top-0 right-0 z-40 w-80 lg:w-96 h-below-nav lg:h-screen border-l border-border bg-solid flex-shrink-0 flex flex-col overflow-hidden pb-safe transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        }`}>
+        <div className="p-4 lg:p-5 border-b border-border/50 glass-panel">
+          <div className="flex items-center justify-between mb-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground hover:bg-surface-2 rounded-xl -ml-2"
+              onClick={handleBack}>
+              <ChevronLeft size={20} />
+            </Button>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium uppercase tracking-wide">
+              <Target size={12} />
+              Tactics
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground hover:bg-surface-2 rounded-xl"
+              onClick={() => setIsSettingsOpen(true)}
+              title="Settings">
+              <Settings size={18} />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-purple-500/30 to-blue-500/30 border border-purple-400/30">
+              <Target className="w-6 h-6 text-purple-300" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-foreground truncate">
+                Puzzle #{puzzle.lichessId}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Rating {puzzle.rating}
+                {focusMotif && (
+                  <>
+                    {" · "}
+                    <span className="text-amber-300/90">
+                      drilling{" "}
+                      {MOTIF_LABELS[focusMotif as CanonicalMotif] ?? focusMotif}
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 p-4 lg:p-5 flex flex-col overflow-y-auto gap-4">
+          <div className="grid grid-cols-3 gap-2">
+            <Stat label="Due" value={dueCount} />
+            <Stat
+              label="Streak"
+              value={streak}
+              icon={
+                <Flame
+                  className={`w-4 h-4 ${
+                    streak > 0 ? "text-orange-500" : "text-muted-foreground"
+                  }`}
+                />
+              }
+            />
+            <Stat label="Level" value={prefs?.currentTargetRating ?? "—"} />
+          </div>
+
+          <Button
+            variant="outline"
+            className="w-full h-10 rounded-xl border-border/50 hover:bg-surface-2"
+            onClick={() => navigate("/tactics/drills")}>
+            <Repeat2 size={16} className="mr-2" />
+            Woodpecker Drills
+          </Button>
+
+          {motifProgress && (
+            <MotifProgressPanel motifProgress={motifProgress} />
+          )}
+        </div>
       </aside>
+
+      {prefs && isSettingsOpen && (
+        <SettingsDrawer
+          prefs={prefs}
+          motifProgress={motifProgress}
+          onClose={() => setIsSettingsOpen(false)}
+          onUpdate={updatePrefs}
+        />
+      )}
     </div>
   );
 }
 
-function FiltersPanel({
-  prefs,
-  band,
-  onDifficultyChange,
-  onCategoryToggle,
+function Stat({
+  label,
+  value,
+  icon,
 }: {
-  prefs: Prefs;
-  band: DifficultyBand;
-  onDifficultyChange: (b: DifficultyBand) => void;
-  onCategoryToggle: (c: PuzzleCategory, on: boolean) => void;
+  label: string;
+  value: number | string;
+  icon?: React.ReactNode;
 }) {
   return (
-    <div className="glass-card rounded-xl p-3 lg:p-4 space-y-4">
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
-          Difficulty
-        </label>
-        <select
-          value={band}
-          onChange={(e) => onDifficultyChange(e.target.value as DifficultyBand)}
-          className="w-full h-9 px-3 rounded-lg bg-surface-2 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
-          {(
-            Object.keys(DIFFICULTY_BANDS) as Array<
-              keyof typeof DIFFICULTY_BANDS
-            >
-          ).map((k) => (
-            <option key={k} value={k}>
-              {DIFFICULTY_BANDS[k].label}
-            </option>
-          ))}
-          {band === "custom" && (
-            <option value="custom">
-              Custom ({prefs.ratingMin}–{prefs.ratingMax})
-            </option>
-          )}
-        </select>
+    <div className="glass-card rounded-xl p-2.5">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+        {label}
+      </p>
+      <div className="flex items-center gap-1.5">
+        {icon}
+        <p className="text-lg font-semibold text-foreground tabular-nums">
+          {value}
+        </p>
       </div>
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
-          Categories
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          {PUZZLE_CATEGORIES.map((cat) => {
-            const enabled = prefs.enabledCategories.includes(cat);
-            const isLast =
-              enabled && prefs.enabledCategories.length === 1;
-            return (
-              <label
-                key={cat}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer select-none transition-colors ${
-                  enabled
-                    ? "bg-primary/15 border-primary/40 text-foreground"
-                    : "bg-surface-2/40 border-border/40 text-muted-foreground hover:bg-surface-2"
-                } ${isLast ? "cursor-not-allowed opacity-80" : ""}`}>
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={enabled}
-                  disabled={isLast}
-                  onChange={(e) => onCategoryToggle(cat, e.target.checked)}
-                />
-                <span
-                  className={`w-4 h-4 rounded-sm flex items-center justify-center border ${
-                    enabled
-                      ? "bg-primary border-primary"
-                      : "border-border/60"
-                  }`}>
-                  {enabled && (
-                    <span className="text-[10px] text-primary-foreground">
-                      ✓
-                    </span>
-                  )}
-                </span>
-                {cat}
+    </div>
+  );
+}
+
+/**
+ * Hidden by default. Opens from a cog button. Holds the controls that most
+ * users will only touch once or twice (mode, motif, categories).
+ */
+function SettingsDrawer({
+  prefs,
+  motifProgress,
+  onClose,
+  onUpdate,
+}: {
+  prefs: Prefs;
+  motifProgress: MotifProgress[] | null;
+  onClose: () => void;
+  onUpdate: (patch: {
+    mode?: SelectionMode;
+    blockedFilterMotif?: string | null;
+    enabledCategories?: PuzzleCategory[];
+  }) => void;
+}) {
+  const MODE_LABELS: Record<SelectionMode, string> = {
+    auto: "Auto — pick what I need",
+    blocked: "Blocked — one motif",
+    mixed: "Mixed — all motifs",
+  };
+  const MODE_HELP: Record<SelectionMode, string> = {
+    auto: "App picks the weakest motif you haven't unlocked yet, then mixes once you've solved 20+ at 80%.",
+    blocked: "Drill a single motif until you switch away.",
+    mixed: "Everything jumbled — best once your motifs are unlocked.",
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end lg:items-center justify-center bg-black/60"
+      onClick={onClose}>
+      <div
+        className="bg-solid border-t lg:border border-border/50 w-full lg:w-[28rem] max-h-[85vh] lg:max-h-[80vh] rounded-t-2xl lg:rounded-2xl overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 lg:p-5 border-b border-border/50 flex items-center justify-between sticky top-0 bg-solid">
+          <h3 className="text-base font-semibold text-foreground">Settings</h3>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X size={18} />
+          </Button>
+        </div>
+
+        <div className="p-4 lg:p-5 space-y-5">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+              Mode
+            </label>
+            <select
+              value={prefs.mode}
+              onChange={(e) =>
+                onUpdate({ mode: e.target.value as SelectionMode })
+              }
+              className="w-full h-10 px-3 rounded-lg bg-surface-2 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
+              {(Object.keys(MODE_LABELS) as SelectionMode[]).map((m) => (
+                <option key={m} value={m}>
+                  {MODE_LABELS[m]}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground mt-1.5 leading-snug">
+              {MODE_HELP[prefs.mode]}
+            </p>
+          </div>
+
+          {prefs.mode === "blocked" && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+                Motif
               </label>
-            );
-          })}
+              <select
+                value={prefs.blockedFilterMotif ?? ""}
+                onChange={(e) =>
+                  onUpdate({
+                    mode: "blocked",
+                    blockedFilterMotif: e.target.value || null,
+                  })
+                }
+                className="w-full h-10 px-3 rounded-lg bg-surface-2 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
+                <option value="" disabled>
+                  Pick a motif…
+                </option>
+                {CANONICAL_MOTIFS.map((m) => {
+                  const row = motifProgress?.find((x) => x.motif === m);
+                  return (
+                    <option key={m} value={m}>
+                      {MOTIF_LABELS[m]}
+                      {row && row.attempts > 0
+                        ? ` (${row.attempts}${row.unlocked ? " · unlocked" : ""})`
+                        : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+              Categories
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {PUZZLE_CATEGORIES.map((cat) => {
+                const enabled = prefs.enabledCategories.includes(cat);
+                const isLast =
+                  enabled && prefs.enabledCategories.length === 1;
+                return (
+                  <label
+                    key={cat}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer select-none transition-colors ${
+                      enabled
+                        ? "bg-primary/15 border-primary/40 text-foreground"
+                        : "bg-surface-2/40 border-border/40 text-muted-foreground hover:bg-surface-2"
+                    } ${isLast ? "cursor-not-allowed opacity-80" : ""}`}>
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={enabled}
+                      disabled={isLast}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? Array.from(
+                              new Set([...prefs.enabledCategories, cat]),
+                            )
+                          : prefs.enabledCategories.filter((c) => c !== cat);
+                        if (next.length === 0) return;
+                        onUpdate({ enabledCategories: next });
+                      }}
+                    />
+                    <span
+                      className={`w-4 h-4 rounded-sm flex items-center justify-center border ${
+                        enabled
+                          ? "bg-primary border-primary"
+                          : "border-border/60"
+                      }`}>
+                      {enabled && (
+                        <span className="text-[10px] text-primary-foreground">
+                          ✓
+                        </span>
+                      )}
+                    </span>
+                    {cat}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function RatingButtons({
-  onRate,
-  disabled,
+function MotifProgressPanel({
+  motifProgress,
 }: {
-  onRate: (r: ReviewResponse) => void;
-  disabled: boolean;
+  motifProgress: MotifProgress[];
 }) {
+  const locked = motifProgress
+    .filter((m) => !m.unlocked)
+    .sort((a, b) => b.attempts - a.attempts);
+  const unlocked = motifProgress.filter((m) => m.unlocked);
+  const ordered = [...locked, ...unlocked];
+
   return (
-    <div className="grid grid-cols-4 gap-2">
-      <Button
-        onClick={() => onRate("forgot")}
-        disabled={disabled}
-        className="h-11 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
-        variant="ghost">
-        <span className="text-xs font-medium">Forgot</span>
-        <span className="text-[10px] opacity-70">Again</span>
-      </Button>
-      <Button
-        onClick={() => onRate("partial")}
-        disabled={disabled}
-        className="h-11 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
-        variant="ghost">
-        <span className="text-xs font-medium">Hard</span>
-        <span className="text-[10px] opacity-70">Struggled</span>
-      </Button>
-      <Button
-        onClick={() => onRate("effort")}
-        disabled={disabled}
-        className="h-11 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
-        variant="ghost">
-        <span className="text-xs font-medium">Good</span>
-        <span className="text-[10px] opacity-70">Effort</span>
-      </Button>
-      <Button
-        onClick={() => onRate("easy")}
-        disabled={disabled}
-        className="h-11 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 flex flex-col items-center justify-center gap-0.5 rounded-xl"
-        variant="ghost">
-        <span className="text-xs font-medium">Easy</span>
-        <span className="text-[10px] opacity-70">No problem</span>
-      </Button>
+    <div className="glass-card rounded-xl p-3 lg:p-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Motifs
+        </span>
+        <span className="text-[10px] text-muted-foreground/70">
+          {unlocked.length}/{motifProgress.length} unlocked
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {ordered.map((m) => {
+          const pct = Math.min(
+            100,
+            Math.round((m.attempts / UNLOCK_ATTEMPTS) * 100),
+          );
+          const accPct =
+            m.attempts >= 3 && m.ewmaSuccess !== null
+              ? Math.round(m.ewmaSuccess * 100)
+              : null;
+          return (
+            <li key={m.motif} className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span
+                  className={
+                    m.unlocked ? "text-foreground" : "text-foreground/90"
+                  }>
+                  {m.unlocked && (
+                    <span className="text-emerald-400 mr-1">✓</span>
+                  )}
+                  {m.label}
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {m.unlocked
+                    ? accPct !== null
+                      ? `${accPct}%`
+                      : "unlocked"
+                    : `${Math.min(m.attempts, UNLOCK_ATTEMPTS)}/${UNLOCK_ATTEMPTS}`}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                <div
+                  className={`h-full transition-[width] duration-300 ${
+                    m.unlocked
+                      ? "bg-emerald-500/70"
+                      : "bg-gradient-to-r from-amber-400/70 to-amber-500/70"
+                  }`}
+                  style={{ width: `${m.unlocked ? 100 : pct}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -800,11 +1011,9 @@ function AnalysisPanel({
   error: string | null;
   compact?: boolean;
 }) {
-  // Convert engine output (UCI from the analyzed FEN) to SAN so the user
-  // sees moves in the notation they actually think in. We try the best
-  // move on its own first, then walk the continuation off the same FEN.
   const { bestSan, pvSan } = (() => {
-    if (!fen || !result) return { bestSan: null as string | null, pvSan: [] as string[] };
+    if (!fen || !result)
+      return { bestSan: null as string | null, pvSan: [] as string[] };
     let bestSan: string | null = null;
     const pvSan: string[] = [];
     try {

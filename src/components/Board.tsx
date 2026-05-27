@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useSettings } from "@/contexts/SettingsContext";
 import { playMoveSound, playCaptureSound } from "@/lib/sounds";
+import { PromotionPicker, detectPromotion } from "@/components/PromotionPicker";
 
 interface BoardProps {
   playerColor?: "white" | "black";
@@ -101,6 +102,15 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
     const [uciMoves, setUciMoves] = useState<string[]>([]);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    // Deferred promotion move: set when the user drops a pawn on the last
+    // rank; cleared when they pick a piece (executed) or click the backdrop
+    // (cancelled). Without this the board silently auto-promotes to queen,
+    // which is wrong for underpromotion and confusing in build/training.
+    const [pendingPromotion, setPendingPromotion] = useState<{
+      from: string;
+      to: string;
+      color: "w" | "b";
+    } | null>(null);
     const { soundEffects, showCoordinates } = useSettings();
 
     // Sync board state with the initial props during render (not in a
@@ -168,6 +178,7 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         setPosition(gameRef.current.fen());
       }
       setSelectedSquare(null);
+      setPendingPromotion(null);
     }
 
     // Memoize pairing of SAN moves and UCI moves to avoid replaying the game
@@ -248,55 +259,42 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       }
     };
 
-    const handlePieceDrop = ({
-      sourceSquare,
-      targetSquare,
-      piece,
-    }: {
-      sourceSquare: string;
-      targetSquare: string | null;
-      piece: { isSparePiece: boolean; position: string; pieceType: string };
-    }): boolean => {
-      // Prevent dragging outside of allowed modes
-      if (!buildMode && (!trainingMode || !showingAnswer)) {
-        return false;
-      }
-
-      if (!targetSquare) {
-        return false;
-      }
-
+    /**
+     * Apply a move with an explicit promotion piece, routing through the
+     * mode-specific branch (training validate / build record / normal play).
+     * Returns whether the move was accepted. Shared by the drag-drop entry
+     * point and the promotion picker so under-promotion produces a single
+     * source of truth for "what just happened on the board".
+     */
+    const executeMove = (
+      sourceSquare: string,
+      targetSquare: string,
+      promotion: "q" | "r" | "b" | "n" = "q",
+    ): boolean => {
       if (trainingMode && onTrainingMove) {
-        // In training mode, validate the move without executing it permanently
         try {
-          // Create a temporary game to validate and get SAN notation
           const tempGame = new Chess(gameRef.current.fen());
           const move = tempGame.move({
             from: sourceSquare,
             to: targetSquare,
-            promotion: "q",
+            promotion,
           });
-          if (!move) {
-            return false;
-          }
+          if (!move) return false;
 
-          // Call the training callback with move details
           const isCorrect = onTrainingMove({
             from: sourceSquare,
             to: targetSquare,
             san: move.san,
           });
 
-          // If correct, execute the move on the actual board
           if (isCorrect) {
             gameRef.current.move({
               from: sourceSquare,
               to: targetSquare,
-              promotion: "q",
+              promotion,
             });
             setPosition(gameRef.current.fen());
           }
-
           return isCorrect;
         } catch {
           return false;
@@ -304,16 +302,13 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
       }
 
       if (buildMode) {
-        // In build mode, make the move and track it
         try {
           const move = gameRef.current.move({
             from: sourceSquare,
             to: targetSquare,
-            promotion: "q",
+            promotion,
           });
-          if (!move) {
-            return false;
-          }
+          if (!move) return false;
           const newMoves = [...moves, move.san];
           const newUciMoves = [
             ...uciMoves,
@@ -326,13 +321,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           setCurrentMoveIndex(newHistory.length - 1);
           setPosition(gameRef.current.fen());
 
-          // Play sound effect
           if (soundEffects) {
-            if (move.captured) {
-              playCaptureSound();
-            } else {
-              playMoveSound();
-            }
+            if (move.captured) playCaptureSound();
+            else playMoveSound();
           }
 
           onBuildMove?.({ from: sourceSquare, to: targetSquare });
@@ -347,21 +338,15 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         }
       }
 
-      // Only allow moves if viewing the latest position
-      if (currentMoveIndex !== moveHistory.length - 1) {
-        return false;
-      }
-
+      // Normal play branch
+      if (currentMoveIndex !== moveHistory.length - 1) return false;
       try {
         const move = gameRef.current.move({
           from: sourceSquare,
           to: targetSquare,
-          promotion: "q",
+          promotion,
         });
-
-        if (!move) {
-          return false;
-        }
+        if (!move) return false;
 
         const newHistory = moveHistory.slice(0, currentMoveIndex + 1);
         newHistory.push(gameRef.current.fen());
@@ -379,13 +364,9 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
         setCurrentMoveIndex(newHistory.length - 1);
         setPosition(gameRef.current.fen());
 
-        // Play sound effect
         if (soundEffects) {
-          if (move.captured) {
-            playCaptureSound();
-          } else {
-            playMoveSound();
-          }
+          if (move.captured) playCaptureSound();
+          else playMoveSound();
         }
 
         onMoveHistoryChange?.(newHistory.length);
@@ -395,6 +376,69 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
           san: move.san,
         });
         return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const handlePromotionPick = (piece: "q" | "r" | "b" | "n") => {
+      if (!pendingPromotion) return;
+      const { from, to } = pendingPromotion;
+      setPendingPromotion(null);
+      executeMove(from, to, piece);
+    };
+
+    const cancelPromotion = () => setPendingPromotion(null);
+
+    const handlePieceDrop = ({
+      sourceSquare,
+      targetSquare,
+      piece,
+    }: {
+      sourceSquare: string;
+      targetSquare: string | null;
+      piece: { isSparePiece: boolean; position: string; pieceType: string };
+    }): boolean => {
+      // Prevent dragging outside of allowed modes
+      if (!buildMode && (!trainingMode || !showingAnswer)) {
+        return false;
+      }
+
+      if (!targetSquare) {
+        return false;
+      }
+      // No-op drops (release on the same square) aren't move attempts —
+      // chess.js would reject them anyway. Filtering here keeps the
+      // training-mode incorrect path from firing on a casual piece-poke.
+      if (sourceSquare === targetSquare) {
+        return false;
+      }
+
+      // Block further drags while a promotion choice is open — otherwise
+      // a second drop would silently replace the pending one.
+      if (pendingPromotion) return false;
+
+      // Intercept pawn promotions so the user picks Q/R/B/N instead of
+      // silently queening. For training mode in particular this matters:
+      // the expected move might be an under-promotion.
+      const promo = detectPromotion(
+        gameRef.current.fen(),
+        sourceSquare,
+        targetSquare,
+      );
+      if (promo) {
+        setPendingPromotion({
+          from: sourceSquare,
+          to: targetSquare,
+          color: promo,
+        });
+        // Return false so react-chessboard snaps the piece back; the picker
+        // appears in its place and the move materialises after the choice.
+        return false;
+      }
+
+      try {
+        return executeMove(sourceSquare, targetSquare);
       } catch {
         return false;
       }
@@ -624,6 +668,13 @@ export const Board = forwardRef<BoardHandle, BoardProps>(
             }}
           />
         </div>
+        {pendingPromotion && (
+          <PromotionPicker
+            color={pendingPromotion.color}
+            onPick={handlePromotionPick}
+            onCancel={cancelPromotion}
+          />
+        )}
         {isViewingHistory && !hideHistoryOverlay && (
           // Tiny corner badge instead of a full-board scrim. The previous
           // backdrop-blur curtain covered the very thing the user was

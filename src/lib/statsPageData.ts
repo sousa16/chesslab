@@ -1,17 +1,31 @@
 /**
  * /stats page data aggregation.
  *
- * Identical contract to the previous inline computation in stats/page.tsx
- * but lifted out so we can cache it. The heavy parts are: building the
- * repertoire tree (chess.js), computing ECO families per entry, and the
- * puzzle-review join. All three repeat for every navigation; caching
- * keyed on userId + lastChanged means re-visits within the cache window
- * skip them entirely.
+ * Pulls everything the stats page renders, cached on (userId, lastChanged)
+ * so repeat visits skip the work. Lastchanged is the most recent timestamp
+ * across the data sources that contribute to stats — any review/edit/drill
+ * naturally busts the cache.
+ *
+ * Sections returned:
+ *  - openings: per-family aggregate from the repertoire tree + SRS state
+ *  - tacticsOverall: top-line tactics counters (seen, reviews, avg ease)
+ *  - tacticsCategories: per-category (Mates/Motifs/Middlegame/Endgame)
+ *  - tacticsAdaptive: current adaptive-rating setpoint + EWMA accuracy
+ *  - tacticsMotifs: per-canonical-motif counters + rating + unlock state
+ *  - tacticsDrills: active / completed counts + recent completed sessions
+ *
+ * Rating-band stats were dropped when the adaptive controller replaced
+ * the manual band selector — per-motif rating is the meaningful slice now.
  */
 
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCachedRepertoireFamilies } from "@/lib/repertoireTreeCache";
+import {
+  CANONICAL_MOTIFS,
+  MOTIF_LABELS,
+  type CanonicalMotif,
+} from "@/lib/motifs";
 
 export interface FamilyStats {
   family: string;
@@ -32,40 +46,70 @@ export interface TacticsCategoryStats {
   totalReps: number;
 }
 
-export interface TacticsRatingBandStats {
-  band: string;
-  reviewed: number;
-  avgEase: number;
-  totalReps: number;
-}
-
 export interface TacticsOverallStats {
   reviewed: number;
   avgEase: number;
   totalReps: number;
 }
 
-export interface StatsPageData {
-  openings: FamilyStats[];
-  tacticsCategories: TacticsCategoryStats[];
-  tacticsBands: TacticsRatingBandStats[];
-  tacticsOverall: TacticsOverallStats;
+export interface TacticsAdaptiveStats {
+  currentTargetRating: number;
+  globalAttempts: number;
+  globalCorrect: number;
+  /** Lifetime accuracy (correct / attempts). null when no attempts yet. */
+  accuracyPct: number | null;
+  /** Rolling EWMA from the controller. null when fewer than 3 attempts. */
+  recentEwmaPct: number | null;
 }
 
-const RATING_BANDS: { label: string; min: number; max: number }[] = [
-  { label: "Beginner (800–1399)", min: 800, max: 1399 },
-  { label: "Intermediate (1400–1799)", min: 1400, max: 1799 },
-  { label: "Advanced (1800–2400)", min: 1800, max: 2400 },
-];
+export interface TacticsMotifStats {
+  motif: CanonicalMotif;
+  label: string;
+  attempts: number;
+  correct: number;
+  accuracyPct: number | null;
+  recentEwmaPct: number | null;
+  rating: number | null;
+  unlocked: boolean;
+}
+
+export interface TacticsDrillSummary {
+  id: string;
+  motif: string;
+  size: number;
+  baselineMs: number | null;
+  lastCycleMs: number | null;
+  /** baseline / final cycle — how many times faster you got. null if either side is missing. */
+  speedup: number | null;
+  completedAt: string;
+}
+
+export interface TacticsDrillStats {
+  activeCount: number;
+  completedCount: number;
+  recent: TacticsDrillSummary[];
+}
+
+export interface StatsPageData {
+  openings: FamilyStats[];
+  tacticsOverall: TacticsOverallStats;
+  tacticsCategories: TacticsCategoryStats[];
+  tacticsAdaptive: TacticsAdaptiveStats;
+  tacticsMotifs: TacticsMotifStats[];
+  tacticsDrills: TacticsDrillStats;
+}
 
 async function computeStatsPageData(userId: string): Promise<StatsPageData> {
-  // Tree-derived data (family per entry + which families are
-  // represented at leaves below each node) is pulled from the shared
-  // structure cache — see repertoireTreeCache.ts. SRS-derived data
-  // (phase, easeFactor, repetitions, etc) comes from a fresh per-request
-  // projection. Splitting these means SRS review writes don't bust the
-  // expensive tree-build but still produce up-to-date aggregates.
-  const [families, repertoires, reviews] = await Promise.all([
+  const [
+    families,
+    repertoires,
+    reviews,
+    puzzlePrefs,
+    motifRatings,
+    activeDrillCount,
+    completedDrillCount,
+    recentDrills,
+  ] = await Promise.all([
     getCachedRepertoireFamilies(userId),
     prisma.repertoire.findMany({
       where: { userId },
@@ -88,8 +132,19 @@ async function computeStatsPageData(userId: string): Promise<StatsPageData> {
       select: {
         easeFactor: true,
         repetitions: true,
-        puzzle: { select: { categories: true, rating: true } },
+        puzzle: { select: { categories: true } },
       },
+    }),
+    prisma.userPuzzlePrefs.findUnique({ where: { userId } }),
+    prisma.userMotifRating.findMany({
+      where: { userId, motif: { in: [...CANONICAL_MOTIFS] } },
+    }),
+    prisma.drillSession.count({ where: { userId, status: "active" } }),
+    prisma.drillSession.count({ where: { userId, status: "completed" } }),
+    prisma.drillSession.findMany({
+      where: { userId, status: "completed" },
+      orderBy: { completedAt: "desc" },
+      take: 5,
     }),
   ]);
 
@@ -163,18 +218,11 @@ async function computeStatsPageData(userId: string): Promise<StatsPageData> {
     lastReviewedAt: a.lastReviewedAt ? a.lastReviewedAt.toISOString() : null,
   }));
 
-  // ── Tactics: per-category + per-rating-band + overall ─────────────────
+  // ── Tactics: top-line + per-category ──────────────────────────────────
   const categoryAccum = new Map<
     string,
     { category: string; reviewed: number; easeSum: number; totalReps: number }
   >();
-  const bandAccum: TacticsRatingBandStats[] = RATING_BANDS.map((b) => ({
-    band: b.label,
-    reviewed: 0,
-    avgEase: 0,
-    totalReps: 0,
-  }));
-  const bandEaseSums: number[] = RATING_BANDS.map(() => 0);
 
   let overallEaseSum = 0;
   let overallTotalReps = 0;
@@ -193,16 +241,6 @@ async function computeStatsPageData(userId: string): Promise<StatsPageData> {
       agg.easeSum += r.easeFactor;
       agg.totalReps += r.repetitions;
     }
-
-    for (let i = 0; i < RATING_BANDS.length; i++) {
-      const b = RATING_BANDS[i];
-      if (r.puzzle.rating >= b.min && r.puzzle.rating <= b.max) {
-        bandAccum[i].reviewed += 1;
-        bandAccum[i].totalReps += r.repetitions;
-        bandEaseSums[i] += r.easeFactor;
-        break;
-      }
-    }
   }
 
   const tacticsCategories: TacticsCategoryStats[] = Array.from(
@@ -214,31 +252,99 @@ async function computeStatsPageData(userId: string): Promise<StatsPageData> {
     totalReps: a.totalReps,
   }));
 
-  const tacticsBands = bandAccum.map((b, i) => ({
-    ...b,
-    avgEase: b.reviewed > 0 ? bandEaseSums[i] / b.reviewed : 0,
-  }));
-
   const tacticsOverall: TacticsOverallStats = {
     reviewed: reviews.length,
     avgEase: reviews.length > 0 ? overallEaseSum / reviews.length : 0,
     totalReps: overallTotalReps,
   };
 
-  return { openings, tacticsCategories, tacticsBands, tacticsOverall };
+  // ── Adaptive controller snapshot ──────────────────────────────────────
+  // Defaults match the UserPuzzlePrefs schema defaults so a user who's
+  // never opened tactics still gets meaningful zeros.
+  const adaptive = puzzlePrefs ?? {
+    currentTargetRating: 1200,
+    globalEwmaSuccess: 0.5,
+    globalAttempts: 0,
+    globalCorrect: 0,
+  };
+
+  const tacticsAdaptive: TacticsAdaptiveStats = {
+    currentTargetRating: adaptive.currentTargetRating,
+    globalAttempts: adaptive.globalAttempts,
+    globalCorrect: adaptive.globalCorrect,
+    accuracyPct:
+      adaptive.globalAttempts > 0
+        ? (adaptive.globalCorrect / adaptive.globalAttempts) * 100
+        : null,
+    recentEwmaPct:
+      adaptive.globalAttempts >= 3
+        ? adaptive.globalEwmaSuccess * 100
+        : null,
+  };
+
+  // ── Per-motif progress ────────────────────────────────────────────────
+  const motifByName = new Map(motifRatings.map((m) => [m.motif, m]));
+  const tacticsMotifs: TacticsMotifStats[] = CANONICAL_MOTIFS.map((m) => {
+    const row = motifByName.get(m);
+    return {
+      motif: m as CanonicalMotif,
+      label: MOTIF_LABELS[m],
+      attempts: row?.attempts ?? 0,
+      correct: row?.correct ?? 0,
+      accuracyPct:
+        row && row.attempts > 0
+          ? (row.correct / row.attempts) * 100
+          : null,
+      recentEwmaPct:
+        row && row.attempts >= 3 ? row.ewmaSuccess * 100 : null,
+      rating: row?.rating ?? null,
+      unlocked: row?.unlocked ?? false,
+    };
+  });
+
+  // ── Drill sessions ────────────────────────────────────────────────────
+  const tacticsDrills: TacticsDrillStats = {
+    activeCount: activeDrillCount,
+    completedCount: completedDrillCount,
+    recent: recentDrills.map((d) => {
+      const speedup =
+        d.baselineMs && d.lastCycleMs && d.lastCycleMs > 0
+          ? d.baselineMs / d.lastCycleMs
+          : null;
+      return {
+        id: d.id,
+        motif: d.motif,
+        size: d.size,
+        baselineMs: d.baselineMs,
+        lastCycleMs: d.lastCycleMs,
+        speedup,
+        completedAt:
+          d.completedAt?.toISOString() ?? d.updatedAt.toISOString(),
+      };
+    }),
+  };
+
+  return {
+    openings,
+    tacticsOverall,
+    tacticsCategories,
+    tacticsAdaptive,
+    tacticsMotifs,
+    tacticsDrills,
+  };
 }
 
-// Cache keyed on userId + the latest entry/review touch — same pattern
-// as training stats. Writes naturally bust the key.
+// Cache keyed on userId + the latest entry/review/drill touch — writes
+// naturally bust the key.
 const cachedComputeStatsPageData = unstable_cache(
   async (userId: string, _lastChanged: number) =>
     computeStatsPageData(userId),
-  ["stats-page-v1"],
+  ["stats-page-v2"],
   { revalidate: 300, tags: ["stats-page"] },
 );
 
 async function getStatsPageLastChanged(userId: string): Promise<number> {
-  const [maxEntry, maxReview] = await Promise.all([
+  const [maxEntry, maxReview, maxMotif, maxDrill, maxPrefs] = await Promise.all([
     prisma.repertoireEntry.findFirst({
       where: { repertoire: { userId } },
       select: { updatedAt: true },
@@ -249,10 +355,27 @@ async function getStatsPageLastChanged(userId: string): Promise<number> {
       select: { updatedAt: true },
       orderBy: { updatedAt: "desc" },
     }),
+    prisma.userMotifRating.findFirst({
+      where: { userId },
+      select: { updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.drillSession.findFirst({
+      where: { userId },
+      select: { updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.userPuzzlePrefs.findUnique({
+      where: { userId },
+      select: { updatedAt: true },
+    }),
   ]);
   return Math.max(
     maxEntry?.updatedAt.getTime() ?? 0,
     maxReview?.updatedAt.getTime() ?? 0,
+    maxMotif?.updatedAt.getTime() ?? 0,
+    maxDrill?.updatedAt.getTime() ?? 0,
+    maxPrefs?.updatedAt.getTime() ?? 0,
   );
 }
 

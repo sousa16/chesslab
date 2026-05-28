@@ -98,62 +98,82 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 2) new puzzle — pick the motif (if any) and the target rating.
-    const { focusMotif, targetRating } = await resolveFocus(
+    // 2) new puzzle — build an ordered list of (motif, rating) candidates
+    // and try each until something matches.
+    //
+    // The previous version ran a single query against the chosen focusMotif
+    // and surfaced "empty" the moment that motif's catalog was thin — the
+    // user could be 5 puzzles in and get told there's nothing left even
+    // though 17,000 other puzzles existed. The cascade below means a sparse
+    // motif (e.g. `clearance` or `xRayAttack`) doesn't lock the whole
+    // selector; we advance to the next-weakest motif, and finally to the
+    // unfiltered pool, before declaring genuine exhaustion.
+    const candidates = await resolveCandidates(
       userId,
       prefs.mode,
       prefs.blockedFilterMotif,
       prefs.currentTargetRating,
     );
 
-    // For motif-filtered queries the GIN index on themes does the heavy
-    // lifting. For unfiltered queries we fall back to the rating btree.
-    const themeFilter = focusMotif
-      ? Prisma.sql`AND p.themes && ARRAY[${focusMotif}]::text[]`
-      : Prisma.empty;
+    type PuzzleRow = {
+      id: string;
+      lichessId: string;
+      fen: string;
+      moves: string;
+      rating: number;
+      themes: string[];
+      categories: string[];
+    };
 
-    const rows = await prisma.$queryRaw<
-      Array<{
-        id: string;
-        lichessId: string;
-        fen: string;
-        moves: string;
-        rating: number;
-        themes: string[];
-        categories: string[];
-      }>
-    >`
-      SELECT p.id, p."lichessId", p.fen, p.moves, p.rating, p.themes, p.categories
-      FROM "Puzzle" p
-      WHERE p.categories && ${prefs.enabledCategories}::text[]
-        ${themeFilter}
-        AND p.id <> ALL (${excludeIds}::text[])
-        AND NOT EXISTS (
-          SELECT 1 FROM "PuzzleReview" r
-          WHERE r."puzzleId" = p.id AND r."userId" = ${userId}
-        )
-      ORDER BY ABS(p.rating - ${targetRating}) ASC, p.id ASC
-      LIMIT 1
-    `;
+    let chosen: { row: PuzzleRow; focusMotif: string | null; targetRating: number } | null =
+      null;
 
-    if (rows.length === 0) {
+    for (const cand of candidates) {
+      const themeFilter = cand.focusMotif
+        ? Prisma.sql`AND p.themes && ARRAY[${cand.focusMotif}]::text[]`
+        : Prisma.empty;
+
+      const rows = await prisma.$queryRaw<Array<PuzzleRow>>`
+        SELECT p.id, p."lichessId", p.fen, p.moves, p.rating, p.themes, p.categories
+        FROM "Puzzle" p
+        WHERE p.categories && ${prefs.enabledCategories}::text[]
+          ${themeFilter}
+          AND p.id <> ALL (${excludeIds}::text[])
+          AND NOT EXISTS (
+            SELECT 1 FROM "PuzzleReview" r
+            WHERE r."puzzleId" = p.id AND r."userId" = ${userId}
+          )
+        ORDER BY ABS(p.rating - ${cand.targetRating}) ASC, p.id ASC
+        LIMIT 1
+      `;
+      if (rows.length > 0) {
+        chosen = {
+          row: rows[0],
+          focusMotif: cand.focusMotif,
+          targetRating: cand.targetRating,
+        };
+        break;
+      }
+    }
+
+    if (!chosen) {
       return NextResponse.json({
         puzzle: null,
         review: null,
         dueCount: 0,
         source: "empty",
-        focusMotif,
-        targetRating,
+        focusMotif: null,
+        targetRating: prefs.currentTargetRating,
       });
     }
 
     return NextResponse.json({
-      puzzle: serializePuzzle(rows[0]),
+      puzzle: serializePuzzle(chosen.row),
       review: null,
       dueCount,
       source: "new",
-      focusMotif,
-      targetRating,
+      focusMotif: chosen.focusMotif,
+      targetRating: chosen.targetRating,
     });
   } catch (err) {
     console.error("Error fetching next puzzle:", err);
@@ -162,36 +182,42 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Decide which motif (if any) to focus on and at what rating, based on
- * the user's mode and the per-motif adaptive state.
+ * Build an ordered list of (motif, rating) candidates for the new-puzzle
+ * search. The selector tries them in order and stops at the first one with
+ * a matching puzzle in the catalog.
  *
- * The "auto" branch is what implements blocked-then-interleaved: locked
- * motifs are served exclusively until they unlock, round-robin by attempts
- * so the weakest motif always advances next. Once everything is unlocked,
- * the user lands in mixed mode automatically — no UI toggle needed.
+ * Mode behaviour:
+ *  - "auto"    → every locked motif (weakest first by attempts), then a
+ *                mixed-pool fallback so a sparse motif can't strand the
+ *                user mid-session.
+ *  - "blocked" → just the user-picked motif. Strict by design — the user
+ *                wants ONE motif, so we don't silently widen.
+ *  - "mixed"   → one mixed-pool entry.
  */
-async function resolveFocus(
+async function resolveCandidates(
   userId: string,
   mode: string,
   blockedFilterMotif: string | null,
   currentTargetRating: number,
-): Promise<{ focusMotif: string | null; targetRating: number }> {
+): Promise<Array<{ focusMotif: string | null; targetRating: number }>> {
   if (mode === "mixed") {
-    return { focusMotif: null, targetRating: currentTargetRating };
+    return [{ focusMotif: null, targetRating: currentTargetRating }];
   }
 
   if (mode === "blocked") {
     if (!blockedFilterMotif || !isCanonicalMotif(blockedFilterMotif)) {
       // Defensive: invalid prefs → behave like mixed.
-      return { focusMotif: null, targetRating: currentTargetRating };
+      return [{ focusMotif: null, targetRating: currentTargetRating }];
     }
     const row = await prisma.userMotifRating.findUnique({
       where: { userId_motif: { userId, motif: blockedFilterMotif } },
     });
-    return {
-      focusMotif: blockedFilterMotif,
-      targetRating: row?.rating ?? currentTargetRating,
-    };
+    return [
+      {
+        focusMotif: blockedFilterMotif,
+        targetRating: row?.rating ?? currentTargetRating,
+      },
+    ];
   }
 
   // mode === "auto"
@@ -200,9 +226,7 @@ async function resolveFocus(
   });
   const byMotif = new Map(motifRows.map((m) => [m.motif, m]));
 
-  // Build the locked list: unseen motifs first (attempts = 0), then any
-  // seen-but-not-unlocked. Sort by attempts ascending → round-robin
-  // toward the weakest motif.
+  // Locked motifs (unseen counts as attempts=0 → naturally at the front).
   const locked: { motif: string; attempts: number; rating: number }[] = [];
   for (const m of CANONICAL_MOTIFS) {
     const row = byMotif.get(m);
@@ -212,14 +236,17 @@ async function resolveFocus(
       locked.push({ motif: m, attempts: row.attempts, rating: row.rating });
     }
   }
-
-  if (locked.length === 0) {
-    // Everything unlocked → mixed pool.
-    return { focusMotif: null, targetRating: currentTargetRating };
-  }
-
   locked.sort((a, b) => a.attempts - b.attempts);
-  return { focusMotif: locked[0].motif, targetRating: locked[0].rating };
+
+  const out: Array<{ focusMotif: string | null; targetRating: number }> =
+    locked.map((l) => ({ focusMotif: l.motif, targetRating: l.rating }));
+
+  // Always append a mixed-pool fallback. Means a thin motif catalog (or an
+  // unlucky enabled-categories filter) never strands the user — once the
+  // motif-specific queries are exhausted, the next puzzle just comes from
+  // the broader pool. Cheap: the loop short-circuits on the first hit.
+  out.push({ focusMotif: null, targetRating: currentTargetRating });
+  return out;
 }
 
 function serializePuzzle(p: {

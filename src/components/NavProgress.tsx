@@ -117,36 +117,55 @@ export function useStartNavTransition(): (callback: () => void) => void {
 
 export function NavProgressBar() {
   const { isPending } = useNavProgressContext();
-  // Three-stage state machine:
-  //   idle    → bar isn't rendered at all (no DOM presence)
-  //   loading → mount the bar; animate scaleX 0 → 0.85 over 8s with
-  //             cubic ease-out so even a long server stall keeps
-  //             showing "almost there" without ever hitting 100%
-  //   done    → snap scaleX to 1, fade opacity to 0, then unmount
+  // Four-stage state machine:
+  //   idle     → bar isn't rendered at all (no DOM presence)
+  //   start    → bar mounted at scaleX(0); next frame we kick to "loading"
+  //              so the browser sees a real 0 → 0.85 transition rather
+  //              than just painting the bar at 0.85 (which gave the prior
+  //              "bar is suddenly there, then snaps to 100%" behaviour)
+  //   loading  → animate scaleX 0 → 0.85 over 8s, cubic ease-out
+  //   done     → snap scaleX to 1, fade opacity to 0, then unmount
   //
   // Returning null while idle is intentional: keeping the element
   // mounted with opacity:0 turned out to leave a persistent 2px
-  // strip visible at the top of the viewport on some browsers (the
-  // gradient bleeds through low-opacity in certain compositing
-  // paths). Conditional rendering avoids the whole class of issue.
-  const [state, setState] = useState<"idle" | "loading" | "done">("idle");
+  // strip visible at the top of the viewport on some browsers.
+  const [state, setState] = useState<"idle" | "start" | "loading" | "done">(
+    "idle",
+  );
+
   useEffect(() => {
     if (isPending) {
-      setState("loading");
+      // Mount at scaleX(0). The next-frame effect below switches to
+      // "loading" so the transition has a real starting frame.
+      setState((s) => (s === "idle" ? "start" : s));
       return;
     }
-    if (state === "loading") {
+    if (state === "start" || state === "loading") {
       setState("done");
       const id = setTimeout(() => setState("idle"), 300);
       return () => clearTimeout(id);
     }
   }, [isPending, state]);
 
+  // Two-frame kick: paint at scaleX(0), then on the next animation frame
+  // flip to scaleX(0.85) so the browser interpolates between them.
+  // requestAnimationFrame fires after layout/paint; without it the state
+  // update batches with the mount and the browser only sees the final
+  // value (no animation).
+  useEffect(() => {
+    if (state !== "start") return;
+    const id = requestAnimationFrame(() => setState("loading"));
+    return () => cancelAnimationFrame(id);
+  }, [state]);
+
   if (state === "idle") return null;
 
-  const scaleX = state === "loading" ? 0.85 : 1;
-  const opacity = state === "loading" ? 1 : 0;
-  const transitionDuration = state === "loading" ? "8000ms" : "300ms";
+  const scaleX = state === "start" ? 0 : state === "loading" ? 0.85 : 1;
+  const opacity = state === "done" ? 0 : 1;
+  // The 8s transition only applies while filling. The "start → loading"
+  // kick uses the same duration (it IS the fill). The done state uses a
+  // short duration for the snap-to-full + fade-out.
+  const transitionDuration = state === "done" ? "300ms" : "8000ms";
 
   return (
     <div

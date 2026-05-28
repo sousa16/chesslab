@@ -24,24 +24,54 @@ interface TacticsCategoryStats {
   totalReps: number;
 }
 
-interface TacticsRatingBandStats {
-  band: string;
-  reviewed: number;
-  avgEase: number;
-  totalReps: number;
-}
-
 interface TacticsOverallStats {
   reviewed: number;
   avgEase: number;
   totalReps: number;
 }
 
+interface TacticsAdaptiveStats {
+  currentTargetRating: number;
+  globalAttempts: number;
+  globalCorrect: number;
+  accuracyPct: number | null;
+  recentEwmaPct: number | null;
+}
+
+interface TacticsMotifStats {
+  motif: string;
+  label: string;
+  attempts: number;
+  correct: number;
+  accuracyPct: number | null;
+  recentEwmaPct: number | null;
+  rating: number | null;
+  unlocked: boolean;
+}
+
+interface TacticsDrillSummary {
+  id: string;
+  motif: string;
+  size: number;
+  baselineMs: number | null;
+  lastCycleMs: number | null;
+  speedup: number | null;
+  completedAt: string;
+}
+
+interface TacticsDrillStats {
+  activeCount: number;
+  completedCount: number;
+  recent: TacticsDrillSummary[];
+}
+
 interface StatsClientProps {
   openings: FamilyStats[];
-  tacticsCategories: TacticsCategoryStats[];
-  tacticsBands: TacticsRatingBandStats[];
   tacticsOverall: TacticsOverallStats;
+  tacticsCategories: TacticsCategoryStats[];
+  tacticsAdaptive: TacticsAdaptiveStats;
+  tacticsMotifs: TacticsMotifStats[];
+  tacticsDrills: TacticsDrillStats;
 }
 
 type SortKey =
@@ -83,9 +113,11 @@ function formatPct(p: number): string {
 
 export default function StatsClient({
   openings,
-  tacticsCategories,
-  tacticsBands,
   tacticsOverall,
+  tacticsCategories,
+  tacticsAdaptive,
+  tacticsMotifs,
+  tacticsDrills,
 }: StatsClientProps) {
   // Default to "worst openings first" — low ease = struggling. Falls back
   // to family name for ties so the order is deterministic.
@@ -315,9 +347,9 @@ export default function StatsClient({
                 Tactics
               </h2>
               <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-                Same ease-factor proxy. Categories may overlap (a puzzle
-                tagged both Mates and Motifs counts in each); rating bands
-                are mutually exclusive.
+                Adaptive difficulty targets ~85% recent success. Motifs
+                unlock once you&apos;ve done 20 at &ge; 80% — the bar fills
+                as you build pattern fluency.
               </p>
             </div>
 
@@ -327,49 +359,195 @@ export default function StatsClient({
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <StatTile
                     label="Puzzles seen"
                     value={tacticsOverall.reviewed.toString()}
                   />
                   <StatTile
-                    label="Total reviews"
-                    value={tacticsOverall.totalReps.toString()}
+                    label="Adaptive level"
+                    value={tacticsAdaptive.currentTargetRating.toString()}
                   />
                   <StatTile
-                    label="Avg ease"
-                    value={formatEase(tacticsOverall.avgEase)}
+                    label="Recent acc"
+                    value={
+                      tacticsAdaptive.recentEwmaPct !== null
+                        ? `${Math.round(tacticsAdaptive.recentEwmaPct)}%`
+                        : "—"
+                    }
+                  />
+                  <StatTile
+                    label="Lifetime acc"
+                    value={
+                      tacticsAdaptive.accuracyPct !== null
+                        ? `${Math.round(tacticsAdaptive.accuracyPct)}%`
+                        : "—"
+                    }
                   />
                 </div>
+
+                {/* Motif progress — closest-to-unlock first, then unlocked. */}
+                <MotifTable motifs={tacticsMotifs} />
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="glass-card rounded-xl p-3 lg:p-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                       By category
                     </p>
-                    <SimpleRows rows={tacticsCategories.map((c) => ({
-                      label: c.category,
-                      a: `${c.reviewed} seen`,
-                      b: `ease ${formatEase(c.avgEase)}`,
-                      ease: c.avgEase,
-                    }))} />
+                    <SimpleRows
+                      rows={tacticsCategories.map((c) => ({
+                        label: c.category,
+                        a: `${c.reviewed} seen`,
+                        b: `ease ${formatEase(c.avgEase)}`,
+                        ease: c.avgEase,
+                      }))}
+                    />
                   </div>
-                  <div className="glass-card rounded-xl p-3 lg:p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                      By rating band
-                    </p>
-                    <SimpleRows rows={tacticsBands.map((b) => ({
-                      label: b.band,
-                      a: `${b.reviewed} seen`,
-                      b: `ease ${formatEase(b.avgEase)}`,
-                      ease: b.avgEase,
-                    }))} />
-                  </div>
+                  <DrillSummary drills={tacticsDrills} />
                 </div>
               </>
             )}
           </section>
     </AppPage>
+  );
+}
+
+/**
+ * Per-canonical-motif progress table. Locked motifs (closest to unlock,
+ * highest attempts) at the top, unlocked at the bottom. Empty motifs
+ * (0 attempts) are still listed so the user sees what's available.
+ */
+function MotifTable({ motifs }: { motifs: TacticsMotifStats[] }) {
+  const UNLOCK_ATTEMPTS = 20;
+  const locked = motifs
+    .filter((m) => !m.unlocked)
+    .sort((a, b) => b.attempts - a.attempts);
+  const unlocked = motifs.filter((m) => m.unlocked);
+  const ordered = [...locked, ...unlocked];
+
+  if (motifs.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="glass-card rounded-xl overflow-x-auto">
+      <table className="w-full text-xs lg:text-sm">
+        <thead className="text-[10px] lg:text-[11px] uppercase tracking-wider text-muted-foreground">
+          <tr className="border-b border-border/50">
+            <Th>Motif</Th>
+            <Th align="right">Done</Th>
+            <Th align="right">Acc</Th>
+            <Th align="right">Recent</Th>
+            <Th align="right">Level</Th>
+            <Th align="right">Status</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {ordered.map((m) => (
+            <tr
+              key={m.motif}
+              className="border-b border-border/20 last:border-b-0">
+              <td className="px-3 py-2 lg:px-4 lg:py-3 text-foreground">
+                <span className="font-medium">
+                  {m.unlocked && (
+                    <span className="text-emerald-400 mr-1">✓</span>
+                  )}
+                  {m.label}
+                </span>
+              </td>
+              <td className="px-3 py-2 lg:px-4 lg:py-3 text-right tabular-nums">
+                {m.unlocked ? (
+                  <span className="text-muted-foreground">
+                    {m.attempts}
+                  </span>
+                ) : (
+                  <span className="tabular-nums">
+                    {Math.min(m.attempts, UNLOCK_ATTEMPTS)}/{UNLOCK_ATTEMPTS}
+                  </span>
+                )}
+              </td>
+              <td className="px-3 py-2 lg:px-4 lg:py-3 text-right tabular-nums text-muted-foreground">
+                {m.accuracyPct !== null ? `${Math.round(m.accuracyPct)}%` : "—"}
+              </td>
+              <td className="px-3 py-2 lg:px-4 lg:py-3 text-right tabular-nums">
+                {m.recentEwmaPct !== null ? (
+                  <span
+                    className={
+                      m.recentEwmaPct >= 80
+                        ? "text-emerald-400"
+                        : m.recentEwmaPct >= 60
+                          ? "text-foreground"
+                          : "text-amber-400"
+                    }>
+                    {Math.round(m.recentEwmaPct)}%
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </td>
+              <td className="px-3 py-2 lg:px-4 lg:py-3 text-right tabular-nums text-muted-foreground">
+                {m.rating ?? "—"}
+              </td>
+              <td className="px-3 py-2 lg:px-4 lg:py-3 text-right">
+                {m.unlocked ? (
+                  <span className="text-emerald-400 text-[10px] uppercase tracking-wider">
+                    Unlocked
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground text-[10px] uppercase tracking-wider">
+                    Drilling
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DrillSummary({ drills }: { drills: TacticsDrillStats }) {
+  return (
+    <div className="glass-card rounded-xl p-3 lg:p-4">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+        Woodpecker drills
+      </p>
+      <div className="flex gap-4 text-sm mb-3">
+        <div>
+          <span className="text-muted-foreground text-xs mr-1">Active</span>
+          <span className="tabular-nums font-semibold">{drills.activeCount}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs mr-1">Completed</span>
+          <span className="tabular-nums font-semibold">
+            {drills.completedCount}
+          </span>
+        </div>
+      </div>
+      {drills.recent.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No drills completed yet.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {drills.recent.map((d) => (
+            <div
+              key={d.id}
+              className="flex items-center justify-between text-xs lg:text-sm gap-2">
+              <span className="text-foreground truncate">
+                {d.motif === "mixed" ? "Mixed" : d.motif} · {d.size}
+              </span>
+              <span className="text-muted-foreground tabular-nums">
+                {d.speedup
+                  ? `${d.speedup.toFixed(1)}× faster`
+                  : "completed"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

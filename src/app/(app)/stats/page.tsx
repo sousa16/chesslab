@@ -10,15 +10,23 @@ export default async function StatsPage() {
     return <div>Please sign in to view stats</div>;
   }
 
-  const { openings, tacticsCategories, tacticsBands, tacticsOverall } =
-    await getStatsPageData(session.user.id);
+  const {
+    openings,
+    tacticsOverall,
+    tacticsCategories,
+    tacticsAdaptive,
+    tacticsMotifs,
+    tacticsDrills,
+  } = await getStatsPageData(session.user.id);
 
   return (
     <StatsClient
       openings={openings}
-      tacticsCategories={tacticsCategories}
-      tacticsBands={tacticsBands}
       tacticsOverall={tacticsOverall}
+      tacticsCategories={tacticsCategories}
+      tacticsAdaptive={tacticsAdaptive}
+      tacticsMotifs={tacticsMotifs}
+      tacticsDrills={tacticsDrills}
     />
   );
 }

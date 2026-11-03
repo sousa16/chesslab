@@ -28,8 +28,10 @@ jobs:
         continue-on-error: true
 
       # src/lib/email.ts builds the Resend client at import time, which throws
-      # without a key. Tests mock the network, so a dummy value is enough.
+      # without a key, and auth.test.ts expects NEXTAUTH_SECRET to be set.
+      # Tests mock the network, so dummy values are enough.
       - name: Test
         run: npm test
         env:
           RESEND_API_KEY: re_test_dummy
+          NEXTAUTH_SECRET: ci-test-secret

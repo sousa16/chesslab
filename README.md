@@ -2,7 +2,7 @@
 
 A personal chess training app for serious improvement. Build your opening repertoire by color, drill it with spaced repetition, train tactics from a 10k+ Lichess puzzle pool, and find the holes in your prep by replaying your real games against your saved lines.
 
-**Live at [chesslab.club](https://chesslab.club).** Sign up with email or Google; everything below describes what the deployed app does.
+**Live at [chesslab.pt](https://chesslab.pt).** Sign up with email or Google; everything below describes what the deployed app does.
 
 ## Features
 

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Non-blocking for now: the codebase has existing lint errors (mostly no-explicit-any).
+      # Remove continue-on-error once they are fixed.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      # src/lib/email.ts builds the Resend client at import time, which throws
+      # without a key, and auth.test.ts expects NEXTAUTH_SECRET to be set.
+      # Tests mock the network, so dummy values are enough.
+      - name: Test
+        run: npm test
+        env:
+          RESEND_API_KEY: re_test_dummy
+          NEXTAUTH_SECRET: ci-test-secret

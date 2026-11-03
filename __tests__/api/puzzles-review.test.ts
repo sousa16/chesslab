@@ -23,6 +23,14 @@ jest.mock("@/lib/prisma", () => ({
     dailyActivity: {
       upsert: jest.fn(),
     },
+    userPuzzlePrefs: {
+      upsert: jest.fn(),
+      update: jest.fn(),
+    },
+    userMotifRating: {
+      findMany: jest.fn(),
+      upsert: jest.fn(),
+    },
   },
 }));
 
@@ -47,6 +55,16 @@ describe("POST /api/puzzles/review", () => {
       id: "review-1",
     });
     (mockPrisma.dailyActivity.upsert as jest.Mock).mockResolvedValue({});
+    // Adaptive-difficulty state updated after every review.
+    (mockPrisma.userPuzzlePrefs.upsert as jest.Mock).mockResolvedValue({
+      currentTargetRating: 1200,
+      globalEwmaSuccess: 0.5,
+      globalAttempts: 0,
+      globalCorrect: 0,
+    });
+    (mockPrisma.userPuzzlePrefs.update as jest.Mock).mockResolvedValue({});
+    (mockPrisma.userMotifRating.findMany as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.userMotifRating.upsert as jest.Mock).mockResolvedValue({});
   });
 
   it("returns 401 when no session", async () => {
@@ -76,6 +94,7 @@ describe("POST /api/puzzles/review", () => {
   it("creates a fresh review when called with a puzzleId on first encounter", async () => {
     (mockPrisma.puzzle.findUnique as jest.Mock).mockResolvedValue({
       id: "puz-42",
+      themes: ["fork"],
     });
 
     const res = await POST(
@@ -154,6 +173,7 @@ describe("POST /api/puzzles/review", () => {
       phase: "exponential",
       learningStepIndex: 0,
       lastReviewDate: past,
+      puzzle: { themes: ["fork"] },
     });
     const res = await POST(
       makeRequest({ reviewId: "rev-7", response: "forgot" }),

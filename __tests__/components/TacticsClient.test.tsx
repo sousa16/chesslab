@@ -5,8 +5,8 @@
  * the four code paths that matter:
  *   1. initial load with a due puzzle on screen
  *   2. empty state when there are no due/new puzzles
- *   3. Show Answer → revealed UI
- *   4. Rate flow → POST /api/puzzles/review + advance to next puzzle
+ *   3. Show solution → revealed UI + analysis
+ *   4. Skip / solve → POST /api/puzzles/review with the derived response
  *
  * PuzzleBoard, MobileNav, and react-chessboard are stubbed so this suite
  * stays focused on TacticsClient state + fetch logic.
@@ -35,8 +35,15 @@ jest.mock("@/components/PuzzleBoard", () => {
         analysisMode?: boolean;
         onPositionChange?: (fen: string) => void;
       },
-      _ref: React.Ref<unknown>,
+      ref: React.Ref<unknown>,
     ) => {
+      React.useImperativeHandle(ref, () => ({
+        revealRemaining: () => Promise.resolve(),
+        goToFirst: jest.fn(),
+        goToPrevious: jest.fn(),
+        goToNext: jest.fn(),
+        goToLast: jest.fn(),
+      }));
       (globalThis as any).__lastPuzzleBoardProps = props;
       return (
         <div
@@ -77,27 +84,48 @@ const samplePuzzle = {
 };
 
 const samplePrefs = {
-  ratingMin: 1400,
-  ratingMax: 1799,
+  mode: "auto",
+  blockedFilterMotif: null,
   enabledCategories: ["middlegame", "endgame"],
+  currentTargetRating: 1200,
+  globalEwmaSuccess: 0.5,
+  globalAttempts: 0,
+  globalCorrect: 0,
 };
 
+const emptyNext = {
+  puzzle: null,
+  review: null,
+  dueCount: 0,
+  source: "empty",
+};
+
+/**
+ * Routes fetch by URL. The component fires prefs, motif-progress and
+ * /api/puzzles/next in parallel on mount, so a positional sequence is
+ * order-sensitive. `responses[0]` is the prefs payload, the rest are served
+ * to /api/puzzles/next in order (then an empty response; "pending" never
+ * resolves, so the current puzzle stays on screen). Anything else
+ * (review POST, analysis, PATCH) gets a plain ok response.
+ */
 function mockFetchSequence(responses: Array<unknown | "empty">) {
+  const [prefs, ...nexts] = responses;
   let i = 0;
-  (fetch as jest.Mock).mockImplementation(() => {
-    const next = responses[i++] ?? "empty";
-    if (next === "empty") {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          puzzle: null,
-          review: null,
-          dueCount: 0,
-          source: "empty",
-        }),
-      });
+  (fetch as jest.Mock).mockImplementation((url: string) => {
+    const ok = (body: unknown) =>
+      Promise.resolve({ ok: true, json: async () => body });
+    if (typeof url === "string") {
+      if (url.startsWith("/api/puzzle-prefs")) return ok(prefs);
+      if (url.startsWith("/api/puzzles/motif-progress")) {
+        return ok({ motifs: [] });
+      }
+      if (url.startsWith("/api/puzzles/next")) {
+        const next = nexts[i++] ?? "empty";
+        if (next === "pending") return new Promise(() => {});
+        return ok(next === "empty" ? emptyNext : next);
+      }
     }
-    return Promise.resolve({ ok: true, json: async () => next });
+    return ok({});
   });
 }
 
@@ -133,7 +161,7 @@ describe("TacticsClient", () => {
     );
   });
 
-  it("renders the puzzle board and Show Answer button when a puzzle is queued", async () => {
+  it("renders the puzzle board with Skip and Show solution when a puzzle is queued", async () => {
     mockFetchSequence([
       samplePrefs,
       {
@@ -148,10 +176,11 @@ describe("TacticsClient", () => {
     renderClient();
     const board = await screen.findByTestId("puzzle-board");
     expect(board).toHaveAttribute("data-fen", samplePuzzle.fen);
-    expect(screen.getByText("Show Answer")).toBeInTheDocument();
+    expect(screen.getByText("Skip")).toBeInTheDocument();
+    expect(screen.getByText("Show solution")).toBeInTheDocument();
   });
 
-  it("posts to /api/puzzles/review when the user rates the puzzle", async () => {
+  function mockOnePuzzleThenPending() {
     mockFetchSequence([
       samplePrefs,
       {
@@ -160,47 +189,53 @@ describe("TacticsClient", () => {
         dueCount: 1,
         source: "due",
       },
-      // prefetch
-      {
-        puzzle: { ...samplePuzzle, id: "p2" },
-        review: { id: "r-2" },
-        dueCount: 0,
-        source: "due",
-      },
+      // The prefetch never resolves, so we stay on this puzzle.
+      "pending",
     ]);
-    renderClient();
-    await screen.findByText("Show Answer");
+  }
 
-    // Reveal solution first — rating buttons only render after.
-    fireEvent.click(screen.getByText("Show Answer"));
-
-    // RatingButtons renders labels like "Easy" once revealed. There are
-    // two copies (mobile + desktop layouts both render); use the first.
-    const easyBtns = await screen.findAllByText(/^Easy$/i);
-    expect(easyBtns.length).toBeGreaterThan(0);
-    await act(async () => {
-      easyBtns[0].click();
-    });
-
-    // The review POST happened with the reviewId of the active card.
-    const calls = (fetch as jest.Mock).mock.calls;
-    const reviewCall = calls.find(
+  function reviewBody() {
+    const reviewCall = (fetch as jest.Mock).mock.calls.find(
       (c) => typeof c[0] === "string" && c[0] === "/api/puzzles/review",
     );
     expect(reviewCall).toBeDefined();
-    const body = JSON.parse(reviewCall![1].body as string);
-    expect(body).toEqual(
-      expect.objectContaining({
-        reviewId: "r-1",
-        response: "easy",
-      }),
+    return JSON.parse(reviewCall![1].body as string);
+  }
+
+  // The rating is derived from how the puzzle was played, not picked by the
+  // user: skipping is "forgot", a clean solve is "easy".
+  it("posts a 'forgot' review for the active card when the user skips", async () => {
+    mockOnePuzzleThenPending();
+    renderClient();
+    await screen.findByText("Skip");
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Skip"));
+    });
+
+    expect(reviewBody()).toEqual(
+      expect.objectContaining({ reviewId: "r-1", response: "forgot" }),
+    );
+  });
+
+  it("posts an 'easy' review when the board reports a clean solve", async () => {
+    mockOnePuzzleThenPending();
+    renderClient();
+    await screen.findByTestId("puzzle-board");
+
+    await act(async () => {
+      (globalThis as any).__lastPuzzleBoardProps.onSolved();
+    });
+
+    expect(reviewBody()).toEqual(
+      expect.objectContaining({ reviewId: "r-1", response: "easy" }),
     );
   });
 
   describe("analysis toggle", () => {
     function mockSequenceForOneReveal() {
-      // initial prefs fetch, the active puzzle, and the speculative
-      // next-puzzle prefetch the component fires in the background.
+      // initial prefs fetch, the active puzzle, and a next-puzzle prefetch
+      // that never resolves, so the solution stays on screen to analyze.
       mockFetchSequence([
         samplePrefs,
         {
@@ -209,17 +244,17 @@ describe("TacticsClient", () => {
           dueCount: 1,
           source: "due",
         },
-        "empty",
+        "pending",
       ]);
     }
 
-    it("only shows the Analyze toggle after Show Answer is pressed", async () => {
+    it("only shows the Analyze toggle after Show solution is pressed", async () => {
       mockSequenceForOneReveal();
       renderClient();
-      await screen.findByText("Show Answer");
+      await screen.findByText("Show solution");
       expect(screen.queryByRole("button", { name: /analyze/i })).toBeNull();
 
-      fireEvent.click(screen.getByText("Show Answer"));
+      fireEvent.click(screen.getByText("Show solution"));
 
       const analyzeBtns = await screen.findAllByRole("button", {
         name: /analyze/i,
@@ -240,10 +275,10 @@ describe("TacticsClient", () => {
         // pending promises still need a real tick to resolve. waitFor
         // pumps them.
         await waitFor(() =>
-          expect(screen.getByText("Show Answer")).toBeInTheDocument(),
+          expect(screen.getByText("Show solution")).toBeInTheDocument(),
         );
 
-        fireEvent.click(screen.getByText("Show Answer"));
+        fireEvent.click(screen.getByText("Show solution"));
         const [analyzeBtn] = await screen.findAllByRole("button", {
           name: /analyze/i,
         });
@@ -309,9 +344,9 @@ describe("TacticsClient", () => {
         mockSequenceForOneReveal();
         renderClient();
         await waitFor(() =>
-          expect(screen.getByText("Show Answer")).toBeInTheDocument(),
+          expect(screen.getByText("Show solution")).toBeInTheDocument(),
         );
-        fireEvent.click(screen.getByText("Show Answer"));
+        fireEvent.click(screen.getByText("Show solution"));
         const [analyzeBtn] = await screen.findAllByRole("button", {
           name: /analyze/i,
         });

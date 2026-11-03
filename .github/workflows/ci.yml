@@ -27,5 +27,9 @@ jobs:
         run: npm run lint
         continue-on-error: true
 
+      # src/lib/email.ts builds the Resend client at import time, which throws
+      # without a key. Tests mock the network, so a dummy value is enough.
       - name: Test
         run: npm test
+        env:
+          RESEND_API_KEY: re_test_dummy

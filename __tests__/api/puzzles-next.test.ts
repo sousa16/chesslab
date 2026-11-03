@@ -16,6 +16,10 @@ jest.mock("@/lib/prisma", () => ({
     userPuzzlePrefs: {
       findUnique: jest.fn(),
     },
+    userMotifRating: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+    },
     puzzleReview: {
       findFirst: jest.fn(),
       count: jest.fn(),
@@ -45,6 +49,7 @@ describe("GET /api/puzzles/next", () => {
     mockGetServerSession.mockResolvedValue({ user: { id: "user-1" } });
     mockPrisma.userPuzzlePrefs.findUnique.mockResolvedValue(null);
     mockPrisma.puzzleReview.count.mockResolvedValue(2);
+    mockPrisma.userMotifRating.findMany.mockResolvedValue([]);
     mockPrisma.$queryRaw.mockResolvedValue([]);
   });
 
